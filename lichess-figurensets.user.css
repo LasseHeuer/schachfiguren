@@ -5,29 +5,34 @@
 @description    Benutzerdefinierte Schachfiguren fuer Lichess
 @author         Me
 @preprocessor   uso
-@var select figurenset "Figurenset" ["system_pixel", "system_eckig", "rund"]
+@var select figurenset "Figurenset" {
+  "system_pixel*:System Pixel": "https://lasseheuer.github.io/schachfiguren/system_pixel/",
+  "system_eckig:System Eckig": "https://lasseheuer.github.io/schachfiguren/system_eckig/",
+  "rund:Rund": "https://lasseheuer.github.io/schachfiguren/rund/"
+}
 ==/UserStyle== */
 
 /* Set-Auswahl: in Stylus unter "Figurenset" wechseln. */
 
 /* WEISSE FIGUREN */
-.white.king, .piece.white.king       { background-image: url("https://lasseheuer.github.io/schachfiguren//*[[figurenset]]*/wk.svg") !important; }
-.white.queen, .piece.white.queen     { background-image: url("https://lasseheuer.github.io/schachfiguren//*[[figurenset]]*/wq.svg") !important; }
-.white.rook, .piece.white.rook       { background-image: url("https://lasseheuer.github.io/schachfiguren//*[[figurenset]]*/wr.svg") !important; }
-.white.bishop, .piece.white.bishop   { background-image: url("https://lasseheuer.github.io/schachfiguren//*[[figurenset]]*/wb.svg") !important; }
-.white.knight, .piece.white.knight   { background-image: url("https://lasseheuer.github.io/schachfiguren//*[[figurenset]]*/wn.svg") !important; }
-.white.pawn, .piece.white.pawn       { background-image: url("https://lasseheuer.github.io/schachfiguren//*[[figurenset]]*/wp.svg") !important; }
+.white.king, .piece.white.king       { background-image: url(/*[[figurenset]]*/wk.svg) !important; }
+.white.queen, .piece.white.queen     { background-image: url(/*[[figurenset]]*/wq.svg) !important; }
+.white.rook, .piece.white.rook       { background-image: url(/*[[figurenset]]*/wr.svg) !important; }
+.white.bishop, .piece.white.bishop   { background-image: url(/*[[figurenset]]*/wb.svg) !important; }
+.white.knight, .piece.white.knight   { background-image: url(/*[[figurenset]]*/wn.svg) !important; }
+.white.pawn, .piece.white.pawn       { background-image: url(/*[[figurenset]]*/wp.svg) !important; }
 
 /* SCHWARZE FIGUREN */
-.black.king, .piece.black.king       { background-image: url("https://lasseheuer.github.io/schachfiguren//*[[figurenset]]*/bk.svg") !important; }
-.black.queen, .piece.black.queen     { background-image: url("https://lasseheuer.github.io/schachfiguren//*[[figurenset]]*/bq.svg") !important; }
-.black.rook, .piece.black.rook       { background-image: url("https://lasseheuer.github.io/schachfiguren//*[[figurenset]]*/br.svg") !important; }
-.black.bishop, .piece.black.bishop   { background-image: url("https://lasseheuer.github.io/schachfiguren//*[[figurenset]]*/bb.svg") !important; }
-.black.knight, .piece.black.knight   { background-image: url("https://lasseheuer.github.io/schachfiguren//*[[figurenset]]*/bn.svg") !important; }
-.black.pawn, .piece.black.pawn       { background-image: url("https://lasseheuer.github.io/schachfiguren//*[[figurenset]]*/bp.svg") !important; }
+.black.king, .piece.black.king       { background-image: url(/*[[figurenset]]*/bk.svg) !important; }
+.black.queen, .piece.black.queen     { background-image: url(/*[[figurenset]]*/bq.svg) !important; }
+.black.rook, .piece.black.rook       { background-image: url(/*[[figurenset]]*/br.svg) !important; }
+.black.bishop, .piece.black.bishop   { background-image: url(/*[[figurenset]]*/bb.svg) !important; }
+.black.knight, .piece.black.knight   { background-image: url(/*[[figurenset]]*/bn.svg) !important; }
+.black.pawn, .piece.black.pawn       { background-image: url(/*[[figurenset]]*/bp.svg) !important; }
 
 /* Allgemein */
 .white, .black, .piece {
     background-size: contain !important;
+    background-position: center !important;
     background-repeat: no-repeat !important;
 }
