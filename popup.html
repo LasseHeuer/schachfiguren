@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Lichess Figurensets</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="popup">
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark">Lf</span><strong>Lichess</strong></div>
+        <label class="power-toggle" title="Erweiterung ein- oder ausschalten"><span>Aktiv</span><input type="checkbox" data-setting="enabled" role="switch"></label>
+      </header>
+      <p id="page-status" role="status">Verbindung wird geprueft …</p>
+      <nav class="tabs" role="tablist" aria-label="Einstellungsbereiche">
+        <button class="tab active" id="tab-figuren" type="button" role="tab" aria-selected="true" aria-controls="panel-figuren" data-tab="figuren">Figuren</button>
+        <button class="tab" id="tab-brett" type="button" role="tab" aria-selected="false" aria-controls="panel-brett" data-tab="brett" tabindex="-1">Brett</button>
+        <button class="tab" id="tab-zuege" type="button" role="tab" aria-selected="false" aria-controls="panel-zuege" data-tab="zuege" tabindex="-1">Zuege</button>
+        <button class="tab" id="tab-hover" type="button" role="tab" aria-selected="false" aria-controls="panel-hover" data-tab="hover" tabindex="-1">Hover</button>
+        <button class="tab" id="tab-effekte" type="button" role="tab" aria-selected="false" aria-controls="panel-effekte" data-tab="effekte" tabindex="-1">Effekte</button>
+        <button class="tab" id="tab-mehr" type="button" role="tab" aria-selected="false" aria-controls="panel-mehr" data-tab="mehr" tabindex="-1">Mehr</button>
+      </nav>
+
+      <section class="panel" id="panel-figuren" role="tabpanel" aria-labelledby="tab-figuren" data-panel="figuren">
+        <label class="select-setting"><span>Figurenset</span><select data-setting="pieceSet"><option value="system_pixel">System Pixel</option><option value="system_eckig">System Eckig</option><option value="rund">Rund</option></select></label>
+        <div class="color-pair">
+          <label class="color-setting"><span>Weisse Figuren</span><input type="color" data-setting="whitePieceColor"></label>
+          <label class="color-setting"><span>Schwarze Figuren</span><input type="color" data-setting="blackPieceColor"></label>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-brett" role="tabpanel" aria-labelledby="tab-brett" data-panel="brett" hidden>
+        <div class="theme-grid">
+          <fieldset class="theme"><legend>Hell</legend>
+            <label class="color-row"><span>Helles Feld</span><input type="color" data-setting="boardLightLight"></label>
+            <label class="color-row"><span>Dunkles Feld</span><input type="color" data-setting="boardDarkLight"></label>
+          </fieldset>
+          <fieldset class="theme"><legend>Dunkel</legend>
+            <label class="color-row"><span>Helles Feld</span><input type="color" data-setting="boardLightDark"></label>
+            <label class="color-row"><span>Dunkles Feld</span><input type="color" data-setting="boardDarkDark"></label>
+          </fieldset>
+        </div>
+        <div class="switch-list">
+          <label class="switch-setting"><span>Einfarbig</span><input type="checkbox" data-setting="monochromeBoard" role="switch"></label>
+          <label class="switch-setting"><span>Felderoutline</span><input type="checkbox" data-setting="squareOutline" role="switch"></label>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-zuege" role="tabpanel" aria-labelledby="tab-zuege" data-panel="zuege" hidden>
+        <div class="theme-grid">
+          <fieldset class="theme"><legend>Hell</legend>
+            <label class="color-row"><span>Letzter Zug</span><input type="color" data-setting="lastMoveLight"></label>
+            <label class="color-row"><span>Auswahl und Dots</span><input type="color" data-setting="selectedLight"></label>
+            <label class="color-row"><span>Schachfeld</span><input type="color" data-setting="checkSquareLight"></label>
+          </fieldset>
+          <fieldset class="theme"><legend>Dunkel</legend>
+            <label class="color-row"><span>Letzter Zug</span><input type="color" data-setting="lastMoveDark"></label>
+            <label class="color-row"><span>Auswahl und Dots</span><input type="color" data-setting="selectedDark"></label>
+            <label class="color-row"><span>Schachfeld</span><input type="color" data-setting="checkSquareDark"></label>
+          </fieldset>
+        </div>
+        <div class="range-grid single-range">
+          <label class="range-setting"><span>Groesse Bewegungsdots</span><output data-value-for="moveDotSize"></output><input type="range" min="5" max="50" step="5" data-setting="moveDotSize"></label>
+        </div>
+        <div class="switch-list">
+          <label class="switch-setting"><span>Letzten Zug markieren</span><input type="checkbox" data-setting="markLastMove" role="switch"></label>
+          <label class="switch-setting"><span>Quadratische Dots</span><input type="checkbox" data-setting="squareMoveDots" role="switch"></label>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-hover" role="tabpanel" aria-labelledby="tab-hover" data-panel="hover" hidden>
+        <div class="theme-grid">
+          <fieldset class="theme"><legend>Hell</legend><label class="color-row"><span>Mischfarbe</span><input type="color" data-setting="hoverMixLight"></label></fieldset>
+          <fieldset class="theme"><legend>Dunkel</legend><label class="color-row"><span>Mischfarbe</span><input type="color" data-setting="hoverMixDark"></label></fieldset>
+        </div>
+        <div class="range-grid">
+          <label class="range-setting"><span>Grundmischung ganze Seite</span><output data-value-for="idleMixPercent"></output><input type="range" min="0" max="100" step="5" data-setting="idleMixPercent"></label>
+          <label class="range-setting"><span>Mischung bei Hover</span><output data-value-for="hoverMixPercent"></output><input type="range" min="0" max="100" step="5" data-setting="hoverMixPercent"></label>
+          <label class="range-setting range-wide"><span>Entsaettigung</span><output data-value-for="hoverDesaturation"></output><input type="range" min="0" max="100" step="5" data-setting="hoverDesaturation"></label>
+        </div>
+      </section>
+
+      <section class="panel effect-panel" id="panel-effekte" role="tabpanel" aria-labelledby="tab-effekte" data-panel="effekte" hidden>
+        <label class="switch-setting"><span>Verlaeufe entfernen<small>Brettfelder und Bewegungsdots bleiben erhalten.</small></span><input type="checkbox" data-setting="removeGradients" role="switch"></label>
+        <label class="switch-setting"><span>Leuchteffekte entfernen</span><input type="checkbox" data-setting="removeGlows" role="switch"></label>
+        <label class="switch-setting"><span>Schatten entfernen</span><input type="checkbox" data-setting="removeShadows" role="switch"></label>
+        <label class="switch-setting"><span>Umrandungen entfernen</span><input type="checkbox" data-setting="removeOutlines" role="switch"></label>
+        <label class="switch-setting"><span>Runde Ecken entfernen</span><input type="checkbox" data-setting="removeRoundedCorners" role="switch"></label>
+        <label class="switch-setting"><span>Animationen abschalten</span><input type="checkbox" data-setting="disableAnimations" role="switch"></label>
+      </section>
+
+      <section class="panel" id="panel-mehr" role="tabpanel" aria-labelledby="tab-mehr" data-panel="mehr" hidden>
+        <label class="switch-setting"><span>Gesamtspielzeit nur in Stunden</span><input type="checkbox" data-setting="showPlayTimeInHours" role="switch"></label>
+        <label class="switch-setting"><span>Spielerfarben im Analysegraphen</span><input type="checkbox" data-setting="analysisGraphColors" role="switch"></label>
+      </section>
+
+      <section class="color-picker" id="color-picker" aria-labelledby="color-picker-title" hidden>
+        <header class="color-picker-header"><strong id="color-picker-title">Farbe</strong><button id="close-color-picker" type="button">Schliessen</button></header>
+        <output class="color-preview" id="color-picker-preview">#ffffff</output>
+        <div class="sv-field" id="color-picker-sv" role="group" aria-label="Saettigung und Helligkeit"><span class="sv-field-thumb" id="color-picker-sv-thumb"></span></div>
+        <label class="picker-range"><span>Farbton (Hue)<output id="color-picker-hue-value"></output></span><input id="color-picker-hue" type="range" min="0" max="359" step="1"></label>
+        <label class="picker-range"><span>Saettigung (Saturation)<output id="color-picker-saturation-value"></output></span><input id="color-picker-saturation" type="range" min="0" max="100" step="1"></label>
+        <label class="picker-range"><span>Helligkeit (Value)<output id="color-picker-value-value"></output></span><input id="color-picker-value" type="range" min="0" max="100" step="1"></label>
+        <small class="picker-hint">Shift beim Ziehen: viermal langsamere Einstellung</small>
+      </section>
+
+      <footer class="footer"><span id="save-status" role="status" aria-live="polite">Automatisch gespeichert</span><div class="footer-actions"><button id="export-settings" type="button">Export</button><button id="reset-settings" type="button">Zuruecksetzen</button></div></footer>
+    </main>
+    <script src="settings.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

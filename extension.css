@@ -1,0 +1,226 @@
+html {
+  --lfs-mix-percent: 0%;
+  --lfs-hover-desaturation: 0%;
+  --lfs-hover-mix-color: #808080;
+  --lfs-move-dot-size: 10%;
+  --lfs-square-move-dot-size: calc(var(--lfs-move-dot-size) * 1.4142);
+  --lfs-white-piece-color: #d1521d;
+  --lfs-black-piece-color: #2ba4d1;
+  background-color: var(--c-bg-page) !important;
+}
+
+html.light {
+  --lfs-board-dark-active: var(--lfs-board-dark-light, #d6ddd3);
+  --lfs-last-move-color: var(--lfs-last-move-light, #dae0d7);
+  --lfs-selected-square-color: var(--lfs-selected-light, #ffffff);
+  --lfs-check-square-color: var(--lfs-check-light, #e57373);
+  --lfs-hover-mix-color: var(--lfs-hover-mix-light, #d4d2d2);
+}
+
+html:not(.light) {
+  --lfs-board-dark-active: var(--lfs-board-dark-dark, #433e4c);
+  --lfs-last-move-color: var(--lfs-last-move-dark, #2d2b2b);
+  --lfs-selected-square-color: var(--lfs-selected-dark, #252823);
+  --lfs-check-square-color: var(--lfs-check-dark, #8c3434);
+  --lfs-hover-mix-color: var(--lfs-hover-mix-dark, #282727);
+}
+
+html:not([data-lfs-disabled]) {
+  --lfs-mix-percent: var(--lfs-idle-mix-percent, 55%);
+}
+
+html:not([data-lfs-disabled]):has(cg-board:hover) {
+  --lfs-mix-percent: var(--lfs-hover-mix-percent, 80%);
+  --lfs-hover-desaturation: var(--lfs-hover-desaturation-setting, 60%);
+}
+
+html:not([data-lfs-disabled])[data-lfs-remove-rounded-corners] body *,
+html:not([data-lfs-disabled])[data-lfs-remove-rounded-corners] body *::before,
+html:not([data-lfs-disabled])[data-lfs-remove-rounded-corners] body *::after {
+  border-radius: 0 !important;
+}
+
+html:not([data-lfs-disabled])[data-lfs-remove-shadows] body *,
+html:not([data-lfs-disabled])[data-lfs-remove-shadows] body *::before,
+html:not([data-lfs-disabled])[data-lfs-remove-shadows] body *::after {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+html:not([data-lfs-disabled])[data-lfs-remove-glows] body *:not(cg-board):not(cg-board *),
+html:not([data-lfs-disabled])[data-lfs-remove-glows] body *:not(cg-board):not(cg-board *)::before,
+html:not([data-lfs-disabled])[data-lfs-remove-glows] body *:not(cg-board):not(cg-board *)::after {
+  filter: none !important;
+}
+
+html:not([data-lfs-disabled])[data-lfs-remove-outlines] body *:not(cg-board):not(cg-board *),
+html:not([data-lfs-disabled])[data-lfs-remove-outlines] body *:not(cg-board):not(cg-board *)::before,
+html:not([data-lfs-disabled])[data-lfs-remove-outlines] body *:not(cg-board):not(cg-board *)::after {
+  outline: none !important;
+}
+
+html:not([data-lfs-disabled])[data-lfs-remove-gradients] body *:not(cg-board):not(cg-board *),
+html:not([data-lfs-disabled])[data-lfs-remove-gradients] body *:not(cg-board):not(cg-board *)::before,
+html:not([data-lfs-disabled])[data-lfs-remove-gradients] body *:not(cg-board):not(cg-board *)::after {
+  background-image: none !important;
+}
+
+html:not([data-lfs-disabled]) body .cmn-toggle label::after {
+  background-color: var(--c-bg-page, #fff) !important;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent) !important;
+  box-sizing: border-box;
+}
+
+html:not([data-lfs-disabled])[data-lfs-remove-gradients]::before {
+  background: var(--c-bg-page) !important;
+}
+
+html:not([data-lfs-disabled])[data-lfs-disable-animations] body *,
+html:not([data-lfs-disabled])[data-lfs-disable-animations] body *::before,
+html:not([data-lfs-disabled])[data-lfs-disable-animations] body *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+html:not([data-lfs-disabled])::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  background-color: color-mix(in srgb, transparent, var(--lfs-hover-mix-color) var(--lfs-mix-percent));
+  backdrop-filter: none;
+  transition: background-color 150ms ease, backdrop-filter 150ms ease;
+  pointer-events: none;
+}
+
+html:not([data-lfs-disabled]):has(cg-board:hover)::after {
+  backdrop-filter: saturate(calc(100% - var(--lfs-hover-desaturation)));
+}
+
+html:not([data-lfs-disabled]) .main-board .cg-wrap,
+html:not([data-lfs-disabled]) .main-board.cg-wrap {
+  position: absolute !important;
+}
+
+html:not([data-lfs-disabled]) body cg-board {
+  z-index: 2147483647 !important;
+}
+
+html:not([data-lfs-disabled])::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--c-bg-page) linear-gradient(to bottom, var(--c-body-gradient), var(--c-bg-page) 116px) no-repeat;
+}
+
+html:not([data-lfs-disabled]) body {
+  background: transparent !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board::before {
+  filter: none !important;
+  opacity: 1 !important;
+  background-color: var(--lfs-board-dark) !important;
+  background-image:
+    linear-gradient(45deg, var(--lfs-board-light) 25%, transparent 25%, transparent 75%, var(--lfs-board-light) 75%),
+    linear-gradient(45deg, var(--lfs-board-light) 25%, transparent 25%, transparent 75%, var(--lfs-board-light) 75%) !important;
+  background-position: 0 0, 16.666667% 16.666667% !important;
+  background-repeat: repeat, repeat !important;
+  background-size: 25% 25% !important;
+}
+
+html.light:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board::before {
+  --lfs-board-light: var(--lfs-board-light-light, #e9e8e8);
+  --lfs-board-dark: var(--lfs-board-dark-light, #d6ddd3);
+}
+
+html:not(.light):not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board::before {
+  --lfs-board-light: var(--lfs-board-light-dark, #454b3d);
+  --lfs-board-dark: var(--lfs-board-dark-dark, #433e4c);
+}
+
+html:not([data-lfs-disabled])[data-lfs-square-outline] body cg-board::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--lfs-board-dark-active, #333) 65%, var(--c-font, #111) 35%) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--lfs-board-dark-active, #333) 65%, var(--c-font, #111) 35%) 1px, transparent 1px),
+    linear-gradient(to right, transparent calc(100% - 1px), color-mix(in srgb, var(--lfs-board-dark-active, #333) 65%, var(--c-font, #111) 35%) calc(100% - 1px)),
+    linear-gradient(to bottom, transparent calc(100% - 1px), color-mix(in srgb, var(--lfs-board-dark-active, #333) 65%, var(--c-font, #111) 35%) calc(100% - 1px)) !important;
+  background-position: 0 0 !important;
+  background-size: 100% 100%, 100% 100%, 12.5% 100%, 100% 12.5% !important;
+  background-repeat: no-repeat, no-repeat, repeat-x, repeat-y !important;
+}
+
+html:not([data-lfs-disabled])[data-lfs-monochrome-board] body[data-board] .is2d .cg-wrap cg-board::before {
+  background-color: var(--lfs-board-light) !important;
+  background-image: none !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square.last-move {
+  background: none !important;
+}
+
+html:not([data-lfs-disabled])[data-lfs-mark-last-move] body[data-board] .is2d .cg-wrap cg-board square.last-move {
+  background: var(--lfs-last-move-color) !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square.selected {
+  background-color: var(--lfs-selected-square-color) !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square.move-dest:not(.oc),
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square.premove-dest:not(.oc) {
+  background: radial-gradient(
+    var(--lfs-selected-square-color) 0 var(--lfs-move-dot-size),
+    transparent calc(var(--lfs-move-dot-size) + 1%)
+  ) !important;
+}
+
+html:not([data-lfs-disabled])[data-lfs-square-move-dots] body[data-board] .is2d .cg-wrap cg-board square.move-dest:not(.oc),
+html:not([data-lfs-disabled])[data-lfs-square-move-dots] body[data-board] .is2d .cg-wrap cg-board square.premove-dest:not(.oc) {
+  background: linear-gradient(var(--lfs-selected-square-color), var(--lfs-selected-square-color)) center /
+    var(--lfs-square-move-dot-size) var(--lfs-square-move-dot-size) no-repeat !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square.check {
+  background: var(--lfs-check-square-color) !important;
+}
+
+html:not([data-lfs-disabled]) #acpl-chart-container {
+  background: none !important;
+}
+
+html:not([data-lfs-disabled]) .is2d .cg-wrap piece.ghost {
+  display: none !important;
+}
+
+html:not([data-lfs-disabled]) .is2d .cg-wrap piece.white.king,
+html:not([data-lfs-disabled]) .is2d .puzzle__feedback piece.white.king { background: var(--lfs-white-piece-color) !important; -webkit-mask: var(--lfs-piece-wk) center / contain no-repeat !important; mask: var(--lfs-piece-wk) center / contain no-repeat !important; }
+html:not([data-lfs-disabled]) .is2d .cg-wrap piece.white.queen,
+html:not([data-lfs-disabled]) .is2d .puzzle__feedback piece.white.queen { background: var(--lfs-white-piece-color) !important; -webkit-mask: var(--lfs-piece-wq) center / contain no-repeat !important; mask: var(--lfs-piece-wq) center / contain no-repeat !important; }
+html:not([data-lfs-disabled]) .is2d .cg-wrap piece.white.rook,
+html:not([data-lfs-disabled]) .is2d .puzzle__feedback piece.white.rook { background: var(--lfs-white-piece-color) !important; -webkit-mask: var(--lfs-piece-wr) center / contain no-repeat !important; mask: var(--lfs-piece-wr) center / contain no-repeat !important; }
+html:not([data-lfs-disabled]) .is2d .cg-wrap piece.white.bishop,
+html:not([data-lfs-disabled]) .is2d .puzzle__feedback piece.white.bishop { background: var(--lfs-white-piece-color) !important; -webkit-mask: var(--lfs-piece-wb) center / contain no-repeat !important; mask: var(--lfs-piece-wb) center / contain no-repeat !important; }
+html:not([data-lfs-disabled]) .is2d .cg-wrap piece.white.knight,
+html:not([data-lfs-disabled]) .is2d .puzzle__feedback piece.white.knight { background: var(--lfs-white-piece-color) !important; -webkit-mask: var(--lfs-piece-wn) center / contain no-repeat !important; mask: var(--lfs-piece-wn) center / contain no-repeat !important; }
+html:not([data-lfs-disabled]) .is2d .cg-wrap piece.white.pawn,
+html:not([data-lfs-disabled]) .is2d .puzzle__feedback piece.white.pawn { background: var(--lfs-white-piece-color) !important; -webkit-mask: var(--lfs-piece-wp) center / contain no-repeat !important; mask: var(--lfs-piece-wp) center / contain no-repeat !important; }
+html:not([data-lfs-disabled]) .is2d .cg-wrap piece.black.king,
+html:not([data-lfs-disabled]) .is2d .puzzle__feedback piece.black.king { background: var(--lfs-black-piece-color) !important; -webkit-mask: var(--lfs-piece-bk) center / contain no-repeat !important; mask: var(--lfs-piece-bk) center / contain no-repeat !important; }
+html:not([data-lfs-disabled]) .is2d .cg-wrap piece.black.queen,
+html:not([data-lfs-disabled]) .is2d .puzzle__feedback piece.black.queen { background: var(--lfs-black-piece-color) !important; -webkit-mask: var(--lfs-piece-bq) center / contain no-repeat !important; mask: var(--lfs-piece-bq) center / contain no-repeat !important; }
+html:not([data-lfs-disabled]) .is2d .cg-wrap piece.black.rook,
+html:not([data-lfs-disabled]) .is2d .puzzle__feedback piece.black.rook { background: var(--lfs-black-piece-color) !important; -webkit-mask: var(--lfs-piece-br) center / contain no-repeat !important; mask: var(--lfs-piece-br) center / contain no-repeat !important; }
+html:not([data-lfs-disabled]) .is2d .cg-wrap piece.black.bishop,
+html:not([data-lfs-disabled]) .is2d .puzzle__feedback piece.black.bishop { background: var(--lfs-black-piece-color) !important; -webkit-mask: var(--lfs-piece-bb) center / contain no-repeat !important; mask: var(--lfs-piece-bb) center / contain no-repeat !important; }
+html:not([data-lfs-disabled]) .is2d .cg-wrap piece.black.knight,
+html:not([data-lfs-disabled]) .is2d .puzzle__feedback piece.black.knight { background: var(--lfs-black-piece-color) !important; -webkit-mask: var(--lfs-piece-bn) center / contain no-repeat !important; mask: var(--lfs-piece-bn) center / contain no-repeat !important; }
+html:not([data-lfs-disabled]) .is2d .cg-wrap piece.black.pawn,
+html:not([data-lfs-disabled]) .is2d .puzzle__feedback piece.black.pawn { background: var(--lfs-black-piece-color) !important; -webkit-mask: var(--lfs-piece-bp) center / contain no-repeat !important; mask: var(--lfs-piece-bp) center / contain no-repeat !important; }

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Lichess Figurensets – Einstellungen</title>
+    <link rel="stylesheet" href="options.css">
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <a class="brand" href="#start" aria-label="Lichess Figurensets Einstellungen">
+          <span class="brand-mark">Lf</span>
+          <span><strong>Lichess</strong><small>Figurensets</small></span>
+        </a>
+        <nav aria-label="Einstellungsbereiche">
+          <a href="#figuren">Figuren</a>
+          <a href="#brett">Brettfarben</a>
+          <a href="#zuege">Zugmarkierungen</a>
+          <a href="#hover">Hover-Effekt</a>
+          <a href="#optik">Effekte</a>
+          <a href="#analyse">Mehr</a>
+        </nav>
+        <div class="sidebar-note">Aenderungen werden automatisch gespeichert.</div>
+      </aside>
+
+      <main id="start">
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">BRAVE-ERWEITERUNG</p>
+            <h1>Dein Lichess, dein Stil.</h1>
+            <p class="intro">Figuren, Brett und Markierungen zentral anpassen.</p>
+          </div>
+          <label class="master-toggle">
+            <span><strong>Erweiterung aktiv</strong><small>Alle Anpassungen auf Lichess</small></span>
+            <input type="checkbox" data-setting="enabled" role="switch">
+          </label>
+        </header>
+
+        <div class="settings-grid">
+        <section class="settings-card" id="figuren">
+          <div class="section-heading"><span class="section-index">01</span><div><h2>Figuren</h2><p>Figurenstil und Farben fuer beide Seiten.</p></div></div>
+          <div class="control-grid">
+            <label class="field field-wide"><span>Figurenset</span><select data-setting="pieceSet"><option value="system_pixel">System Pixel</option><option value="system_eckig">System Eckig</option><option value="rund">Rund</option></select><small>Die Grafiken werden direkt aus der Erweiterung geladen.</small></label>
+            <label class="field"><span>Weisse Figuren</span><input type="color" data-setting="whitePieceColor"></label>
+            <label class="field"><span>Schwarze Figuren</span><input type="color" data-setting="blackPieceColor"></label>
+          </div>
+        </section>
+
+        <section class="settings-card" id="brett">
+          <div class="section-heading"><span class="section-index">02</span><div><h2>Brettfarben</h2><p>Eigene Farben fuer helle und dunkle Lichess-Ansicht.</p></div></div>
+          <div class="theme-grid">
+            <fieldset class="theme-panel"><legend>Helles Design</legend>
+              <label class="color-field"><span>Helles Feld</span><input type="color" data-setting="boardLightLight"></label>
+              <label class="color-field"><span>Dunkles Feld</span><input type="color" data-setting="boardDarkLight"></label>
+            </fieldset>
+            <fieldset class="theme-panel"><legend>Dunkles Design</legend>
+              <label class="color-field"><span>Helles Feld</span><input type="color" data-setting="boardLightDark"></label>
+              <label class="color-field"><span>Dunkles Feld</span><input type="color" data-setting="boardDarkDark"></label>
+            </fieldset>
+          </div>
+          <div class="control-grid compact-grid">
+            <label class="switch-field"><span><strong>Einfarbig</strong><small>Alle Felder in der helleren Themenfarbe anzeigen.</small></span><input type="checkbox" data-setting="monochromeBoard" role="switch"></label>
+            <label class="switch-field"><span><strong>Felderoutline</strong><small>Jedes Feld mit der dunkleren Themenfarbe umranden.</small></span><input type="checkbox" data-setting="squareOutline" role="switch"></label>
+          </div>
+        </section>
+
+        <section class="settings-card" id="zuege">
+          <div class="section-heading"><span class="section-index">03</span><div><h2>Zugmarkierungen</h2><p>Farben und Form der Hervorhebungen auf dem Brett.</p></div></div>
+          <div class="theme-grid">
+            <fieldset class="theme-panel"><legend>Helles Design</legend>
+              <label class="color-field"><span>Letzter Zug</span><input type="color" data-setting="lastMoveLight"></label>
+              <label class="color-field"><span>Auswahl und Dots</span><input type="color" data-setting="selectedLight"></label>
+              <label class="color-field"><span>Koenig im Schach</span><input type="color" data-setting="checkSquareLight"></label>
+            </fieldset>
+            <fieldset class="theme-panel"><legend>Dunkles Design</legend>
+              <label class="color-field"><span>Letzter Zug</span><input type="color" data-setting="lastMoveDark"></label>
+              <label class="color-field"><span>Auswahl und Dots</span><input type="color" data-setting="selectedDark"></label>
+              <label class="color-field"><span>Koenig im Schach</span><input type="color" data-setting="checkSquareDark"></label>
+            </fieldset>
+          </div>
+          <div class="control-grid compact-grid">
+            <label class="field"><span>Groesse der Bewegungsdots</span><input type="range" min="5" max="50" step="5" data-setting="moveDotSize"><output data-value-for="moveDotSize"></output></label>
+            <label class="switch-field"><span><strong>Letzten Zug markieren</strong><small>Das zuletzt bespielte Feld farbig hervorheben.</small></span><input type="checkbox" data-setting="markLastMove" role="switch"></label>
+            <label class="switch-field"><span><strong>Quadratische Bewegungsdots</strong><small>Statt runder Punkte kleine Quadrate anzeigen.</small></span><input type="checkbox" data-setting="squareMoveDots" role="switch"></label>
+          </div>
+        </section>
+
+        <section class="settings-card" id="hover">
+          <div class="section-heading"><span class="section-index">04</span><div><h2>Hover-Effekt</h2><p>Seite und Brett beim Bewegen der Maus entsaettigen und mischen.</p></div></div>
+          <div class="theme-grid">
+            <fieldset class="theme-panel"><legend>Helles Design</legend><label class="color-field"><span>Mischfarbe</span><input type="color" data-setting="hoverMixLight"></label></fieldset>
+            <fieldset class="theme-panel"><legend>Dunkles Design</legend><label class="color-field"><span>Mischfarbe</span><input type="color" data-setting="hoverMixDark"></label></fieldset>
+          </div>
+          <div class="control-grid range-grid">
+            <label class="field"><span>Grundmischung auf der ganzen Seite</span><input type="range" min="0" max="100" step="5" data-setting="idleMixPercent"><output data-value-for="idleMixPercent"></output></label>
+            <label class="field"><span>Mischung bei Brett-Hover</span><input type="range" min="0" max="100" step="5" data-setting="hoverMixPercent"><output data-value-for="hoverMixPercent"></output></label>
+            <label class="field field-wide"><span>Entsaettigung bei Brett-Hover</span><input type="range" min="0" max="100" step="5" data-setting="hoverDesaturation"><output data-value-for="hoverDesaturation"></output></label>
+          </div>
+        </section>
+
+        <section class="settings-card" id="optik">
+          <div class="section-heading"><span class="section-index">05</span><div><h2>Darstellungseffekte</h2><p>Unnoetige Oberflaecheneffekte einzeln ein- und ausschalten.</p></div></div>
+          <div class="control-grid compact-grid">
+            <label class="switch-field"><span><strong>Verlaeufe entfernen</strong><small>Brettmuster und Bewegungsdots bleiben erhalten.</small></span><input type="checkbox" data-setting="removeGradients" role="switch"></label>
+            <label class="switch-field"><span><strong>Leuchteffekte entfernen</strong><small>Filtereffekte ausserhalb des Bretts entfernen.</small></span><input type="checkbox" data-setting="removeGlows" role="switch"></label>
+            <label class="switch-field"><span><strong>Schatten entfernen</strong><small>Text- und Kastenschatten ausblenden.</small></span><input type="checkbox" data-setting="removeShadows" role="switch"></label>
+            <label class="switch-field"><span><strong>Umrandungen entfernen</strong><small>Element-Umrisse ausblenden.</small></span><input type="checkbox" data-setting="removeOutlines" role="switch"></label>
+            <label class="switch-field"><span><strong>Runde Ecken entfernen</strong><small>Ecken auf der Seite begradigen.</small></span><input type="checkbox" data-setting="removeRoundedCorners" role="switch"></label>
+            <label class="switch-field"><span><strong>Animationen abschalten</strong><small>Bewegungen und Uebergaenge stoppen.</small></span><input type="checkbox" data-setting="disableAnimations" role="switch"></label>
+          </div>
+        </section>
+
+        <section class="settings-card" id="analyse">
+          <div class="section-heading"><span class="section-index">06</span><div><h2>Weitere Einstellungen</h2><p>Profilanzeige und Analysegraph.</p></div></div>
+          <label class="switch-field"><span><strong>Gesamtspielzeit nur in Stunden</strong><small>Profilzeit ohne Tagesangabe anzeigen.</small></span><input type="checkbox" data-setting="showPlayTimeInHours" role="switch"></label>
+          <label class="switch-field"><span><strong>Analysegraph-Farben angleichen</strong><small>Weiss und Schwarz im Graphen mit den Figurenfarben darstellen.</small></span><input type="checkbox" data-setting="analysisGraphColors" role="switch"></label>
+        </section>
+        </div>
+
+        <footer class="page-footer"><span id="save-status" role="status" aria-live="polite">Einstellungen werden geladen …</span><button type="button" class="reset-button" id="reset-settings">Auf Standardwerte setzen</button></footer>
+      </main>
+    </div>
+    <script src="settings.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>
