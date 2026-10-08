@@ -1,7 +1,7 @@
 /* ==UserStyle==
 @name           Lichess Figurensets
 @namespace      github.com/openstyles/stylus
-@version        1.0.3
+@version        1.0.4
 @description    Benutzerdefinierte Schachfiguren fuer Lichess
 @author         Me
 @preprocessor   uso
@@ -13,20 +13,21 @@
 ==/UserStyle== */
 
 /* Set-Auswahl: in Stylus unter "Figurenset" wechseln. */
-/* Der / nach dem Platzhalter verhindert, dass USO bb als Farbzusatz liest. */
+/* Slash trennt Platzhalter vom Dateinamen und verhindert USO-Farbzusatz-Erkennung. */
+/* .cg-wrap umfasst Brettfiguren und den Drag-Geist ausserhalb von cg-board. */
 
 /* WEISSE FIGUREN */
-.is2d cg-board piece.white.king       { background: url(/*[[figurenset]]*//wk.svg?v=2) center / contain no-repeat !important; }
-.is2d cg-board piece.white.queen      { background: url(/*[[figurenset]]*//wq.svg?v=2) center / contain no-repeat !important; }
-.is2d cg-board piece.white.rook       { background: url(/*[[figurenset]]*//wr.svg?v=2) center / contain no-repeat !important; }
-.is2d cg-board piece.white.bishop     { background: url(/*[[figurenset]]*//wb.svg?v=2) center / contain no-repeat !important; }
-.is2d cg-board piece.white.knight     { background: url(/*[[figurenset]]*//wn.svg?v=2) center / contain no-repeat !important; }
-.is2d cg-board piece.white.pawn       { background: url(/*[[figurenset]]*//wp.svg?v=2) center / contain no-repeat !important; }
+.is2d .cg-wrap piece.white.king       { background: url(/*[[figurenset]]*//wk.svg?v=2) center / contain no-repeat !important; }
+.is2d .cg-wrap piece.white.queen      { background: url(/*[[figurenset]]*//wq.svg?v=2) center / contain no-repeat !important; }
+.is2d .cg-wrap piece.white.rook       { background: url(/*[[figurenset]]*//wr.svg?v=2) center / contain no-repeat !important; }
+.is2d .cg-wrap piece.white.bishop     { background: url(/*[[figurenset]]*//wb.svg?v=2) center / contain no-repeat !important; }
+.is2d .cg-wrap piece.white.knight     { background: url(/*[[figurenset]]*//wn.svg?v=2) center / contain no-repeat !important; }
+.is2d .cg-wrap piece.white.pawn       { background: url(/*[[figurenset]]*//wp.svg?v=2) center / contain no-repeat !important; }
 
 /* SCHWARZE FIGUREN */
-.is2d cg-board piece.black.king       { background: url(/*[[figurenset]]*//bk.svg?v=2) center / contain no-repeat !important; }
-.is2d cg-board piece.black.queen      { background: url(/*[[figurenset]]*//bq.svg?v=2) center / contain no-repeat !important; }
-.is2d cg-board piece.black.rook       { background: url(/*[[figurenset]]*//br.svg?v=2) center / contain no-repeat !important; }
-.is2d cg-board piece.black.bishop     { background: url(/*[[figurenset]]*//bb.svg?v=2) center / contain no-repeat !important; }
-.is2d cg-board piece.black.knight     { background: url(/*[[figurenset]]*//bn.svg?v=2) center / contain no-repeat !important; }
-.is2d cg-board piece.black.pawn       { background: url(/*[[figurenset]]*//bp.svg?v=2) center / contain no-repeat !important; }
+.is2d .cg-wrap piece.black.king       { background: url(/*[[figurenset]]*//bk.svg?v=2) center / contain no-repeat !important; }
+.is2d .cg-wrap piece.black.queen      { background: url(/*[[figurenset]]*//bq.svg?v=2) center / contain no-repeat !important; }
+.is2d .cg-wrap piece.black.rook       { background: url(/*[[figurenset]]*//br.svg?v=2) center / contain no-repeat !important; }
+.is2d .cg-wrap piece.black.bishop     { background: url(/*[[figurenset]]*//bb.svg?v=2) center / contain no-repeat !important; }
+.is2d .cg-wrap piece.black.knight     { background: url(/*[[figurenset]]*//bn.svg?v=2) center / contain no-repeat !important; }
+.is2d .cg-wrap piece.black.pawn       { background: url(/*[[figurenset]]*//bp.svg?v=2) center / contain no-repeat !important; }
