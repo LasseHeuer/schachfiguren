@@ -1,26 +1,31 @@
 /* ==UserStyle==
 @name           Lichess Figurensets
 @namespace      github.com/openstyles/stylus
-@version        1.9.0
+@version        2.5.0
 @description    Benutzerdefinierte Schachfiguren fuer Lichess
 @author         Me
 @preprocessor   uso
 @var select figurenset "Figurenset" {
-  "System Pixel*": "https://lasseheuer.github.io/schachfiguren/system_pixel",
-  "System Eckig": "https://lasseheuer.github.io/schachfiguren/system_eckig",
+  "System Pixel": "https://lasseheuer.github.io/schachfiguren/system_pixel",
+  "System Eckig*": "https://lasseheuer.github.io/schachfiguren/system_eckig",
   "Rund": "https://lasseheuer.github.io/schachfiguren/rund"
 }
-@var color boardLightLight "Hellmodus: Helles Feld" #ffffff
-@var color boardDarkLight "Hellmodus: Dunkles Feld" #f1efff
-@var color lastMoveLight "Hellmodus: Letzter Zug" #c8ec83
-@var color boardLightDark "Dunkelmodus: Helles Feld" #3a3d48
-@var color boardDarkDark "Dunkelmodus: Dunkles Feld" #282b34
-@var color lastMoveDark "Dunkelmodus: Letzter Zug" #697a3d
-@var color hoverMixLight "Hellmodus: Mischfarbe" #808080
-@var color hoverMixDark "Dunkelmodus: Mischfarbe" #808080
-@var range idleMixPercent "Mischung ohne Brett-Hover (%)" [20, 0, 100, 1]
-@var range hoverMixPercent "Mischung bei Maus auf dem Brett (%)" [35, 0, 100, 1]
-@var range hoverDesaturation "Entsaettigung bei Maus auf dem Brett (%)" [60, 0, 100, 1]
+@var color boardLightLight "Hell | Brett: helles Feld" #e9e8e8
+@var color boardDarkLight "Hell | Brett: dunkles Feld" #d6ddd3
+@var color lastMoveLight "Hell | Brett: letzter Zug" #dae0d7
+@var color selectedLight "Hell | Brett: ausgewaehltes Feld" #fff
+@var color moveDotLight "Hell | Brett: Bewegungsdots" #ffffff
+@var color hoverMixLight "Hell | Mischfarbe" #d4d2d2
+@var color boardLightDark "Dunkel | Brett: helles Feld" #454b3d
+@var color boardDarkDark "Dunkel | Brett: dunkles Feld" #433e4c
+@var color lastMoveDark "Dunkel | Brett: letzter Zug" #2d2b2b
+@var color selectedDark "Dunkel | Brett: ausgewaehltes Feld" #252823
+@var color moveDotDark "Dunkel | Brett: Bewegungsdots" #232d23
+@var color hoverMixDark "Dunkel | Mischfarbe" #282727
+@var range idleMixPercent "Mischung ohne Brett-Hover (%)" [55, 0, 100, 5]
+@var range hoverMixPercent "Mischung bei Maus auf dem Brett (%)" [80, 0, 100, 5]
+@var range hoverDesaturation "Entsaettigung bei Maus auf dem Brett (%)" [60, 0, 100, 5]
+@var range moveDotSize "Groesse der Bewegungsdots (%)" [10, 5, 50, 5]
 @var color whitePieceColor "Farbe weisse Figuren" #d1521d
 @var color blackPieceColor "Farbe schwarze Figuren" #2ba4d1
 ==/UserStyle== */
@@ -46,6 +51,7 @@ html {
   --mix-percent: 0%;
   --hover-desaturation: 0%;
   --hover-mix-color: #808080;
+  --move-dot-size: /*[[moveDotSize]]*/%;
   --white-piece-color: /*[[whitePieceColor]]*/;
   --black-piece-color: /*[[blackPieceColor]]*/;
   background-color: var(--c-bg-page) !important;
@@ -53,12 +59,16 @@ html {
 
 html.light {
   --last-move-color: /*[[lastMoveLight]]*/;
+  --selected-square-color: /*[[selectedLight]]*/;
   --hover-mix-color: /*[[hoverMixLight]]*/;
+  --move-dot-color: /*[[moveDotLight]]*/;
 }
 
 html:not(.light) {
   --last-move-color: /*[[lastMoveDark]]*/;
+  --selected-square-color: /*[[selectedDark]]*/;
   --hover-mix-color: /*[[hoverMixDark]]*/;
+  --move-dot-color: /*[[moveDotDark]]*/;
 }
 
 html:has(cg-board) {
@@ -137,6 +147,18 @@ html:not(.light) body[data-board] .is2d .cg-wrap cg-board::before {
 
 body[data-board] .is2d .cg-wrap cg-board square.last-move {
   background-color: var(--last-move-color) !important;
+}
+
+body[data-board] .is2d .cg-wrap cg-board square.selected {
+  background-color: var(--selected-square-color) !important;
+}
+
+body[data-board] .is2d .cg-wrap cg-board square.move-dest:not(.oc),
+body[data-board] .is2d .cg-wrap cg-board square.premove-dest:not(.oc) {
+  background: radial-gradient(
+    var(--move-dot-color) 0 var(--move-dot-size),
+    transparent calc(var(--move-dot-size) + 1%)
+  ) !important;
 }
 
 /* Beim Ziehen nur die bewegte Figur anzeigen, nicht den Platzhalter am Startfeld. */
