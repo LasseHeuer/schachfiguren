@@ -1,7 +1,7 @@
 /* ==UserStyle==
 @name           Lichess Figurensets
 @namespace      github.com/openstyles/stylus
-@version        2.5.0
+@version        2.7.0
 @description    Benutzerdefinierte Schachfiguren fuer Lichess
 @author         Me
 @preprocessor   uso
@@ -13,19 +13,21 @@
 @var color boardLightLight "Hell | Brett: helles Feld" #e9e8e8
 @var color boardDarkLight "Hell | Brett: dunkles Feld" #d6ddd3
 @var color lastMoveLight "Hell | Brett: letzter Zug" #dae0d7
-@var color selectedLight "Hell | Brett: ausgewaehltes Feld" #fff
-@var color moveDotLight "Hell | Brett: Bewegungsdots" #ffffff
+@var color selectedLight "Hell | Brett: Auswahl und Bewegungsdots" #fff
+@var color checkSquareLight "Hell | Brett: Koenig im Schach" #e57373
 @var color hoverMixLight "Hell | Mischfarbe" #d4d2d2
 @var color boardLightDark "Dunkel | Brett: helles Feld" #454b3d
 @var color boardDarkDark "Dunkel | Brett: dunkles Feld" #433e4c
 @var color lastMoveDark "Dunkel | Brett: letzter Zug" #2d2b2b
-@var color selectedDark "Dunkel | Brett: ausgewaehltes Feld" #252823
-@var color moveDotDark "Dunkel | Brett: Bewegungsdots" #232d23
+@var color selectedDark "Dunkel | Brett: Auswahl und Bewegungsdots" #252823
+@var color checkSquareDark "Dunkel | Brett: Koenig im Schach" #8c3434
 @var color hoverMixDark "Dunkel | Mischfarbe" #282727
+@var checkbox markLastMove "Letzten Zug markieren" 0
 @var range idleMixPercent "Mischung ohne Brett-Hover (%)" [55, 0, 100, 5]
 @var range hoverMixPercent "Mischung bei Maus auf dem Brett (%)" [80, 0, 100, 5]
 @var range hoverDesaturation "Entsaettigung bei Maus auf dem Brett (%)" [60, 0, 100, 5]
 @var range moveDotSize "Groesse der Bewegungsdots (%)" [10, 5, 50, 5]
+@var checkbox squareMoveDots "Bewegungsdots quadratisch" 0
 @var color whitePieceColor "Farbe weisse Figuren" #d1521d
 @var color blackPieceColor "Farbe schwarze Figuren" #2ba4d1
 ==/UserStyle== */
@@ -52,6 +54,9 @@ html {
   --hover-desaturation: 0%;
   --hover-mix-color: #808080;
   --move-dot-size: /*[[moveDotSize]]*/%;
+  --square-move-dot-size: calc(var(--move-dot-size) * 1.4142);
+  --square-move-dots: /*[[squareMoveDots]]*/;
+  --mark-last-move: /*[[markLastMove]]*/;
   --white-piece-color: /*[[whitePieceColor]]*/;
   --black-piece-color: /*[[blackPieceColor]]*/;
   background-color: var(--c-bg-page) !important;
@@ -60,15 +65,17 @@ html {
 html.light {
   --last-move-color: /*[[lastMoveLight]]*/;
   --selected-square-color: /*[[selectedLight]]*/;
+  --check-square-color: /*[[checkSquareLight]]*/;
   --hover-mix-color: /*[[hoverMixLight]]*/;
-  --move-dot-color: /*[[moveDotLight]]*/;
+  --move-dot-color: var(--selected-square-color);
 }
 
 html:not(.light) {
   --last-move-color: /*[[lastMoveDark]]*/;
   --selected-square-color: /*[[selectedDark]]*/;
+  --check-square-color: /*[[checkSquareDark]]*/;
   --hover-mix-color: /*[[hoverMixDark]]*/;
-  --move-dot-color: /*[[moveDotDark]]*/;
+  --move-dot-color: var(--selected-square-color);
 }
 
 html:has(cg-board) {
@@ -101,15 +108,13 @@ html:has(cg-board:hover)::after {
   background: none !important;
 }
 
-/* Die Ebenen bleiben stabil waehrend die Mischebene ein- und ausblendet. */
+/* Nur das Brett bleibt ueber der Mischebene; Figuren daneben werden mitgemischt. */
 html:has(cg-board) .cg-wrap {
   position: relative;
-  z-index: 2147483647;
 }
 
-html:has(cg-board) body piece:not(cg-board *) {
-  position: relative !important;
-  z-index: 2147483647 !important;
+html:has(cg-board) .cg-wrap cg-board {
+  z-index: 2147483647;
 }
 
 /* Lichess-Seitenhintergrund. Die Vollbild-Ebene darueber mischt ihn mit. */
@@ -151,7 +156,13 @@ html:not(.light) body[data-board] .is2d .cg-wrap cg-board::before {
 }
 
 body[data-board] .is2d .cg-wrap cg-board square.last-move {
-  background-color: var(--last-move-color) !important;
+  background: none !important;
+}
+
+@container style(--mark-last-move: 1) {
+  body[data-board] .is2d .cg-wrap cg-board square.last-move {
+    background: var(--last-move-color) !important;
+  }
 }
 
 body[data-board] .is2d .cg-wrap cg-board square.selected {
@@ -164,6 +175,18 @@ body[data-board] .is2d .cg-wrap cg-board square.premove-dest:not(.oc) {
     var(--move-dot-color) 0 var(--move-dot-size),
     transparent calc(var(--move-dot-size) + 1%)
   ) !important;
+}
+
+@container style(--square-move-dots: 1) {
+  body[data-board] .is2d .cg-wrap cg-board square.move-dest:not(.oc),
+  body[data-board] .is2d .cg-wrap cg-board square.premove-dest:not(.oc) {
+    background: linear-gradient(var(--move-dot-color), var(--move-dot-color)) center /
+      var(--square-move-dot-size) var(--square-move-dot-size) no-repeat !important;
+  }
+}
+
+body[data-board] .is2d .cg-wrap cg-board square.check {
+  background: var(--check-square-color) !important;
 }
 
 /* Beim Ziehen nur die bewegte Figur anzeigen, nicht den Platzhalter am Startfeld. */
