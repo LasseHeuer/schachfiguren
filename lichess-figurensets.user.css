@@ -1,7 +1,7 @@
 /* ==UserStyle==
 @name           Lichess Figurensets
 @namespace      github.com/openstyles/stylus
-@version        1.5.2
+@version        1.9.0
 @description    Benutzerdefinierte Schachfiguren fuer Lichess
 @author         Me
 @preprocessor   uso
@@ -16,7 +16,13 @@
 @var color boardLightDark "Dunkelmodus: Helles Feld" #3a3d48
 @var color boardDarkDark "Dunkelmodus: Dunkles Feld" #282b34
 @var color lastMoveDark "Dunkelmodus: Letzter Zug" #697a3d
-@var range hoverDarkening "Abdunklung bei Maus auf dem Brett (%)" [35, 0, 100, 1]
+@var color hoverMixLight "Hellmodus: Mischfarbe" #808080
+@var color hoverMixDark "Dunkelmodus: Mischfarbe" #808080
+@var range idleMixPercent "Mischung ohne Brett-Hover (%)" [20, 0, 100, 1]
+@var range hoverMixPercent "Mischung bei Maus auf dem Brett (%)" [35, 0, 100, 1]
+@var range hoverDesaturation "Entsaettigung bei Maus auf dem Brett (%)" [60, 0, 100, 1]
+@var color whitePieceColor "Farbe weisse Figuren" #d1521d
+@var color blackPieceColor "Farbe schwarze Figuren" #2ba4d1
 ==/UserStyle== */
 
 @-moz-document domain("lichess.org") {
@@ -35,32 +41,63 @@
   text-shadow: none !important;
 }
 
-/* Ein Slider fuer die Abdunklung bei Hover ueber einem Lichess-Brett. */
+/* Einstellbare Graumischung bei Hover ueber einem Lichess-Brett. */
 html {
-  --board-hover-dim: 0%;
-  --page-saturation: 0.75;
+  --mix-percent: 0%;
+  --hover-desaturation: 0%;
+  --hover-mix-color: #808080;
+  --white-piece-color: /*[[whitePieceColor]]*/;
+  --black-piece-color: /*[[blackPieceColor]]*/;
   background-color: var(--c-bg-page) !important;
 }
 
 html.light {
   --last-move-color: /*[[lastMoveLight]]*/;
+  --hover-mix-color: /*[[hoverMixLight]]*/;
 }
 
 html:not(.light) {
   --last-move-color: /*[[lastMoveDark]]*/;
+  --hover-mix-color: /*[[hoverMixDark]]*/;
+}
+
+html:has(cg-board) {
+  --mix-percent: /*[[idleMixPercent]]*/%;
 }
 
 html:has(cg-board:hover) {
-  --board-hover-dim: /*[[hoverDarkening]]*/%;
-  --page-saturation: 0.4;
+  --mix-percent: /*[[hoverMixPercent]]*/%;
+  --hover-desaturation: /*[[hoverDesaturation]]*/%;
 }
 
-/* Nur sichere Teilbaeume filtern, damit sich die Saettigung nicht mehrfach addiert. */
-body :has(cg-board, piece) > :not(cg-board):not(cg-board *):not(piece):not(:has(cg-board, piece)) {
-  filter: saturate(var(--page-saturation)) brightness(calc(100% - var(--board-hover-dim))) !important;
+/* Eine einzige Ebene mischt die gesamte Seite bei Brett-Hover. */
+html::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  background-color: color-mix(in srgb, transparent, var(--hover-mix-color) var(--mix-percent));
+  backdrop-filter: none;
+  transition: background-color 150ms ease, backdrop-filter 150ms ease;
+  pointer-events: none;
 }
 
-/* Auch der Seitenhintergrund wird nur beim Brett-Hover abgedunkelt. */
+html:has(cg-board:hover)::after {
+  backdrop-filter: saturate(calc(100% - var(--hover-desaturation)));
+}
+
+/* Die Ebenen bleiben stabil waehrend die Mischebene ein- und ausblendet. */
+html:has(cg-board) .cg-wrap {
+  position: relative;
+  z-index: 2147483647;
+}
+
+html:has(cg-board) body piece:not(cg-board *) {
+  position: relative !important;
+  z-index: 2147483647 !important;
+}
+
+/* Lichess-Seitenhintergrund. Die Vollbild-Ebene darueber mischt ihn mit. */
 html::before {
   content: "";
   position: fixed;
@@ -68,20 +105,10 @@ html::before {
   z-index: -1;
   pointer-events: none;
   background: var(--c-bg-page) linear-gradient(to bottom, var(--c-body-gradient), var(--c-bg-page) 116px) no-repeat;
-  filter: saturate(var(--page-saturation)) brightness(calc(100% - var(--board-hover-dim)));
 }
 
 body {
   background: transparent !important;
-}
-
-/* Diese Puzzle-Flaechen enthalten eine Figur und koennen nicht gefiltert werden. */
-.puzzle__tools {
-  background-color: color-mix(in srgb, var(--c-bg-box), black var(--board-hover-dim)) !important;
-}
-
-.puzzle__feedback {
-  background-color: color-mix(in srgb, var(--c-bg-zebra), black var(--board-hover-dim)) !important;
 }
 
 /* Brettfarben in Stylus ueber die Farbfelder einstellen. */
@@ -116,19 +143,67 @@ body[data-board] .is2d .cg-wrap cg-board square.last-move {
 .is2d .cg-wrap piece.ghost { display: none !important; }
 
 /* WEISSE FIGUREN */
-.is2d .cg-wrap piece.white.king, .is2d .puzzle__feedback piece.white.king       { background: url(/*[[figurenset]]*//wk.svg?v=2) center / contain no-repeat !important; }
-.is2d .cg-wrap piece.white.queen, .is2d .puzzle__feedback piece.white.queen    { background: url(/*[[figurenset]]*//wq.svg?v=2) center / contain no-repeat !important; }
-.is2d .cg-wrap piece.white.rook, .is2d .puzzle__feedback piece.white.rook      { background: url(/*[[figurenset]]*//wr.svg?v=2) center / contain no-repeat !important; }
-.is2d .cg-wrap piece.white.bishop, .is2d .puzzle__feedback piece.white.bishop  { background: url(/*[[figurenset]]*//wb.svg?v=2) center / contain no-repeat !important; }
-.is2d .cg-wrap piece.white.knight, .is2d .puzzle__feedback piece.white.knight  { background: url(/*[[figurenset]]*//wn.svg?v=2) center / contain no-repeat !important; }
-.is2d .cg-wrap piece.white.pawn, .is2d .puzzle__feedback piece.white.pawn      { background: url(/*[[figurenset]]*//wp.svg?v=2) center / contain no-repeat !important; }
+.is2d .cg-wrap piece.white.king, .is2d .puzzle__feedback piece.white.king {
+  background: var(--white-piece-color) !important;
+  -webkit-mask: url(/*[[figurenset]]*//wk.svg?v=2) center / contain no-repeat !important;
+  mask: url(/*[[figurenset]]*//wk.svg?v=2) center / contain no-repeat !important;
+}
+.is2d .cg-wrap piece.white.queen, .is2d .puzzle__feedback piece.white.queen {
+  background: var(--white-piece-color) !important;
+  -webkit-mask: url(/*[[figurenset]]*//wq.svg?v=2) center / contain no-repeat !important;
+  mask: url(/*[[figurenset]]*//wq.svg?v=2) center / contain no-repeat !important;
+}
+.is2d .cg-wrap piece.white.rook, .is2d .puzzle__feedback piece.white.rook {
+  background: var(--white-piece-color) !important;
+  -webkit-mask: url(/*[[figurenset]]*//wr.svg?v=2) center / contain no-repeat !important;
+  mask: url(/*[[figurenset]]*//wr.svg?v=2) center / contain no-repeat !important;
+}
+.is2d .cg-wrap piece.white.bishop, .is2d .puzzle__feedback piece.white.bishop {
+  background: var(--white-piece-color) !important;
+  -webkit-mask: url(/*[[figurenset]]*//wb.svg?v=2) center / contain no-repeat !important;
+  mask: url(/*[[figurenset]]*//wb.svg?v=2) center / contain no-repeat !important;
+}
+.is2d .cg-wrap piece.white.knight, .is2d .puzzle__feedback piece.white.knight {
+  background: var(--white-piece-color) !important;
+  -webkit-mask: url(/*[[figurenset]]*//wn.svg?v=2) center / contain no-repeat !important;
+  mask: url(/*[[figurenset]]*//wn.svg?v=2) center / contain no-repeat !important;
+}
+.is2d .cg-wrap piece.white.pawn, .is2d .puzzle__feedback piece.white.pawn {
+  background: var(--white-piece-color) !important;
+  -webkit-mask: url(/*[[figurenset]]*//wp.svg?v=2) center / contain no-repeat !important;
+  mask: url(/*[[figurenset]]*//wp.svg?v=2) center / contain no-repeat !important;
+}
 
 /* SCHWARZE FIGUREN */
-.is2d .cg-wrap piece.black.king, .is2d .puzzle__feedback piece.black.king       { background: url(/*[[figurenset]]*//bk.svg?v=2) center / contain no-repeat !important; }
-.is2d .cg-wrap piece.black.queen, .is2d .puzzle__feedback piece.black.queen    { background: url(/*[[figurenset]]*//bq.svg?v=2) center / contain no-repeat !important; }
-.is2d .cg-wrap piece.black.rook, .is2d .puzzle__feedback piece.black.rook      { background: url(/*[[figurenset]]*//br.svg?v=2) center / contain no-repeat !important; }
-.is2d .cg-wrap piece.black.bishop, .is2d .puzzle__feedback piece.black.bishop  { background: url(/*[[figurenset]]*//bb.svg?v=2) center / contain no-repeat !important; }
-.is2d .cg-wrap piece.black.knight, .is2d .puzzle__feedback piece.black.knight  { background: url(/*[[figurenset]]*//bn.svg?v=2) center / contain no-repeat !important; }
-.is2d .cg-wrap piece.black.pawn, .is2d .puzzle__feedback piece.black.pawn      { background: url(/*[[figurenset]]*//bp.svg?v=2) center / contain no-repeat !important; }
+.is2d .cg-wrap piece.black.king, .is2d .puzzle__feedback piece.black.king {
+  background: var(--black-piece-color) !important;
+  -webkit-mask: url(/*[[figurenset]]*//bk.svg?v=2) center / contain no-repeat !important;
+  mask: url(/*[[figurenset]]*//bk.svg?v=2) center / contain no-repeat !important;
+}
+.is2d .cg-wrap piece.black.queen, .is2d .puzzle__feedback piece.black.queen {
+  background: var(--black-piece-color) !important;
+  -webkit-mask: url(/*[[figurenset]]*//bq.svg?v=2) center / contain no-repeat !important;
+  mask: url(/*[[figurenset]]*//bq.svg?v=2) center / contain no-repeat !important;
+}
+.is2d .cg-wrap piece.black.rook, .is2d .puzzle__feedback piece.black.rook {
+  background: var(--black-piece-color) !important;
+  -webkit-mask: url(/*[[figurenset]]*//br.svg?v=2) center / contain no-repeat !important;
+  mask: url(/*[[figurenset]]*//br.svg?v=2) center / contain no-repeat !important;
+}
+.is2d .cg-wrap piece.black.bishop, .is2d .puzzle__feedback piece.black.bishop {
+  background: var(--black-piece-color) !important;
+  -webkit-mask: url(/*[[figurenset]]*//bb.svg?v=2) center / contain no-repeat !important;
+  mask: url(/*[[figurenset]]*//bb.svg?v=2) center / contain no-repeat !important;
+}
+.is2d .cg-wrap piece.black.knight, .is2d .puzzle__feedback piece.black.knight {
+  background: var(--black-piece-color) !important;
+  -webkit-mask: url(/*[[figurenset]]*//bn.svg?v=2) center / contain no-repeat !important;
+  mask: url(/*[[figurenset]]*//bn.svg?v=2) center / contain no-repeat !important;
+}
+.is2d .cg-wrap piece.black.pawn, .is2d .puzzle__feedback piece.black.pawn {
+  background: var(--black-piece-color) !important;
+  -webkit-mask: url(/*[[figurenset]]*//bp.svg?v=2) center / contain no-repeat !important;
+  mask: url(/*[[figurenset]]*//bp.svg?v=2) center / contain no-repeat !important;
+}
 
 }
