@@ -96,6 +96,11 @@ html:has(cg-board:hover)::after {
   backdrop-filter: saturate(calc(100% - var(--hover-desaturation)));
 }
 
+/* Analysegraph ohne den horizontalen Hintergrundverlauf. */
+#acpl-chart-container {
+  background: none !important;
+}
+
 /* Die Ebenen bleiben stabil waehrend die Mischebene ein- und ausblendet. */
 html:has(cg-board) .cg-wrap {
   position: relative;
