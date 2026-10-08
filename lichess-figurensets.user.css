@@ -1,7 +1,7 @@
 /* ==UserStyle==
 @name           Lichess Figurensets
 @namespace      github.com/openstyles/stylus
-@version        1.4.0
+@version        1.5.2
 @description    Benutzerdefinierte Schachfiguren fuer Lichess
 @author         Me
 @preprocessor   uso
@@ -16,11 +16,10 @@
 @var color boardLightDark "Dunkelmodus: Helles Feld" #3a3d48
 @var color boardDarkDark "Dunkelmodus: Dunkles Feld" #282b34
 @var color lastMoveDark "Dunkelmodus: Letzter Zug" #697a3d
-@var range brightnessLight "Hellmodus: Helligkeit (%)" [100, 0, 200, 1]
-@var range contrastLight "Hellmodus: Kontrast (%)" [100, 0, 200, 1]
-@var range brightnessDark "Dunkelmodus: Helligkeit (%)" [100, 0, 200, 1]
-@var range contrastDark "Dunkelmodus: Kontrast (%)" [100, 0, 200, 1]
+@var range hoverDarkening "Abdunklung bei Maus auf dem Brett (%)" [35, 0, 100, 1]
 ==/UserStyle== */
+
+@-moz-document domain("lichess.org") {
 
 /* Set-Auswahl: in Stylus unter "Figurenset" wechseln. */
 /* Slash trennt Platzhalter vom Dateinamen und verhindert USO-Farbzusatz-Erkennung. */
@@ -36,29 +35,32 @@
   text-shadow: none !important;
 }
 
-/* Regler fuer die Website, getrennt nach hellem und dunklem Lichess-Design. */
+/* Ein Slider fuer die Abdunklung bei Hover ueber einem Lichess-Brett. */
+html {
+  --board-hover-dim: 0%;
+  --page-saturation: 0.75;
+  background-color: var(--c-bg-page) !important;
+}
+
 html.light {
-  --page-brightness: /*[[brightnessLight]]*/%;
-  --page-contrast: /*[[contrastLight]]*/%;
   --last-move-color: /*[[lastMoveLight]]*/;
 }
 
 html:not(.light) {
-  --page-brightness: /*[[brightnessDark]]*/%;
-  --page-contrast: /*[[contrastDark]]*/%;
   --last-move-color: /*[[lastMoveDark]]*/;
 }
 
-/* Spielfeld, Markierungen und Figuren bleiben von den Reglern ausgenommen. */
-body :not(cg-board):not(cg-board *):not(piece):not(:has(cg-board, piece)) {
-  filter: saturate(0.2) brightness(var(--page-brightness)) contrast(var(--page-contrast)) !important;
+html:has(cg-board:hover) {
+  --board-hover-dim: /*[[hoverDarkening]]*/%;
+  --page-saturation: 0.4;
 }
 
-/* Auch Lichess' Seitenhintergrund folgt den Reglern. */
-html {
-  background-color: var(--c-bg-page) !important;
+/* Nur sichere Teilbaeume filtern, damit sich die Saettigung nicht mehrfach addiert. */
+body :has(cg-board, piece) > :not(cg-board):not(cg-board *):not(piece):not(:has(cg-board, piece)) {
+  filter: saturate(var(--page-saturation)) brightness(calc(100% - var(--board-hover-dim))) !important;
 }
 
+/* Auch der Seitenhintergrund wird nur beim Brett-Hover abgedunkelt. */
 html::before {
   content: "";
   position: fixed;
@@ -66,11 +68,20 @@ html::before {
   z-index: -1;
   pointer-events: none;
   background: var(--c-bg-page) linear-gradient(to bottom, var(--c-body-gradient), var(--c-bg-page) 116px) no-repeat;
-  filter: saturate(0.2) brightness(var(--page-brightness)) contrast(var(--page-contrast));
+  filter: saturate(var(--page-saturation)) brightness(calc(100% - var(--board-hover-dim)));
 }
 
 body {
   background: transparent !important;
+}
+
+/* Diese Puzzle-Flaechen enthalten eine Figur und koennen nicht gefiltert werden. */
+.puzzle__tools {
+  background-color: color-mix(in srgb, var(--c-bg-box), black var(--board-hover-dim)) !important;
+}
+
+.puzzle__feedback {
+  background-color: color-mix(in srgb, var(--c-bg-zebra), black var(--board-hover-dim)) !important;
 }
 
 /* Brettfarben in Stylus ueber die Farbfelder einstellen. */
@@ -119,3 +130,5 @@ body[data-board] .is2d .cg-wrap cg-board square.last-move {
 .is2d .cg-wrap piece.black.bishop, .is2d .puzzle__feedback piece.black.bishop  { background: url(/*[[figurenset]]*//bb.svg?v=2) center / contain no-repeat !important; }
 .is2d .cg-wrap piece.black.knight, .is2d .puzzle__feedback piece.black.knight  { background: url(/*[[figurenset]]*//bn.svg?v=2) center / contain no-repeat !important; }
 .is2d .cg-wrap piece.black.pawn, .is2d .puzzle__feedback piece.black.pawn      { background: url(/*[[figurenset]]*//bp.svg?v=2) center / contain no-repeat !important; }
+
+}
