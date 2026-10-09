@@ -33,10 +33,12 @@
       "--lfs-last-move-light": settings.lastMoveLight,
       "--lfs-selected-light": settings.selectedLight,
       "--lfs-check-light": settings.checkSquareLight,
+      "--lfs-engine-arrow-light": settings.engineArrowLight,
       "--lfs-hover-mix-light": settings.hoverMixLight,
       "--lfs-last-move-dark": settings.lastMoveDark,
       "--lfs-selected-dark": settings.selectedDark,
       "--lfs-check-dark": settings.checkSquareDark,
+      "--lfs-engine-arrow-dark": settings.engineArrowDark,
       "--lfs-hover-mix-dark": settings.hoverMixDark
     };
 

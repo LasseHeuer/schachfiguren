@@ -10,6 +10,7 @@ html {
 }
 
 html.light {
+  --lfs-engine-arrow-color: var(--lfs-engine-arrow-light, #15781b);
   --lfs-board-dark-active: var(--lfs-board-dark-light, #d6ddd3);
   --lfs-last-move-color: var(--lfs-last-move-light, #dae0d7);
   --lfs-selected-square-color: var(--lfs-selected-light, #ffffff);
@@ -18,6 +19,7 @@ html.light {
 }
 
 html:not(.light) {
+  --lfs-engine-arrow-color: var(--lfs-engine-arrow-dark, #80b64c);
   --lfs-board-dark-active: var(--lfs-board-dark-dark, #433e4c);
   --lfs-last-move-color: var(--lfs-last-move-dark, #2d2b2b);
   --lfs-selected-square-color: var(--lfs-selected-dark, #252823);
@@ -59,9 +61,9 @@ html:not([data-lfs-disabled])[data-lfs-remove-outlines] body *:not(cg-board):not
   outline: none !important;
 }
 
-html:not([data-lfs-disabled])[data-lfs-remove-gradients] body *:not(cg-board):not(cg-board *),
-html:not([data-lfs-disabled])[data-lfs-remove-gradients] body *:not(cg-board):not(cg-board *)::before,
-html:not([data-lfs-disabled])[data-lfs-remove-gradients] body *:not(cg-board):not(cg-board *)::after {
+html:not([data-lfs-disabled])[data-lfs-remove-gradients] body *:not(cg-board):not(cg-board *):not(.material):not(.material *):not(.eval-gauge),
+html:not([data-lfs-disabled])[data-lfs-remove-gradients] body *:not(cg-board):not(cg-board *):not(.material):not(.material *):not(.eval-gauge)::before,
+html:not([data-lfs-disabled])[data-lfs-remove-gradients] body *:not(cg-board):not(cg-board *):not(.material):not(.material *):not(.eval-gauge)::after {
   background-image: none !important;
 }
 
@@ -86,7 +88,7 @@ html:not([data-lfs-disabled])::after {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: 2147483000;
+  z-index: 1;
   background-color: color-mix(in srgb, transparent, var(--lfs-hover-mix-color) var(--lfs-mix-percent));
   backdrop-filter: none;
   transition: background-color 150ms ease, backdrop-filter 150ms ease;
@@ -102,8 +104,9 @@ html:not([data-lfs-disabled]) .main-board.cg-wrap {
   position: absolute !important;
 }
 
-html:not([data-lfs-disabled]) body cg-board {
-  z-index: 2147483647 !important;
+html:not([data-lfs-disabled]) body .cg-wrap {
+  position: relative;
+  z-index: 2 !important;
 }
 
 html:not([data-lfs-disabled])::before {
@@ -195,6 +198,80 @@ html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square.ch
 html:not([data-lfs-disabled]) #acpl-chart-container {
   background: none !important;
 }
+
+html:not([data-lfs-disabled]) .material {
+  position: relative !important;
+  z-index: 3 !important;
+}
+
+html:not([data-lfs-disabled]) .material mpiece {
+  opacity: 1 !important;
+  filter: none !important;
+  background: var(--lfs-captured-piece-color) !important;
+}
+
+html:not([data-lfs-disabled]) .round__app:has(.main-board .cg-wrap.orientation-white) .material-top,
+html:not([data-lfs-disabled]) .round__app:has(.main-board .cg-wrap.orientation-black) .material-bottom {
+  --lfs-captured-piece-color: var(--lfs-white-piece-color);
+  --lfs-captured-pawn: var(--lfs-piece-wp);
+  --lfs-captured-bishop: var(--lfs-piece-wb);
+  --lfs-captured-knight: var(--lfs-piece-wn);
+  --lfs-captured-rook: var(--lfs-piece-wr);
+  --lfs-captured-queen: var(--lfs-piece-wq);
+  --lfs-captured-king: var(--lfs-piece-wk);
+}
+
+html:not([data-lfs-disabled]) .round__app:has(.main-board .cg-wrap.orientation-white) .material-bottom,
+html:not([data-lfs-disabled]) .round__app:has(.main-board .cg-wrap.orientation-black) .material-top {
+  --lfs-captured-piece-color: var(--lfs-black-piece-color);
+  --lfs-captured-pawn: var(--lfs-piece-bp);
+  --lfs-captured-bishop: var(--lfs-piece-bb);
+  --lfs-captured-knight: var(--lfs-piece-bn);
+  --lfs-captured-rook: var(--lfs-piece-br);
+  --lfs-captured-queen: var(--lfs-piece-bq);
+  --lfs-captured-king: var(--lfs-piece-bk);
+}
+
+html:not([data-lfs-disabled]) .eval-gauge {
+  background: linear-gradient(
+    to bottom,
+    var(--lfs-black-piece-color) var(--eval-percent, 50%),
+    var(--lfs-white-piece-color) var(--eval-percent, 50%)
+  ) !important;
+}
+
+html:not([data-lfs-disabled]) .eval-gauge:has(> .black) {
+  background: var(--lfs-white-piece-color) !important;
+}
+
+html:not([data-lfs-disabled]) .eval-gauge > .black {
+  background-color: var(--lfs-black-piece-color) !important;
+}
+
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes line[marker-end="url(#arrowhead-pb)"],
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes line[marker-end="url(#arrowhead-pgr)"],
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes line[marker-end="url(#arrowhead-pg)"],
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below line[marker-end="url(#arrowhead-pb)"],
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below line[marker-end="url(#arrowhead-pgr)"],
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below line[marker-end="url(#arrowhead-pg)"] {
+  stroke: var(--lfs-engine-arrow-color) !important;
+}
+
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes marker#arrowhead-pb path,
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes marker#arrowhead-pgr path,
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes marker#arrowhead-pg path,
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below marker#arrowhead-pb path,
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below marker#arrowhead-pgr path,
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below marker#arrowhead-pg path {
+  fill: var(--lfs-engine-arrow-color) !important;
+}
+
+html:not([data-lfs-disabled]) .material mpiece.pawn { -webkit-mask: var(--lfs-captured-pawn) center / contain no-repeat !important; mask: var(--lfs-captured-pawn) center / contain no-repeat !important; }
+html:not([data-lfs-disabled]) .material mpiece.bishop { -webkit-mask: var(--lfs-captured-bishop) center / contain no-repeat !important; mask: var(--lfs-captured-bishop) center / contain no-repeat !important; }
+html:not([data-lfs-disabled]) .material mpiece.knight { -webkit-mask: var(--lfs-captured-knight) center / contain no-repeat !important; mask: var(--lfs-captured-knight) center / contain no-repeat !important; }
+html:not([data-lfs-disabled]) .material mpiece.rook { -webkit-mask: var(--lfs-captured-rook) center / contain no-repeat !important; mask: var(--lfs-captured-rook) center / contain no-repeat !important; }
+html:not([data-lfs-disabled]) .material mpiece.queen { -webkit-mask: var(--lfs-captured-queen) center / contain no-repeat !important; mask: var(--lfs-captured-queen) center / contain no-repeat !important; }
+html:not([data-lfs-disabled]) .material mpiece.king { -webkit-mask: var(--lfs-captured-king) center / contain no-repeat !important; mask: var(--lfs-captured-king) center / contain no-repeat !important; }
 
 html:not([data-lfs-disabled]) .is2d .cg-wrap piece.ghost {
   display: none !important;
