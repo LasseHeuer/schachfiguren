@@ -173,11 +173,11 @@ html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board[data-lfs-
   background-repeat: no-repeat !important;
 }
 
-html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square.last-move {
+html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board square.last-move {
   background: none !important;
 }
 
-html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > svg.lfs-last-move-line {
+html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board > svg.lfs-last-move-line {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -186,7 +186,7 @@ html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > svg.lfs
   pointer-events: none;
 }
 
-html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > svg.lfs-last-move-line polygon {
+html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board > svg.lfs-last-move-line polygon {
   fill: var(--lfs-last-move-color);
 }
 
@@ -265,22 +265,31 @@ html:not([data-lfs-disabled]) .eval-gauge > .black {
   background-color: var(--lfs-black-piece-color) !important;
 }
 
-html:not([data-lfs-disabled]) .cg-wrap .cg-shapes line[marker-end="url(#arrowhead-pb)"],
-html:not([data-lfs-disabled]) .cg-wrap .cg-shapes line[marker-end="url(#arrowhead-pgr)"],
-html:not([data-lfs-disabled]) .cg-wrap .cg-shapes line[marker-end="url(#arrowhead-pg)"],
-html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below line[marker-end="url(#arrowhead-pb)"],
-html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below line[marker-end="url(#arrowhead-pgr)"],
-html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below line[marker-end="url(#arrowhead-pg)"] {
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes line[marker-end^="url(#arrowhead-pb"],
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes line[marker-end^="url(#arrowhead-pg"],
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes line[marker-end^="url(#arrowhead-pgr"],
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes line[marker-end^="url(#arrowhead-pr"],
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below line[marker-end^="url(#arrowhead-pb"],
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below line[marker-end^="url(#arrowhead-pg"],
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below line[marker-end^="url(#arrowhead-pgr"],
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below line[marker-end^="url(#arrowhead-pr"] {
   stroke: var(--lfs-engine-arrow-color) !important;
 }
 
-html:not([data-lfs-disabled]) .cg-wrap .cg-shapes marker#arrowhead-pb path,
-html:not([data-lfs-disabled]) .cg-wrap .cg-shapes marker#arrowhead-pgr path,
-html:not([data-lfs-disabled]) .cg-wrap .cg-shapes marker#arrowhead-pg path,
-html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below marker#arrowhead-pb path,
-html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below marker#arrowhead-pgr path,
-html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below marker#arrowhead-pg path {
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes marker[id^="arrowhead-pb"] path,
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes marker[id^="arrowhead-pg"] path,
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes marker[id^="arrowhead-pgr"] path,
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes marker[id^="arrowhead-pr"] path,
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below marker[id^="arrowhead-pb"] path,
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below marker[id^="arrowhead-pg"] path,
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below marker[id^="arrowhead-pgr"] path,
+html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below marker[id^="arrowhead-pr"] path {
   fill: var(--lfs-engine-arrow-color) !important;
+}
+
+/* Keep engine arrows behind pieces without changing drag or move-animation stacking. */
+html:not([data-lfs-disabled]) .is2d .cg-wrap:has(.cg-shapes line[marker-end^="url(#arrowhead-p"]) cg-board > piece:not(.anim):not(.dragging) {
+  z-index: 3;
 }
 
 html:not([data-lfs-disabled]) .material mpiece.pawn { -webkit-mask: var(--lfs-captured-pawn) center / contain no-repeat !important; mask: var(--lfs-captured-pawn) center / contain no-repeat !important; }

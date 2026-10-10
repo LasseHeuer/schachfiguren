@@ -6,7 +6,8 @@
     B: [[-1, -1], [-1, 1], [1, -1], [1, 1]],
     Q: [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]
   };
-  const boardSelector = ".main-board cg-board, .mini-game cg-board";
+  const boardSelector = "body[data-board] .cg-wrap cg-board, .mini-game cg-board";
+  const selectedSquareSelector = "body[data-board] .cg-wrap cg-board > square.selected, .mini-game cg-board > square.selected";
 
   let settings = null;
   const observedBoards = new Map();
@@ -587,7 +588,7 @@
           return;
         }
         if (settings?.enabled && settings.threatColoringEnabled) {
-          const selected = document.querySelector(".main-board cg-board > square.selected");
+          const selected = document.querySelector(selectedSquareSelector);
           if (selected) scheduleRender(selected.parentElement);
         }
       }, true);

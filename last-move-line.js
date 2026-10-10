@@ -1,5 +1,5 @@
 (() => {
-  const boardSelector = "body[data-board] .cg-wrap cg-board";
+  const boardSelector = ".cg-wrap cg-board";
   const svgNamespace = "http://www.w3.org/2000/svg";
   const observedBoards = new Map();
   let settings = null;
@@ -26,7 +26,7 @@
   }
 
   function renderBoard(board, entry) {
-    if (!settings?.enabled || !settings.markLastMove) {
+    if (!settings?.enabled || !settings.markLastMove || !board.closest(".is2d")) {
       if (entry.svg) entry.svg.style.display = "none";
       return;
     }
@@ -119,6 +119,10 @@
     return node.nodeType === Node.ELEMENT_NODE && (node.matches("cg-board") || Boolean(node.querySelector("cg-board")));
   }
 
+  function containsBoardContainer(node) {
+    return node.nodeType === Node.ELEMENT_NODE && (node.matches(".cg-wrap") || Boolean(node.querySelector(".cg-wrap")));
+  }
+
   function scanBoards() {
     const boards = new Set(document.querySelectorAll(boardSelector));
     for (const board of boards) observeBoard(board);
@@ -134,9 +138,14 @@
   }
 
   const documentObserver = new MutationObserver(mutations => {
-    if (mutations.some(mutation => [...mutation.addedNodes, ...mutation.removedNodes].some(containsBoard))) scanBoards();
+    const shouldRefresh = mutations.some(mutation => mutation.type === "attributes"
+      ? containsBoardContainer(mutation.target)
+      : [...mutation.addedNodes, ...mutation.removedNodes].some(containsBoard));
+    if (!shouldRefresh) return;
+    scanBoards();
+    for (const board of observedBoards.keys()) scheduleRender(board);
   });
-  documentObserver.observe(document, { childList: true, subtree: true });
+  documentObserver.observe(document, { attributes: true, attributeFilter: ["class"], childList: true, subtree: true });
   scanBoards();
 
   globalThis.LichessLastMoveLine = {

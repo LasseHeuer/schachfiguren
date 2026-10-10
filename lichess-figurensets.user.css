@@ -112,22 +112,30 @@ html:has(cg-board:hover)::after {
   background: none !important;
 }
 
-html:has(cg-board) .cg-wrap .cg-shapes line[marker-end="url(#arrowhead-pb)"],
-html:has(cg-board) .cg-wrap .cg-shapes line[marker-end="url(#arrowhead-pgr)"],
-html:has(cg-board) .cg-wrap .cg-shapes line[marker-end="url(#arrowhead-pg)"],
-html:has(cg-board) .cg-wrap .cg-shapes-below line[marker-end="url(#arrowhead-pb)"],
-html:has(cg-board) .cg-wrap .cg-shapes-below line[marker-end="url(#arrowhead-pgr)"],
-html:has(cg-board) .cg-wrap .cg-shapes-below line[marker-end="url(#arrowhead-pg)"] {
+html:has(cg-board) .cg-wrap .cg-shapes line[marker-end^="url(#arrowhead-pb"],
+html:has(cg-board) .cg-wrap .cg-shapes line[marker-end^="url(#arrowhead-pg"],
+html:has(cg-board) .cg-wrap .cg-shapes line[marker-end^="url(#arrowhead-pgr"],
+html:has(cg-board) .cg-wrap .cg-shapes line[marker-end^="url(#arrowhead-pr"],
+html:has(cg-board) .cg-wrap .cg-shapes-below line[marker-end^="url(#arrowhead-pb"],
+html:has(cg-board) .cg-wrap .cg-shapes-below line[marker-end^="url(#arrowhead-pg"],
+html:has(cg-board) .cg-wrap .cg-shapes-below line[marker-end^="url(#arrowhead-pgr"],
+html:has(cg-board) .cg-wrap .cg-shapes-below line[marker-end^="url(#arrowhead-pr"] {
   stroke: var(--engine-arrow-color) !important;
 }
 
-html:has(cg-board) .cg-wrap .cg-shapes marker#arrowhead-pb path,
-html:has(cg-board) .cg-wrap .cg-shapes marker#arrowhead-pgr path,
-html:has(cg-board) .cg-wrap .cg-shapes marker#arrowhead-pg path,
-html:has(cg-board) .cg-wrap .cg-shapes-below marker#arrowhead-pb path,
-html:has(cg-board) .cg-wrap .cg-shapes-below marker#arrowhead-pgr path,
-html:has(cg-board) .cg-wrap .cg-shapes-below marker#arrowhead-pg path {
+html:has(cg-board) .cg-wrap .cg-shapes marker[id^="arrowhead-pb"] path,
+html:has(cg-board) .cg-wrap .cg-shapes marker[id^="arrowhead-pg"] path,
+html:has(cg-board) .cg-wrap .cg-shapes marker[id^="arrowhead-pgr"] path,
+html:has(cg-board) .cg-wrap .cg-shapes marker[id^="arrowhead-pr"] path,
+html:has(cg-board) .cg-wrap .cg-shapes-below marker[id^="arrowhead-pb"] path,
+html:has(cg-board) .cg-wrap .cg-shapes-below marker[id^="arrowhead-pg"] path,
+html:has(cg-board) .cg-wrap .cg-shapes-below marker[id^="arrowhead-pgr"] path,
+html:has(cg-board) .cg-wrap .cg-shapes-below marker[id^="arrowhead-pr"] path {
   fill: var(--engine-arrow-color) !important;
+}
+
+html:has(cg-board) .is2d .cg-wrap:has(.cg-shapes line[marker-end^="url(#arrowhead-p"]) cg-board > piece:not(.anim):not(.dragging) {
+  z-index: 3;
 }
 
 html:has(cg-board) .material {
