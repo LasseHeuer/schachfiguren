@@ -126,6 +126,17 @@
     playTimeTimer = setTimeout(formatPlayTime, 80);
   }
 
+  function applyPromotionSquareTheme() {
+    for (const square of document.querySelectorAll("#promotion-choice square")) {
+      const file = Number.parseFloat(square.style.left) / 12.5;
+      const rank = Number.parseFloat(square.style.top) / 12.5;
+      if (!Number.isFinite(file) || !Number.isFinite(rank)) continue;
+
+      const tone = (Math.round(file) + Math.round(rank)) % 2 === 0 ? "light" : "dark";
+      if (square.dataset.lfsPromotionTone !== tone) square.dataset.lfsPromotionTone = tone;
+    }
+  }
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type !== "lfs-status") return;
 
@@ -172,4 +183,14 @@
     subtree: true,
     characterData: true
   });
+
+  new MutationObserver(records => {
+    for (const node of records.flatMap(record => [...record.addedNodes])) {
+      if (node.nodeType !== Node.ELEMENT_NODE) continue;
+      if (node.id === "promotion-choice" || node.querySelector("#promotion-choice")) {
+        applyPromotionSquareTheme();
+        return;
+      }
+    }
+  }).observe(document, { childList: true, subtree: true });
 })();
