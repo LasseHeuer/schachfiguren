@@ -20,6 +20,7 @@
     root.toggleAttribute("data-lfs-square-outline", settings.squareOutline);
     root.toggleAttribute("data-lfs-rund-comic", settings.pieceSet === "rund_comic");
     globalThis.LichessThreatCoding?.update(settings);
+    globalThis.LichessPieceBounce?.update(settings);
 
     const variables = {
       "--lfs-idle-mix-percent": `${settings.idleMixPercent}%`,

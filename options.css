@@ -66,6 +66,7 @@ output { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 10
 .color-field + .color-field { margin-top: 5px; }
 .color-field input[type="color"] { width: 50px; height: 21px; flex: 0 0 auto; }
 .compact-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 11px; align-items: center; }
+.bounce-controls { margin-top: 12px; }
 .range-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 10px; }
 .threat-controls { grid-template-columns: 1fr; align-items: center; }
 .threat-range-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 12px; }

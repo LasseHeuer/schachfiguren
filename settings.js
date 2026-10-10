@@ -34,6 +34,10 @@
     threatMoveDepth: 3,
     threatDepthFactor: 0.2,
     threatMaxMixPercent: 50,
+    threatGradientPercent: 10,
+    pieceBounceEnabled: true,
+    pieceBounceTiming: 300,
+    pieceBounceDuration: 600,
     removeOutlines: false,
     removeGlows: true,
     removeGradients: true,
@@ -51,7 +55,10 @@
     threatOpponentSeeThrough: [0, 1],
     threatMoveDepth: [1, 5],
     threatDepthFactor: [0, 1],
-    threatMaxMixPercent: [0, 100]
+    threatMaxMixPercent: [0, 100],
+    threatGradientPercent: [0, 100],
+    pieceBounceTiming: [0, 2000],
+    pieceBounceDuration: [200, 1500]
   };
   const colors = Object.keys(defaults).filter(key => /Color|Light|Dark/.test(key) && typeof defaults[key] === "string");
 
@@ -70,6 +77,9 @@
     }
     result.threatMoveDepth = Math.round(result.threatMoveDepth);
     result.threatMaxMixPercent = Math.round(result.threatMaxMixPercent);
+    result.threatGradientPercent = Math.round(result.threatGradientPercent);
+    result.pieceBounceTiming = Math.round(result.pieceBounceTiming / 50) * 50;
+    result.pieceBounceDuration = Math.round(result.pieceBounceDuration / 50) * 50;
 
     for (const key of colors) {
       if (!/^#[0-9a-f]{6}$/i.test(result[key])) result[key] = defaults[key];
@@ -89,7 +99,8 @@
       "disableAnimations",
       "monochromeBoard",
       "squareOutline",
-      "threatColoringEnabled"
+      "threatColoringEnabled",
+      "pieceBounceEnabled"
     ]) {
       result[key] = Boolean(result[key]);
     }

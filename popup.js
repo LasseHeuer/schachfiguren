@@ -40,6 +40,10 @@
       output.value = control.value;
       return;
     }
+    if (["pieceBounceTiming", "pieceBounceDuration"].includes(control.dataset.setting)) {
+      output.value = `${control.value} ms`;
+      return;
+    }
     if (["threatOwnSeeThrough", "threatOpponentSeeThrough", "threatDepthFactor"].includes(control.dataset.setting)) {
       output.value = `${Math.round(Number(control.value) * 100)}%`;
       return;

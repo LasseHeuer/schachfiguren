@@ -6,14 +6,18 @@
     B: [[-1, -1], [-1, 1], [1, -1], [1, 1]],
     Q: [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]
   };
+  const boardSelector = ".main-board cg-board, .mini-game cg-board";
 
   let settings = null;
-  let observedBoard = null;
-  let boardObserver = null;
-  let orientationObserver = null;
+  const observedBoards = new Map();
   let documentObserver = null;
   let themeObserver = null;
+  const threatImageCache = new Map();
+  const displayedThreatKeys = new WeakMap();
+  const pendingThreatKeys = new WeakMap();
+  const dirtyBoards = new Set();
   let renderFrame = 0;
+  let renderAllBoards = true;
   let pieceInteractionActive = false;
   let activePieceDrag = null;
   let lastPointerPosition = null;
@@ -125,28 +129,29 @@
           }
         }
 
-        if (!["B", "R", "Q"].includes(piece[1])) continue;
-        for (const [dr, dc] of getDirections(piece)) {
-          let nextRow = row + dr;
-          let nextCol = col + dc;
-          let blocked = false;
-          let throughFactor = 1;
-          let cumulativeFactor = 1;
-          while (isInside(nextRow, nextCol)) {
-            const occupant = board[nextRow][nextCol];
-            if (blocked) {
-              cumulativeFactor *= throughFactor;
-              if (cumulativeFactor === 0) break;
-              const strength = pieceThreats[nextRow][nextCol] + (sign * cumulativeFactor);
-              pieceThreats[nextRow][nextCol] = Math.max(-1, Math.min(1, strength));
+        if (["B", "R", "Q"].includes(piece[1])) {
+          for (const [dr, dc] of getDirections(piece)) {
+            let nextRow = row + dr;
+            let nextCol = col + dc;
+            let blocked = false;
+            let throughFactor = 1;
+            let cumulativeFactor = 1;
+            while (isInside(nextRow, nextCol)) {
+              const occupant = board[nextRow][nextCol];
+              if (blocked) {
+                cumulativeFactor *= throughFactor;
+                if (cumulativeFactor === 0) break;
+                const strength = pieceThreats[nextRow][nextCol] + (sign * cumulativeFactor);
+                pieceThreats[nextRow][nextCol] = Math.max(-1, Math.min(1, strength));
+              }
+              if (occupant) {
+                blocked = true;
+                throughFactor = occupant[0] === piece[0] ? ownSeeThrough : opponentSeeThrough;
+                cumulativeFactor *= throughFactor;
+              }
+              nextRow += dr;
+              nextCol += dc;
             }
-            if (occupant) {
-              blocked = true;
-              throughFactor = occupant[0] === piece[0] ? ownSeeThrough : opponentSeeThrough;
-              cumulativeFactor *= throughFactor;
-            }
-            nextRow += dr;
-            nextCol += dc;
           }
         }
 
@@ -285,30 +290,136 @@
 
   function clearThreatBackground(board) {
     if (!board) return;
+    displayedThreatKeys.delete(board);
+    pendingThreatKeys.delete(board);
     board.removeAttribute("data-lfs-threat-board");
     board.style.removeProperty("--lfs-threat-background");
     board.style.removeProperty("--lfs-threat-background-position");
   }
 
+  function getThreatImage(cacheKey, colors, transitionPercent) {
+    const cached = threatImageCache.get(cacheKey);
+    if (cached) {
+      threatImageCache.delete(cacheKey);
+      threatImageCache.set(cacheKey, cached);
+      return cached;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 256;
+    const context = canvas.getContext("2d");
+    const imageData = context.createImageData(canvas.width, canvas.height);
+    imageData.data.set(getThreatPixels(colors, transitionPercent));
+    context.putImageData(imageData, 0, 0);
+
+    const url = canvas.toDataURL("image/png");
+    const image = document.createElement("img");
+    let ready;
+    if (typeof image.decode === "function") {
+      image.src = url;
+      ready = image.decode().catch(() => undefined);
+    } else {
+      ready = new Promise(resolve => {
+        image.onload = resolve;
+        image.onerror = resolve;
+        image.src = url;
+      });
+    }
+    const entry = { url, image, ready };
+    threatImageCache.set(cacheKey, entry);
+    if (threatImageCache.size > 64) threatImageCache.delete(threatImageCache.keys().next().value);
+    return entry;
+  }
+
+  function showThreatImage(board, cacheKey, entry) {
+    if (displayedThreatKeys.get(board) === cacheKey) {
+      pendingThreatKeys.delete(board);
+      return;
+    }
+    if (pendingThreatKeys.get(board) === cacheKey) return;
+    pendingThreatKeys.set(board, cacheKey);
+    entry.ready.then(() => {
+      if (!board.isConnected || pendingThreatKeys.get(board) !== cacheKey) return;
+      pendingThreatKeys.delete(board);
+      board.style.setProperty("--lfs-threat-background", `url(\"${entry.url}\")`);
+      board.setAttribute("data-lfs-threat-board", "");
+      displayedThreatKeys.set(board, cacheKey);
+    });
+  }
+
+  function waitForPieceMoves(board) {
+    const animations = [...board.querySelectorAll(":scope > piece")]
+      .flatMap(piece => piece.getAnimations())
+      .filter(animation => animation.transitionProperty === "transform" && animation.playState === "running");
+    if (!animations.length) return false;
+
+    Promise.all(animations.map(animation => animation.finished.catch(() => undefined)))
+      .then(() => scheduleRender(board));
+    return true;
+  }
+
+  function getAxisBlend(position, transitionPercent) {
+    const scaledPosition = position * 8;
+    const cell = Math.min(7, Math.floor(scaledPosition));
+    const offset = scaledPosition - cell;
+    const halfWidth = transitionPercent / 200;
+    if (!halfWidth) return [cell, cell, 0];
+
+    if (cell > 0 && offset < halfWidth) {
+      const progress = (offset + halfWidth) / (2 * halfWidth);
+      return [cell - 1, cell, progress * progress * (3 - 2 * progress)];
+    }
+    if (cell < 7 && offset > 1 - halfWidth) {
+      const progress = (offset - (1 - halfWidth)) / (2 * halfWidth);
+      return [cell, cell + 1, progress * progress * (3 - 2 * progress)];
+    }
+    return [cell, cell, 0];
+  }
+
+  function getThreatPixels(colors, transitionPercent) {
+    const size = 256;
+    const axisBlends = Array.from({ length: size }, (_, pixel) =>
+      getAxisBlend((pixel + 0.5) / size, transitionPercent)
+    );
+    const pixels = new Uint8ClampedArray(size * size * 4);
+
+    for (let y = 0; y < size; y++) {
+      const [fromRow, toRow, rowBlend] = axisBlends[y];
+      for (let x = 0; x < size; x++) {
+        const [fromCol, toCol, colBlend] = axisBlends[x];
+        const topLeft = colors[fromRow][fromCol];
+        const topRight = colors[fromRow][toCol];
+        const bottomLeft = colors[toRow][fromCol];
+        const bottomRight = colors[toRow][toCol];
+        const offset = (y * size + x) * 4;
+
+        for (let channel = 0; channel < 3; channel++) {
+          const top = topLeft[channel] + (topRight[channel] - topLeft[channel]) * colBlend;
+          const bottom = bottomLeft[channel] + (bottomRight[channel] - bottomLeft[channel]) * colBlend;
+          pixels[offset + channel] = top + (bottom - top) * rowBlend;
+        }
+        pixels[offset + 3] = 255;
+      }
+    }
+
+    return pixels;
+  }
+
   function renderPosition(board, position, blackOrientation) {
     const threatMap = calculateThreatMap(position, settings);
-    const backgroundLayers = [];
-    const backgroundPositions = [];
+    const colors = Array.from({ length: 8 }, () => Array(8));
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
         const screenRow = blackOrientation ? 7 - row : row;
         const screenCol = blackOrientation ? 7 - col : col;
         const baseColor = getBoardBaseColor(row, col, settings);
         const color = getOpacityColor(threatMap[row][col], settings, baseColor);
-        const positionX = ((screenCol / 7) * 100).toFixed(6);
-        const positionY = ((screenRow / 7) * 100).toFixed(6);
-        backgroundLayers.push(`linear-gradient(${color}, ${color})`);
-        backgroundPositions.push(`${positionX}% ${positionY}%`);
+        colors[screenRow][screenCol] = color.match(/\d+/g).map(Number);
       }
     }
-    board.style.setProperty("--lfs-threat-background", backgroundLayers.join(", "));
-    board.style.setProperty("--lfs-threat-background-position", backgroundPositions.join(", "));
-    board.setAttribute("data-lfs-threat-board", "");
+    const cacheKey = `${settings.threatGradientPercent}:${JSON.stringify(colors)}`;
+    showThreatImage(board, cacheKey, getThreatImage(cacheKey, colors, settings.threatGradientPercent));
   }
 
   function getDragPreview(board) {
@@ -343,37 +454,43 @@
 
   function render() {
     renderFrame = 0;
-    const board = document.querySelector(".main-board cg-board");
-    if (board !== observedBoard) observeBoard(board);
-    if (!board || !settings?.enabled || !settings.threatColoringEnabled) {
-      clearThreatBackground(board || observedBoard);
-      return;
-    }
-    if (!board.closest(".is2d")) {
-      clearThreatBackground(board);
-      return;
-    }
-    if (pieceInteractionActive) {
-      const preview = getDragPreview(board);
-      if (preview) renderPosition(board, preview.position, preview.blackOrientation);
-      return;
-    }
+    const boards = [...document.querySelectorAll(boardSelector)];
+    observeBoards(boards);
+    const boardsToRender = renderAllBoards ? boards : boards.filter(board => dirtyBoards.has(board));
+    renderAllBoards = false;
+    dirtyBoards.clear();
+    for (const board of boardsToRender) {
+      if (!settings?.enabled || !settings.threatColoringEnabled || !board.closest(".is2d")) {
+        clearThreatBackground(board);
+        continue;
+      }
+      if (pieceInteractionActive) {
+        if (activePieceDrag?.board === board) {
+          const preview = getDragPreview(board);
+          if (preview) renderPosition(board, preview.position, preview.blackOrientation);
+        }
+        continue;
+      }
+      if (waitForPieceMoves(board)) continue;
 
-    const parsed = readBoard(board);
-    if (!parsed) return;
-    const preview = getSelectedMovePreview(board, parsed.position, parsed.blackOrientation);
-    renderPosition(board, preview || parsed.position, parsed.blackOrientation);
+      const parsed = readBoard(board);
+      if (!parsed) continue;
+      const preview = getSelectedMovePreview(board, parsed.position, parsed.blackOrientation);
+      renderPosition(board, preview || parsed.position, parsed.blackOrientation);
+    }
   }
 
-  function scheduleRender() {
+  function scheduleRender(board) {
+    if (board) dirtyBoards.add(board);
+    else renderAllBoards = true;
     if (renderFrame) return;
     renderFrame = requestAnimationFrame(render);
   }
 
   function containsMainBoard(node) {
     return node.nodeType === Node.ELEMENT_NODE && (
-      node.matches(".main-board, .cg-wrap, cg-board") ||
-      Boolean(node.querySelector(".main-board, cg-board"))
+      node.matches(".main-board, .mini-game, .cg-wrap, cg-board") ||
+      Boolean(node.querySelector(boardSelector))
     );
   }
 
@@ -391,28 +508,35 @@
     );
   }
 
-  function observeBoard(board) {
-    const previousBoard = observedBoard;
-    boardObserver?.disconnect();
-    orientationObserver?.disconnect();
-    observedBoard = board || null;
-    if (previousBoard && previousBoard !== observedBoard) clearThreatBackground(previousBoard);
-    if (!board) return;
+  function observeBoards(boards) {
+    const currentBoards = new Set(boards);
+    for (const [board, observers] of observedBoards) {
+      if (currentBoards.has(board)) continue;
+      observers.board.disconnect();
+      observers.orientation?.disconnect();
+      clearThreatBackground(board);
+      observedBoards.delete(board);
+    }
 
-    boardObserver = new MutationObserver(mutations => {
-      if (mutations.some(isRelevantBoardMutation)) scheduleRender();
-    });
-    boardObserver.observe(board, {
-      attributes: true,
-      attributeFilter: ["class", "data-key", "style"],
-      childList: true,
-      subtree: true
-    });
+    for (const board of boards) {
+      if (observedBoards.has(board)) continue;
+      const boardObserver = new MutationObserver(mutations => {
+        if (mutations.some(isRelevantBoardMutation)) scheduleRender(board);
+      });
+      boardObserver.observe(board, {
+        attributes: true,
+        attributeFilter: ["class", "data-key", "style"],
+        childList: true,
+        subtree: true
+      });
 
-    const wrapper = board.closest(".cg-wrap");
-    if (wrapper) {
-      orientationObserver = new MutationObserver(scheduleRender);
-      orientationObserver.observe(wrapper, { attributes: true, attributeFilter: ["class"] });
+      const wrapper = board.closest(".cg-wrap");
+      let orientationObserver = null;
+      if (wrapper) {
+        orientationObserver = new MutationObserver(() => scheduleRender(board));
+        orientationObserver.observe(wrapper, { attributes: true, attributeFilter: ["class"] });
+      }
+      observedBoards.set(board, { board: boardObserver, orientation: orientationObserver });
     }
   }
 
@@ -436,18 +560,20 @@
         if (pieceInteractionActive && activePieceDrag) {
           activePieceDrag.clientX = event.clientX;
           activePieceDrag.clientY = event.clientY;
-          scheduleRender();
+          scheduleRender(activePieceDrag.board);
           return;
         }
-        if (settings?.enabled && settings.threatColoringEnabled && document.querySelector(".main-board cg-board > square.selected")) {
-          scheduleRender();
+        if (settings?.enabled && settings.threatColoringEnabled) {
+          const selected = document.querySelector(".main-board cg-board > square.selected");
+          if (selected) scheduleRender(selected.parentElement);
         }
       }, true);
       const finishPieceInteraction = () => {
         if (!pieceInteractionActive) return;
+        const board = activePieceDrag?.board;
         pieceInteractionActive = false;
         activePieceDrag = null;
-        scheduleRender();
+        scheduleRender(board);
       };
       document.addEventListener("pointerup", finishPieceInteraction, true);
       document.addEventListener("pointercancel", finishPieceInteraction, true);
@@ -458,18 +584,15 @@
     if (!documentObserver) {
       documentObserver = new MutationObserver(mutations => {
         if (!mutations.some(mutation => [...mutation.addedNodes, ...mutation.removedNodes].some(containsMainBoard))) return;
-        const board = document.querySelector(".main-board cg-board");
-        if (board !== observedBoard) observeBoard(board);
         scheduleRender();
       });
       documentObserver.observe(document, { childList: true, subtree: true });
     }
     if (document.documentElement && !themeObserver) {
-      themeObserver = new MutationObserver(scheduleRender);
+      themeObserver = new MutationObserver(() => scheduleRender());
       themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     }
-    const board = document.querySelector(".main-board cg-board");
-    if (board !== observedBoard) observeBoard(board);
+    observeBoards([...document.querySelectorAll(boardSelector)]);
     scheduleRender();
   }
 
@@ -478,5 +601,5 @@
     initialize();
   }
 
-  globalThis.LichessThreatCoding = { update, calculateThreatMap, createPreviewPosition, getBoardBaseColor, getOpacityColor };
+  globalThis.LichessThreatCoding = { update, calculateThreatMap, createPreviewPosition, getBoardBaseColor, getOpacityColor, getThreatPixels };
 })();

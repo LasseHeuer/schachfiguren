@@ -45,6 +45,11 @@
             <label class="field field-wide"><span>Figurenset</span><select data-setting="pieceSet"><option value="system_pixel">System Pixel</option><option value="system_eckig">System Eckig</option><option value="rund">Rund</option><option value="rund_comic">Rund Comic</option></select><small>Die Grafiken werden direkt aus der Erweiterung geladen.</small></label>
             <label class="field"><span>Weisse Figuren</span><input type="color" data-setting="whitePieceColor"></label>
             <label class="field"><span>Schwarze Figuren</span><input type="color" data-setting="blackPieceColor"></label>
+            <label class="switch-field"><span><strong>Figuren-Bounce bei Hover</strong><small>90-Grad-Drehung mit kurzem Nachfedern.</small></span><input type="checkbox" data-setting="pieceBounceEnabled" role="switch"></label>
+          </div>
+          <div class="control-grid bounce-controls">
+            <label class="field"><span>Timing (Pause)</span><input type="range" min="0" max="2000" step="50" data-setting="pieceBounceTiming"><output data-value-for="pieceBounceTiming"></output></label>
+            <label class="field"><span>Dauer</span><input type="range" min="200" max="1500" step="50" data-setting="pieceBounceDuration"><output data-value-for="pieceBounceDuration"></output></label>
           </div>
         </section>
 
@@ -100,6 +105,7 @@
             <label class="field"><span>Zugtiefe</span><input type="range" min="1" max="5" step="1" data-setting="threatMoveDepth"><output data-value-for="threatMoveDepth"></output></label>
             <label class="field"><span>Faktor der Zugtiefe</span><input type="range" min="0" max="1" step="0.01" data-setting="threatDepthFactor"><output data-value-for="threatDepthFactor"></output></label>
             <label class="field"><span>Maximale Mischung bei ±5</span><input type="range" min="0" max="100" step="1" data-setting="threatMaxMixPercent"><output data-value-for="threatMaxMixPercent"></output></label>
+            <label class="field"><span>Verlauf</span><input type="range" min="0" max="100" step="1" data-setting="threatGradientPercent"><output data-value-for="threatGradientPercent"></output></label>
           </div>
         </section>
 

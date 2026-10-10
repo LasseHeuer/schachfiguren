@@ -29,6 +29,11 @@
           <label class="color-setting"><span>Weisse Figuren</span><input type="color" data-setting="whitePieceColor"></label>
           <label class="color-setting"><span>Schwarze Figuren</span><input type="color" data-setting="blackPieceColor"></label>
         </div>
+        <label class="switch-setting bounce-toggle"><span><strong>Figuren-Bounce bei Hover</strong><small>90-Grad-Drehung mit kurzem Nachfedern.</small></span><input type="checkbox" data-setting="pieceBounceEnabled" role="switch"></label>
+        <div class="range-grid bounce-controls">
+          <label class="range-setting"><span>Timing (Pause)</span><output data-value-for="pieceBounceTiming"></output><input type="range" min="0" max="2000" step="50" data-setting="pieceBounceTiming"></label>
+          <label class="range-setting"><span>Dauer</span><output data-value-for="pieceBounceDuration"></output><input type="range" min="200" max="1500" step="50" data-setting="pieceBounceDuration"></label>
+        </div>
       </section>
 
       <section class="panel" id="panel-brett" role="tabpanel" aria-labelledby="tab-brett" data-panel="brett" hidden>
@@ -80,6 +85,7 @@
           <label class="range-setting"><span>Zugtiefe</span><output data-value-for="threatMoveDepth"></output><input type="range" min="1" max="5" step="1" data-setting="threatMoveDepth"></label>
           <label class="range-setting"><span>Tiefenfaktor</span><output data-value-for="threatDepthFactor"></output><input type="range" min="0" max="1" step="0.01" data-setting="threatDepthFactor"></label>
           <label class="range-setting"><span>Maximale Mischung bei ±5</span><output data-value-for="threatMaxMixPercent"></output><input type="range" min="0" max="100" step="1" data-setting="threatMaxMixPercent"></label>
+          <label class="range-setting"><span>Verlauf</span><output data-value-for="threatGradientPercent"></output><input type="range" min="0" max="100" step="1" data-setting="threatGradientPercent"></label>
         </div>
         <small class="threat-note">Bei ±0 bleibt die Brettfarbe unverändert. Bei ±5 gilt der eingestellte Maximalwert.</small>
       </section>
