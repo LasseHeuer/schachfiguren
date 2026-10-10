@@ -35,11 +35,12 @@ h1 { margin-bottom: 7px; font: 800 clamp(25px, 3.1vw, 34px)/1.15 Manrope, sans-s
 .master-toggle strong, .master-toggle small { display: block; }
 .master-toggle strong { font-size: 12px; }
 .master-toggle small { margin-top: 4px; color: var(--muted); font-size: 10px; }
-.settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "figuren brett" "zuege zuege" "hover hover" "optik optik" "analyse analyse"; align-items: start; gap: 12px; }
+.settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "figuren brett" "zuege zuege" "bedrohungen bedrohungen" "hover hover" "optik optik" "analyse analyse"; align-items: start; gap: 12px; }
 .settings-card { min-width: 0; margin: 0; padding: 17px 19px 18px; border: 0; border-radius: 10px; background: #fff; scroll-margin-top: 15px; }
 #figuren { grid-area: figuren; }
 #brett { grid-area: brett; }
 #zuege { grid-area: zuege; }
+#bedrohungen { grid-area: bedrohungen; }
 #hover { grid-area: hover; }
 #optik { grid-area: optik; }
 #analyse { grid-area: analyse; }
@@ -66,6 +67,8 @@ output { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 10
 .color-field input[type="color"] { width: 50px; height: 21px; flex: 0 0 auto; }
 .compact-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 11px; align-items: center; }
 .range-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 10px; }
+.threat-controls { grid-template-columns: 1fr; align-items: center; }
+.threat-range-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 12px; }
 .switch-field { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 49px; }
 .switch-field strong { display: block; margin-bottom: 4px; color: #475147; font-size: 11px; }
 input[type="checkbox"][role="switch"] { position: relative; width: 36px; height: 21px; flex: 0 0 auto; margin: 0; appearance: none; border: 0; border-radius: 20px; background: #cbd1ca; cursor: pointer; transition: background .15s; }
@@ -86,7 +89,7 @@ input[type="checkbox"][role="switch"]:checked::after { transform: translateX(15p
 }
 
 @media (max-width: 760px) {
-  .settings-grid { grid-template-columns: 1fr; grid-template-areas: "figuren" "brett" "zuege" "hover" "optik" "analyse"; }
+  .settings-grid { grid-template-columns: 1fr; grid-template-areas: "figuren" "brett" "zuege" "bedrohungen" "hover" "optik" "analyse"; }
 }
 
 @media (max-width: 540px) {
@@ -95,6 +98,7 @@ input[type="checkbox"][role="switch"]:checked::after { transform: translateX(15p
   .settings-card { padding: 16px; }
   .theme-grid { grid-template-columns: 1fr; }
   .control-grid { grid-template-columns: 1fr; }
+  .control-grid.threat-range-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .field-wide { grid-column: auto; }
   .compact-grid { gap: 10px; }
   .page-footer { align-items: flex-start; flex-direction: column; }

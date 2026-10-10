@@ -17,6 +17,7 @@
           <a href="#figuren">Figuren</a>
           <a href="#brett">Brettfarben</a>
           <a href="#zuege">Zugmarkierungen</a>
+          <a href="#bedrohungen">Bedrohungsfarben</a>
           <a href="#hover">Hover-Effekt</a>
           <a href="#optik">Effekte</a>
           <a href="#analyse">Mehr</a>
@@ -88,8 +89,22 @@
           </div>
         </section>
 
+        <section class="settings-card" id="bedrohungen">
+          <div class="section-heading"><span class="section-index">04</span><div><h2>Bedrohungsfarben</h2><p>Mischt Spielerfarben in die bestehenden Brettfarben ein.</p></div></div>
+          <div class="control-grid threat-controls">
+            <label class="switch-field"><span><strong>Bedrohungsfarben aktivieren</strong><small>0 bedeutet Originalfarbe; bei ±5 wird die hier gewählte Menge beigemischt.</small></span><input type="checkbox" data-setting="threatColoringEnabled" role="switch"></label>
+          </div>
+          <div class="control-grid threat-range-grid">
+            <label class="field"><span>Durch eigene Figuren sehen</span><input type="range" min="0" max="1" step="0.01" data-setting="threatOwnSeeThrough"><output data-value-for="threatOwnSeeThrough"></output></label>
+            <label class="field"><span>Durch gegnerische Figuren sehen</span><input type="range" min="0" max="1" step="0.01" data-setting="threatOpponentSeeThrough"><output data-value-for="threatOpponentSeeThrough"></output></label>
+            <label class="field"><span>Zugtiefe</span><input type="range" min="1" max="5" step="1" data-setting="threatMoveDepth"><output data-value-for="threatMoveDepth"></output></label>
+            <label class="field"><span>Faktor der Zugtiefe</span><input type="range" min="0" max="1" step="0.01" data-setting="threatDepthFactor"><output data-value-for="threatDepthFactor"></output></label>
+            <label class="field"><span>Maximale Mischung bei ±5</span><input type="range" min="0" max="100" step="1" data-setting="threatMaxMixPercent"><output data-value-for="threatMaxMixPercent"></output></label>
+          </div>
+        </section>
+
         <section class="settings-card" id="hover">
-          <div class="section-heading"><span class="section-index">04</span><div><h2>Hover-Effekt</h2><p>Seite und Brett beim Bewegen der Maus entsaettigen und mischen.</p></div></div>
+          <div class="section-heading"><span class="section-index">05</span><div><h2>Hover-Effekt</h2><p>Seite und Brett beim Bewegen der Maus entsaettigen und mischen.</p></div></div>
           <div class="theme-grid">
             <fieldset class="theme-panel"><legend>Helles Design</legend><label class="color-field"><span>Mischfarbe</span><input type="color" data-setting="hoverMixLight"></label></fieldset>
             <fieldset class="theme-panel"><legend>Dunkles Design</legend><label class="color-field"><span>Mischfarbe</span><input type="color" data-setting="hoverMixDark"></label></fieldset>
@@ -102,7 +117,7 @@
         </section>
 
         <section class="settings-card" id="optik">
-          <div class="section-heading"><span class="section-index">05</span><div><h2>Darstellungseffekte</h2><p>Unnoetige Oberflaecheneffekte einzeln ein- und ausschalten.</p></div></div>
+          <div class="section-heading"><span class="section-index">06</span><div><h2>Darstellungseffekte</h2><p>Unnoetige Oberflaecheneffekte einzeln ein- und ausschalten.</p></div></div>
           <div class="control-grid compact-grid">
             <label class="switch-field"><span><strong>Verlaeufe entfernen</strong><small>Brettmuster und Bewegungsdots bleiben erhalten.</small></span><input type="checkbox" data-setting="removeGradients" role="switch"></label>
             <label class="switch-field"><span><strong>Leuchteffekte entfernen</strong><small>Filtereffekte ausserhalb des Bretts entfernen.</small></span><input type="checkbox" data-setting="removeGlows" role="switch"></label>
@@ -114,7 +129,7 @@
         </section>
 
         <section class="settings-card" id="analyse">
-          <div class="section-heading"><span class="section-index">06</span><div><h2>Weitere Einstellungen</h2><p>Profilanzeige und Analysegraph.</p></div></div>
+          <div class="section-heading"><span class="section-index">07</span><div><h2>Weitere Einstellungen</h2><p>Profilanzeige und Analysegraph.</p></div></div>
           <label class="switch-field"><span><strong>Gesamtspielzeit nur in Stunden</strong><small>Profilzeit ohne Tagesangabe anzeigen.</small></span><input type="checkbox" data-setting="showPlayTimeInHours" role="switch"></label>
           <label class="switch-field"><span><strong>Analysegraph-Farben angleichen</strong><small>Weiss und Schwarz im Graphen mit den Figurenfarben darstellen.</small></span><input type="checkbox" data-setting="analysisGraphColors" role="switch"></label>
         </section>

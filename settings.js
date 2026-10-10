@@ -28,6 +28,12 @@
     blackPieceColor: "#2ba4d1",
     analysisGraphColors: true,
     showPlayTimeInHours: true,
+    threatColoringEnabled: false,
+    threatOwnSeeThrough: 0.75,
+    threatOpponentSeeThrough: 0.25,
+    threatMoveDepth: 3,
+    threatDepthFactor: 0.2,
+    threatMaxMixPercent: 50,
     removeOutlines: false,
     removeGlows: true,
     removeGradients: true,
@@ -40,7 +46,12 @@
     idleMixPercent: [0, 100],
     hoverMixPercent: [0, 100],
     hoverDesaturation: [0, 100],
-    moveDotSize: [5, 50]
+    moveDotSize: [5, 50],
+    threatOwnSeeThrough: [0, 1],
+    threatOpponentSeeThrough: [0, 1],
+    threatMoveDepth: [1, 5],
+    threatDepthFactor: [0, 1],
+    threatMaxMixPercent: [0, 100]
   };
   const colors = Object.keys(defaults).filter(key => /Color|Light|Dark/.test(key) && typeof defaults[key] === "string");
 
@@ -50,11 +61,15 @@
     if (!["system_pixel", "system_eckig", "rund"].includes(result.pieceSet)) {
       result.pieceSet = defaults.pieceSet;
     }
-
     for (const [key, [min, max]] of Object.entries(ranges)) {
       const value = Number(result[key]);
       result[key] = Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : defaults[key];
     }
+    for (const key of ["threatOwnSeeThrough", "threatOpponentSeeThrough", "threatDepthFactor"]) {
+      result[key] = Number(result[key].toFixed(2));
+    }
+    result.threatMoveDepth = Math.round(result.threatMoveDepth);
+    result.threatMaxMixPercent = Math.round(result.threatMaxMixPercent);
 
     for (const key of colors) {
       if (!/^#[0-9a-f]{6}$/i.test(result[key])) result[key] = defaults[key];
@@ -73,7 +88,8 @@
       "removeRoundedCorners",
       "disableAnimations",
       "monochromeBoard",
-      "squareOutline"
+      "squareOutline",
+      "threatColoringEnabled"
     ]) {
       result[key] = Boolean(result[key]);
     }
@@ -85,6 +101,8 @@
     for (const control of controls) {
       if (control.type !== "range") continue;
       const coarseStep = control.step || "1";
+      const fineStep = Math.min(1, Number(coarseStep) || 1);
+      const decimals = (String(fineStep).split(".")[1] || "").length;
       let drag;
       control.title = [control.title, "Shift + Ziehen bewegt den Wert viermal langsamer"].filter(Boolean).join(". ");
       const clearPointerFocus = () => control.classList.remove("fine-pointer-focused");
@@ -94,14 +112,16 @@
         if (!event.shiftKey || event.button !== 0) return;
         event.preventDefault();
         control.classList.add("fine-dragging");
-        control.step = "1";
+        control.step = fineStep < 1 ? "any" : "1";
         drag = {
           pointerId: event.pointerId,
           value: Number(control.value),
           x: event.clientX,
           width: Math.max(1, control.getBoundingClientRect().width),
           min: Number(control.min),
-          max: Number(control.max)
+          max: Number(control.max),
+          step: fineStep,
+          decimals
         };
         control.setPointerCapture(event.pointerId);
       });
@@ -116,7 +136,8 @@
       control.addEventListener("pointermove", event => {
         if (!drag || event.pointerId !== drag.pointerId) return;
         const change = (event.clientX - drag.x) / drag.width * (drag.max - drag.min) * 0.25;
-        const nextValue = Math.max(drag.min, Math.min(drag.max, Math.round(drag.value + change)));
+        const steppedValue = Math.round((drag.value + change) / drag.step) * drag.step;
+        const nextValue = Number(Math.max(drag.min, Math.min(drag.max, steppedValue)).toFixed(drag.decimals));
         if (Number(control.value) === nextValue) return;
         control.value = String(nextValue);
         control.dispatchEvent(new Event("input", { bubbles: true }));

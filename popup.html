@@ -17,6 +17,7 @@
         <button class="tab active" id="tab-figuren" type="button" role="tab" aria-selected="true" aria-controls="panel-figuren" data-tab="figuren">Figuren</button>
         <button class="tab" id="tab-brett" type="button" role="tab" aria-selected="false" aria-controls="panel-brett" data-tab="brett" tabindex="-1">Brett</button>
         <button class="tab" id="tab-zuege" type="button" role="tab" aria-selected="false" aria-controls="panel-zuege" data-tab="zuege" tabindex="-1">Zuege</button>
+        <button class="tab" id="tab-bedrohungen" type="button" role="tab" aria-selected="false" aria-controls="panel-bedrohungen" data-tab="bedrohungen" tabindex="-1">Drohung</button>
         <button class="tab" id="tab-hover" type="button" role="tab" aria-selected="false" aria-controls="panel-hover" data-tab="hover" tabindex="-1">Hover</button>
         <button class="tab" id="tab-effekte" type="button" role="tab" aria-selected="false" aria-controls="panel-effekte" data-tab="effekte" tabindex="-1">Effekte</button>
         <button class="tab" id="tab-mehr" type="button" role="tab" aria-selected="false" aria-controls="panel-mehr" data-tab="mehr" tabindex="-1">Mehr</button>
@@ -69,6 +70,18 @@
           <label class="switch-setting"><span>Letzten Zug markieren</span><input type="checkbox" data-setting="markLastMove" role="switch"></label>
           <label class="switch-setting"><span>Quadratische Dots</span><input type="checkbox" data-setting="squareMoveDots" role="switch"></label>
         </div>
+      </section>
+
+      <section class="panel threat-panel" id="panel-bedrohungen" role="tabpanel" aria-labelledby="tab-bedrohungen" data-panel="bedrohungen" hidden>
+        <label class="switch-setting threat-toggle"><span><strong>Bedrohungsfarben aktivieren</strong><small>Mischt Spielerfarbe in die bestehenden Brettfarben ein.</small></span><input type="checkbox" data-setting="threatColoringEnabled" role="switch"></label>
+        <div class="range-grid threat-range-grid">
+          <label class="range-setting"><span>Durch eigene Figuren sehen</span><output data-value-for="threatOwnSeeThrough"></output><input type="range" min="0" max="1" step="0.01" data-setting="threatOwnSeeThrough"></label>
+          <label class="range-setting"><span>Durch Gegner sehen</span><output data-value-for="threatOpponentSeeThrough"></output><input type="range" min="0" max="1" step="0.01" data-setting="threatOpponentSeeThrough"></label>
+          <label class="range-setting"><span>Zugtiefe</span><output data-value-for="threatMoveDepth"></output><input type="range" min="1" max="5" step="1" data-setting="threatMoveDepth"></label>
+          <label class="range-setting"><span>Tiefenfaktor</span><output data-value-for="threatDepthFactor"></output><input type="range" min="0" max="1" step="0.01" data-setting="threatDepthFactor"></label>
+          <label class="range-setting"><span>Maximale Mischung bei ±5</span><output data-value-for="threatMaxMixPercent"></output><input type="range" min="0" max="100" step="1" data-setting="threatMaxMixPercent"></label>
+        </div>
+        <small class="threat-note">Bei ±0 bleibt die Brettfarbe unverändert. Bei ±5 gilt der eingestellte Maximalwert.</small>
       </section>
 
       <section class="panel" id="panel-hover" role="tabpanel" aria-labelledby="tab-hover" data-panel="hover" hidden>

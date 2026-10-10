@@ -17,7 +17,16 @@
   function updateOutput(control) {
     if (control.type !== "range") return;
     const output = document.querySelector(`[data-value-for="${control.dataset.setting}"]`);
-    if (output) output.value = `${control.value}%`;
+    if (!output) return;
+    if (control.dataset.setting === "threatMoveDepth") {
+      output.value = control.value;
+      return;
+    }
+    if (["threatOwnSeeThrough", "threatOpponentSeeThrough", "threatDepthFactor"].includes(control.dataset.setting)) {
+      output.value = `${Math.round(Number(control.value) * 100)}%`;
+      return;
+    }
+    output.value = `${control.value}%`;
   }
 
   function saveControl(control) {

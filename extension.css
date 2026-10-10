@@ -165,6 +165,14 @@ html:not([data-lfs-disabled])[data-lfs-monochrome-board] body[data-board] .is2d 
   background-image: none !important;
 }
 
+/* Keep Chessground's square markers above the threat colors. */
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board[data-lfs-threat-board]::before {
+  background-image: var(--lfs-threat-background) !important;
+  background-position: var(--lfs-threat-background-position) !important;
+  background-size: 12.5% 12.5% !important;
+  background-repeat: no-repeat !important;
+}
+
 html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square.last-move {
   background: none !important;
 }

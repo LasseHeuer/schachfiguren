@@ -18,6 +18,7 @@
     root.toggleAttribute("data-lfs-disable-animations", settings.disableAnimations);
     root.toggleAttribute("data-lfs-monochrome-board", settings.monochromeBoard);
     root.toggleAttribute("data-lfs-square-outline", settings.squareOutline);
+    globalThis.LichessThreatCoding?.update(settings);
 
     const variables = {
       "--lfs-idle-mix-percent": `${settings.idleMixPercent}%`,

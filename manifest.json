@@ -14,7 +14,7 @@
     {
       "matches": ["https://lichess.org/*"],
       "css": ["extension.css"],
-      "js": ["settings.js", "content.js"],
+      "js": ["settings.js", "threat-coding.js", "content.js"],
       "run_at": "document_start"
     },
     {
