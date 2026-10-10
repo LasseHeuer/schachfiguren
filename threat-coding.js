@@ -295,6 +295,7 @@
     board.removeAttribute("data-lfs-threat-board");
     board.style.removeProperty("--lfs-threat-background");
     board.style.removeProperty("--lfs-threat-background-position");
+    board.style.removeProperty("--lfs-threat-background-size");
   }
 
   function getThreatImage(cacheKey, colors, transitionPercent) {
@@ -343,6 +344,8 @@
       if (!board.isConnected || pendingThreatKeys.get(board) !== cacheKey) return;
       pendingThreatKeys.delete(board);
       board.style.setProperty("--lfs-threat-background", `url(\"${entry.url}\")`);
+      board.style.setProperty("--lfs-threat-background-position", "center");
+      board.style.setProperty("--lfs-threat-background-size", "100% 100%");
       board.setAttribute("data-lfs-threat-board", "");
       displayedThreatKeys.set(board, cacheKey);
     });
@@ -419,6 +422,26 @@
       }
     }
     const cacheKey = `${settings.threatGradientPercent}:${JSON.stringify(colors)}`;
+    if (settings.threatGradientPercent === 0) {
+      const layers = [];
+      const positions = [];
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const x = ((col / 7) * 100).toFixed(6);
+          const y = ((row / 7) * 100).toFixed(6);
+          const color = toRgbString(colors[row][col]);
+          layers.push(`linear-gradient(${color}, ${color})`);
+          positions.push(`${x}% ${y}%`);
+        }
+      }
+      pendingThreatKeys.delete(board);
+      board.style.setProperty("--lfs-threat-background", layers.join(", "));
+      board.style.setProperty("--lfs-threat-background-position", positions.join(", "));
+      board.style.setProperty("--lfs-threat-background-size", "12.5% 12.5%");
+      board.setAttribute("data-lfs-threat-board", "");
+      displayedThreatKeys.set(board, cacheKey);
+      return;
+    }
     showThreatImage(board, cacheKey, getThreatImage(cacheKey, colors, settings.threatGradientPercent));
   }
 

@@ -4,6 +4,7 @@
   const status = document.getElementById("page-status");
   const saveStatus = document.getElementById("save-status");
   const tabs = [...document.querySelectorAll("[data-tab]")];
+  const curveTabs = [...document.querySelectorAll("[data-curve-tab]")];
   const colorPicker = document.getElementById("color-picker");
   const colorPickerTitle = document.getElementById("color-picker-title");
   const colorPickerPreview = document.getElementById("color-picker-preview");
@@ -16,7 +17,9 @@
   const colorPickerRanges = [colorPickerHue, colorPickerSaturation, colorPickerValue];
   const rangeTimers = new Map();
   let currentSettings = { ...globalThis.LichessSettings.defaults };
+  let activeCurveKey = "pieceBounceCurve";
   let activeColorInput;
+  let bounceCurveEditor = null;
   globalThis.LichessSettings.bindFineInputs([...controls, ...colorPickerRanges]);
 
   function setTab(name, focus = false) {
@@ -40,8 +43,12 @@
       output.value = control.value;
       return;
     }
-    if (["pieceBounceTiming", "pieceBounceDuration"].includes(control.dataset.setting)) {
+    if (["pieceBounceTiming", "pieceBounceDuration", "pieceBounceWiggleDuration"].includes(control.dataset.setting)) {
       output.value = `${control.value} ms`;
+      return;
+    }
+    if (control.dataset.setting === "pieceBounceWiggleAngle") {
+      output.value = `${control.value}°`;
       return;
     }
     if (["threatOwnSeeThrough", "threatOpponentSeeThrough", "threatDepthFactor"].includes(control.dataset.setting)) {
@@ -152,6 +159,8 @@
   function showSettings(values) {
     const settings = globalThis.LichessSettings.normalize(values);
     currentSettings = settings;
+    setCurveTab(activeCurveKey);
+    updateLoopControls(settings.pieceBounceLoop);
     for (const control of controls) {
       const value = settings[control.dataset.setting];
       if (control.type === "checkbox") control.checked = value;
@@ -168,6 +177,25 @@
     chrome.storage.local.set({ [control.dataset.setting]: value }, () => {
       saveStatus.textContent = "Gespeichert";
     });
+  }
+
+  function saveBounceCurve(curve) {
+    const value = globalThis.LichessSettings.normalize({ ...currentSettings, [activeCurveKey]: curve })[activeCurveKey];
+    currentSettings[activeCurveKey] = value;
+    chrome.storage.local.set({ [activeCurveKey]: value }, () => {
+      saveStatus.textContent = "Gespeichert";
+    });
+  }
+
+  function setCurveTab(key) {
+    if (!Array.isArray(globalThis.LichessSettings.defaults[key])) return;
+    activeCurveKey = key;
+    for (const tab of curveTabs) tab.setAttribute("aria-pressed", String(tab.dataset.curveTab === key));
+    bounceCurveEditor?.setValue(currentSettings[key], globalThis.LichessSettings.defaults[key]);
+  }
+
+  function updateLoopControls(enabled) {
+    for (const control of document.querySelectorAll("[data-loop-pause]")) control.hidden = !enabled;
   }
 
   function showPageStatus() {
@@ -254,6 +282,13 @@
     setTab(tabs[next].dataset.tab, true);
   });
 
+  bounceCurveEditor = globalThis.LichessBezierEditor.mount(
+    document.querySelector('[data-bezier-editor="pieceBounceCurve"]'),
+    currentSettings.pieceBounceCurve,
+    saveBounceCurve
+  );
+  for (const tab of curveTabs) tab.addEventListener("click", () => setCurveTab(tab.dataset.curveTab));
+
   for (const control of controls) {
     if (control.type === "range") {
       control.addEventListener("input", () => {
@@ -269,7 +304,10 @@
     } else if (control.type === "color") {
       control.addEventListener("input", () => saveControl(control));
     } else {
-      control.addEventListener("change", () => saveControl(control));
+      control.addEventListener("change", () => {
+        saveControl(control);
+        if (control.dataset.setting === "pieceBounceLoop") updateLoopControls(control.checked);
+      });
     }
   }
 
@@ -300,7 +338,7 @@
     });
   });
 
-  chrome.storage.local.get(globalThis.LichessSettings.defaults, values => {
+  chrome.storage.local.get(null, values => {
     showSettings(values);
     showPageStatus();
   });

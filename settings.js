@@ -1,44 +1,57 @@
 (() => {
   const defaults = Object.freeze({
     enabled: true,
-    pieceSet: "system_pixel",
-    boardLightLight: "#e9e8e8",
-    boardDarkLight: "#d6ddd3",
+    pieceSet: "system_eckig",
+    complexPawn: true,
+    boardLightLight: "#dfdee0",
+    boardDarkLight: "#d6dbd5",
     monochromeBoard: false,
     squareOutline: false,
     lastMoveLight: "#dae0d7",
+    lastMoveLineWidth: 16,
     selectedLight: "#ffffff",
     checkSquareLight: "#e57373",
-    engineArrowLight: "#15781b",
+    engineArrowLight: "#4a4a4a",
     hoverMixLight: "#d4d2d2",
-    boardLightDark: "#454b3d",
-    boardDarkDark: "#433e4c",
-    lastMoveDark: "#2d2b2b",
+    boardLightDark: "#454541",
+    boardDarkDark: "#434245",
+    lastMoveDark: "#3d3842",
     selectedDark: "#252823",
     checkSquareDark: "#8c3434",
-    engineArrowDark: "#80b64c",
+    engineArrowDark: "#000000",
     hoverMixDark: "#282727",
-    markLastMove: false,
-    idleMixPercent: 55,
-    hoverMixPercent: 80,
+    markLastMove: true,
+    idleMixPercent: 40,
+    hoverMixPercent: 60,
     hoverDesaturation: 60,
     moveDotSize: 10,
-    squareMoveDots: false,
+    squareMoveDots: true,
     whitePieceColor: "#d1521d",
     blackPieceColor: "#2ba4d1",
     analysisGraphColors: true,
     showPlayTimeInHours: true,
-    threatColoringEnabled: false,
-    threatOwnSeeThrough: 0.75,
+    threatColoringEnabled: true,
+    threatOwnSeeThrough: 0.8,
     threatOpponentSeeThrough: 0.25,
     threatMoveDepth: 3,
     threatDepthFactor: 0.2,
-    threatMaxMixPercent: 50,
-    threatGradientPercent: 10,
+    threatMaxMixPercent: 40,
+    threatGradientPercent: 0,
+    threatColoringMode: "opacity",
+    onlineIndicatorDark: "#7c9e4f",
+    buttonBackgroundDark: "#333332",
+    buttonBackgroundLight: "#bdbdbd",
+    clockSize: 90,
     pieceBounceEnabled: true,
-    pieceBounceTiming: 300,
-    pieceBounceDuration: 600,
-    removeOutlines: false,
+    pieceBounceLoop: true,
+    pieceBounceStyle: "wiggle-only",
+    pieceBounceWiggleAngle: 8,
+    pieceBounceTiming: 1100,
+    pieceBounceDuration: 700,
+    pieceBounceWiggleDuration: 450,
+    pieceBounceCurve: [0.43205979291130514, 9.699530416395712, 0.43205979291130514, -119.63553915279083],
+    pieceBounceWiggleCurve: [0.1681075096130371, 7.01450587942914, 0.8627703530447823, -95.40328365388133],
+    removeOutlines: true,
     removeGlows: true,
     removeGradients: true,
     removeShadows: true,
@@ -51,22 +64,31 @@
     hoverMixPercent: [0, 100],
     hoverDesaturation: [0, 100],
     moveDotSize: [5, 50],
+    lastMoveLineWidth: [1, 100],
     threatOwnSeeThrough: [0, 1],
     threatOpponentSeeThrough: [0, 1],
     threatMoveDepth: [1, 5],
     threatDepthFactor: [0, 1],
     threatMaxMixPercent: [0, 100],
     threatGradientPercent: [0, 100],
-    pieceBounceTiming: [0, 2000],
-    pieceBounceDuration: [200, 1500]
+    pieceBounceWiggleAngle: [1, 30],
+    pieceBounceTiming: [0, 5000],
+    pieceBounceDuration: [200, 1500],
+    pieceBounceWiggleDuration: [200, 1500]
   };
   const colors = Object.keys(defaults).filter(key => /Color|Light|Dark/.test(key) && typeof defaults[key] === "string");
 
   function normalize(values = {}) {
     const result = { ...defaults, ...values };
+    if (!Object.prototype.hasOwnProperty.call(values, "pieceBounceWiggleCurve")) {
+      result.pieceBounceWiggleCurve = values.pieceBounceCurve ?? defaults.pieceBounceWiggleCurve;
+    }
 
     if (!["system_pixel", "system_eckig", "rund", "rund_comic"].includes(result.pieceSet)) {
       result.pieceSet = defaults.pieceSet;
+    }
+    if (!["rotate-wiggle", "wiggle-only"].includes(result.pieceBounceStyle)) {
+      result.pieceBounceStyle = defaults.pieceBounceStyle;
     }
     for (const [key, [min, max]] of Object.entries(ranges)) {
       const value = Number(result[key]);
@@ -78,8 +100,24 @@
     result.threatMoveDepth = Math.round(result.threatMoveDepth);
     result.threatMaxMixPercent = Math.round(result.threatMaxMixPercent);
     result.threatGradientPercent = Math.round(result.threatGradientPercent);
+    result.pieceBounceWiggleAngle = Math.round(result.pieceBounceWiggleAngle);
+    result.lastMoveLineWidth = Math.round(result.lastMoveLineWidth);
     result.pieceBounceTiming = Math.round(result.pieceBounceTiming / 50) * 50;
     result.pieceBounceDuration = Math.round(result.pieceBounceDuration / 50) * 50;
+    result.pieceBounceWiggleDuration = Math.round(result.pieceBounceWiggleDuration / 50) * 50;
+    for (const key of ["pieceBounceCurve", "pieceBounceWiggleCurve"]) {
+      const curve = Array.isArray(result[key]) ? result[key].map(Number) : null;
+      if (!curve || curve.length !== 4 || !curve.every(Number.isFinite)) {
+        result[key] = [...defaults[key]];
+      } else {
+        result[key] = [
+          Math.max(0, Math.min(1, curve[0])),
+          Math.max(-200, Math.min(120, curve[1])),
+          Math.max(0, Math.min(1, curve[2])),
+          Math.max(-200, Math.min(120, curve[3]))
+        ];
+      }
+    }
 
     for (const key of colors) {
       if (!/^#[0-9a-f]{6}$/i.test(result[key])) result[key] = defaults[key];
@@ -100,7 +138,9 @@
       "monochromeBoard",
       "squareOutline",
       "threatColoringEnabled",
-      "pieceBounceEnabled"
+      "pieceBounceEnabled",
+      "pieceBounceLoop",
+      "complexPawn"
     ]) {
       result[key] = Boolean(result[key]);
     }

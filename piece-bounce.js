@@ -25,23 +25,54 @@
     activePieces.delete(piece);
   }
 
+  function finishCurrentStep(piece) {
+    const state = activePieces.get(piece);
+    if (!state) return;
+    state.finishAfterCycle = true;
+    if (!state.pauseTimer) return;
+    clearTimeout(state.pauseTimer);
+    state.pauseTimer = null;
+    const resumePause = state.resumePause;
+    state.resumePause = null;
+    resumePause?.();
+  }
+
   async function animateWhileHovered(piece, state) {
-    while (activePieces.get(piece) === state && isEnabled() && piece.isConnected) {
+    while (activePieces.get(piece) === state && isEnabled() && piece.isConnected && !state.finishAfterCycle && (settings.pieceBounceLoop || state.steps === 0)) {
       const angle = state.angle;
-      const animation = piece.animate([
-        { transform: `rotate(${angle}deg)`, offset: 0 },
-        { transform: `rotate(${angle}deg)`, offset: 0.07 },
-        { transform: `rotate(${angle - 9}deg)`, offset: 0.16, easing: "cubic-bezier(.2,.8,.3,1)" },
-        { transform: `rotate(${angle - 9}deg)`, offset: 0.22 },
-        { transform: `rotate(${angle + 102}deg)`, offset: 0.48, easing: "cubic-bezier(.65,0,.35,1)" },
-        { transform: `rotate(${angle + 90}deg)`, offset: 0.58, easing: "cubic-bezier(.2,.8,.3,1)" },
-        { transform: `rotate(${angle + 94}deg)`, offset: 0.66 },
-        { transform: `rotate(${angle + 90}deg)`, offset: 0.74 },
-        { transform: `rotate(${angle + 90}deg)`, offset: 1 }
-      ], { duration: settings.pieceBounceDuration, fill: "forwards", easing: "linear", pseudoElement: "::before" });
+      const isPawn = piece.classList.contains("pawn");
+      const isWiggle = isPawn || settings.pieceBounceStyle === "wiggle-only";
+      const rotation = isWiggle ? 0 : 90;
+      const board = piece.closest("cg-board");
+      const orientation = board?.closest(".cg-wrap")?.classList;
+      const orientationOffset = board && (
+        (orientation?.contains("orientation-white") && piece.classList.contains("black")) ||
+        (orientation?.contains("orientation-black") && piece.classList.contains("white"))
+      ) ? 180 : 0;
+      const curve = isWiggle ? settings.pieceBounceWiggleCurve : settings.pieceBounceCurve;
+      const [handle1Time, handle1Value, handle2Time, handle2Value] = curve;
+      // Normalize the saved 90-degree curve so its timing stays the same at every rotation size.
+      const easing = `cubic-bezier(${handle1Time}, ${handle1Value / -90}, ${handle2Time}, ${handle2Value / -90})`;
+      const centerAngle = orientationOffset + angle;
+      const wiggleAngle = settings.pieceBounceWiggleAngle * (isPawn ? 1 : 0.5);
+      const keyframes = isWiggle ? [
+        { transform: `rotate(${centerAngle}deg)`, offset: 0 },
+        { transform: `rotate(${centerAngle - wiggleAngle}deg)`, offset: 1 / 3 },
+        { transform: `rotate(${centerAngle + wiggleAngle}deg)`, offset: 2 / 3 },
+        { transform: `rotate(${centerAngle}deg)`, offset: 1 }
+      ] : [
+        { transform: `rotate(${centerAngle}deg)`, offset: 0, easing },
+        { transform: `rotate(${centerAngle + rotation}deg)`, offset: 1 }
+      ];
+      const animation = piece.animate(keyframes, {
+        duration: isWiggle ? settings.pieceBounceWiggleDuration : settings.pieceBounceDuration,
+        fill: "forwards",
+        easing: isWiggle ? easing : "linear",
+        pseudoElement: "::before"
+      });
       const previousAnimation = state.animation;
       state.animation = animation;
-      state.angle += 90;
+      state.angle += rotation;
       previousAnimation?.cancel();
 
       try {
@@ -49,7 +80,8 @@
       } catch {
         break;
       }
-      if (activePieces.get(piece) !== state || !isEnabled() || !piece.isConnected) break;
+      state.steps++;
+      if (activePieces.get(piece) !== state || !isEnabled() || !piece.isConnected || state.finishAfterCycle || !settings.pieceBounceLoop) break;
 
       if (settings.pieceBounceTiming > 0) {
         await new Promise(resolve => {
@@ -62,12 +94,26 @@
         });
       }
     }
+    if (state.finishAfterCycle || !settings.pieceBounceLoop) {
+      state.stopped = true;
+      if (state.pauseTimer) clearTimeout(state.pauseTimer);
+      state.resumePause?.();
+      state.animation?.cancel();
+      piece.removeAttribute("data-lfs-bounce-running");
+      activePieces.delete(piece);
+      return;
+    }
     stop(piece, state);
   }
 
   function start(piece) {
-    if (!isEnabled() || activePieces.has(piece) || typeof piece.animate !== "function") return;
-    const state = { angle: 0, animation: null, pauseTimer: null, resumePause: null, stopped: false };
+    if (!isEnabled() || typeof piece.animate !== "function") return;
+    const currentState = activePieces.get(piece);
+    if (currentState) {
+      currentState.finishAfterCycle = false;
+      return;
+    }
+    const state = { angle: 0, animation: null, pauseTimer: null, resumePause: null, stopped: false, finishAfterCycle: false, steps: 0 };
     activePieces.set(piece, state);
     piece.setAttribute("data-lfs-bounce-running", "");
     void animateWhileHovered(piece, state);
@@ -78,9 +124,14 @@
   }
 
   function findPieceAtPoint(event) {
-    const eventPiece = getPiece(event.target);
+    const eventTarget = event.type === "pointerout"
+      ? event.relatedTarget || document.elementFromPoint(event.clientX, event.clientY)
+      : event.target;
+    const eventPiece = getPiece(eventTarget);
     if (eventPiece) return eventPiece;
-    const target = document.elementFromPoint(event.clientX, event.clientY) || event.target;
+    const target = event.type === "pointerout"
+      ? eventTarget
+      : document.elementFromPoint(event.clientX, event.clientY) || event.target;
     const directPiece = getPiece(target);
     if (directPiece) return directPiece;
 
@@ -117,7 +168,7 @@
     if (event.pointerType !== "mouse") return;
     const nextPiece = findPieceAtPoint(event);
     if (hoveredPiece === nextPiece) return;
-    if (hoveredPiece) stop(hoveredPiece);
+    if (hoveredPiece) finishCurrentStep(hoveredPiece);
     hoveredPiece = nextPiece;
     if (hoveredPiece) start(hoveredPiece);
   }
@@ -132,11 +183,24 @@
   });
 
   function update(nextSettings) {
+    if (settings && settings.pieceBounceStyle !== nextSettings.pieceBounceStyle) {
+      for (const [piece, state] of [...activePieces]) stop(piece, state);
+    }
     settings = nextSettings;
     if (!isEnabled()) {
       for (const [piece, state] of activePieces) stop(piece, state);
       hoveredPiece = null;
       return;
+    }
+    if (!settings.pieceBounceLoop) {
+      for (const state of activePieces.values()) {
+        if (!state.pauseTimer) continue;
+        clearTimeout(state.pauseTimer);
+        state.pauseTimer = null;
+        const resumePause = state.resumePause;
+        state.resumePause = null;
+        resumePause?.();
+      }
     }
     for (const piece of document.querySelectorAll(pieceSelector)) {
       if (piece.matches(":hover")) start(piece);

@@ -43,13 +43,26 @@
           <div class="section-heading"><span class="section-index">01</span><div><h2>Figuren</h2><p>Figurenstil und Farben fuer beide Seiten.</p></div></div>
           <div class="control-grid">
             <label class="field field-wide"><span>Figurenset</span><select data-setting="pieceSet"><option value="system_pixel">System Pixel</option><option value="system_eckig">System Eckig</option><option value="rund">Rund</option><option value="rund_comic">Rund Comic</option></select><small>Die Grafiken werden direkt aus der Erweiterung geladen.</small></label>
+            <label class="switch-field"><span><strong>Komplexer Bauer</strong><small>Alternative Bauern bei „System Pixel“ und „System Eckig“.</small></span><input type="checkbox" data-setting="complexPawn" role="switch"></label>
             <label class="field"><span>Weisse Figuren</span><input type="color" data-setting="whitePieceColor"></label>
             <label class="field"><span>Schwarze Figuren</span><input type="color" data-setting="blackPieceColor"></label>
-            <label class="switch-field"><span><strong>Figuren-Bounce bei Hover</strong><small>90-Grad-Drehung mit kurzem Nachfedern.</small></span><input type="checkbox" data-setting="pieceBounceEnabled" role="switch"></label>
+            <label class="switch-field"><span><strong>Figuren-Bounce bei Hover</strong><small>Im Nur-Wippen-Stil wippen Offiziere mit halbem Winkel.</small></span><input type="checkbox" data-setting="pieceBounceEnabled" role="switch"></label>
+            <label class="switch-field"><span><strong>Loop</strong><small>Solange die Maus auf der Figur ist.</small></span><input type="checkbox" data-setting="pieceBounceLoop" role="switch"></label>
           </div>
           <div class="control-grid bounce-controls">
-            <label class="field"><span>Timing (Pause)</span><input type="range" min="0" max="2000" step="50" data-setting="pieceBounceTiming"><output data-value-for="pieceBounceTiming"></output></label>
-            <label class="field"><span>Dauer</span><input type="range" min="200" max="1500" step="50" data-setting="pieceBounceDuration"><output data-value-for="pieceBounceDuration"></output></label>
+            <label class="field"><span>Animationsstil</span><select data-setting="pieceBounceStyle"><option value="rotate-wiggle">90°-Drehung + Bauern-Wippen</option><option value="wiggle-only">Nur Wippen für alle Figuren</option></select></label>
+            <label class="field"><span>Winkel fürs Wippen</span><input type="range" min="1" max="30" step="1" data-setting="pieceBounceWiggleAngle"><output data-value-for="pieceBounceWiggleAngle"></output></label>
+            <label class="field" data-loop-pause><span>Timing (Pause)</span><input type="range" min="0" max="5000" step="50" data-setting="pieceBounceTiming"><output data-value-for="pieceBounceTiming"></output></label>
+            <label class="field"><span>Drehdauer</span><input type="range" min="200" max="1500" step="50" data-setting="pieceBounceDuration"><output data-value-for="pieceBounceDuration"></output></label>
+            <label class="field"><span>Wippdauer</span><input type="range" min="200" max="1500" step="50" data-setting="pieceBounceWiggleDuration"><output data-value-for="pieceBounceWiggleDuration"></output></label>
+          </div>
+          <div class="bounce-curve-panel">
+            <div class="bounce-curve-heading"><span><strong>Animationskurve</strong><small>Griffe ziehen oder mit Pfeiltasten bewegen.</small></span><button type="button" data-bezier-reset>Zuruecksetzen</button></div>
+            <div class="bounce-curve-tabs" role="group" aria-label="Animationskurve auswählen">
+              <button type="button" class="bounce-curve-tab" data-curve-tab="pieceBounceCurve" aria-pressed="true">Drehung</button>
+              <button type="button" class="bounce-curve-tab" data-curve-tab="pieceBounceWiggleCurve" aria-pressed="false">Wiggle</button>
+            </div>
+            <div class="bezier-editor" id="piece-bounce-curve-editor" role="tabpanel" data-bezier-editor="pieceBounceCurve"></div>
           </div>
         </section>
 
@@ -89,8 +102,11 @@
           </div>
           <div class="control-grid compact-grid">
             <label class="field"><span>Groesse der Bewegungsdots</span><input type="range" min="5" max="50" step="5" data-setting="moveDotSize"><output data-value-for="moveDotSize"></output></label>
-            <label class="switch-field"><span><strong>Letzten Zug markieren</strong><small>Das zuletzt bespielte Feld farbig hervorheben.</small></span><input type="checkbox" data-setting="markLastMove" role="switch"></label>
+            <label class="switch-field"><span><strong>Letzten Zug markieren</strong><small>Jedes Feld des letzten Zugs mit einer Mittellinie markieren.</small></span><input type="checkbox" data-setting="markLastMove" role="switch"></label>
             <label class="switch-field"><span><strong>Quadratische Bewegungsdots</strong><small>Statt runder Punkte kleine Quadrate anzeigen.</small></span><input type="checkbox" data-setting="squareMoveDots" role="switch"></label>
+          </div>
+          <div class="control-grid compact-grid">
+            <label class="field field-wide"><span>Breite der Letztzug-Linie</span><input type="range" min="1" max="100" step="1" data-setting="lastMoveLineWidth"><output data-value-for="lastMoveLineWidth"></output></label>
           </div>
         </section>
 
@@ -145,6 +161,7 @@
       </main>
     </div>
     <script src="settings.js"></script>
+    <script src="bezier-editor.js"></script>
     <script src="options.js"></script>
   </body>
 </html>

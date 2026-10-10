@@ -25,14 +25,27 @@
 
       <section class="panel" id="panel-figuren" role="tabpanel" aria-labelledby="tab-figuren" data-panel="figuren">
         <label class="select-setting"><span>Figurenset</span><select data-setting="pieceSet"><option value="system_pixel">System Pixel</option><option value="system_eckig">System Eckig</option><option value="rund">Rund</option><option value="rund_comic">Rund Comic</option></select></label>
+        <label class="switch-setting"><span><strong>Komplexer Bauer</strong><small>Bei „System Pixel“ und „System Eckig“.</small></span><input type="checkbox" data-setting="complexPawn" role="switch"></label>
         <div class="color-pair">
           <label class="color-setting"><span>Weisse Figuren</span><input type="color" data-setting="whitePieceColor"></label>
           <label class="color-setting"><span>Schwarze Figuren</span><input type="color" data-setting="blackPieceColor"></label>
         </div>
-        <label class="switch-setting bounce-toggle"><span><strong>Figuren-Bounce bei Hover</strong><small>90-Grad-Drehung mit kurzem Nachfedern.</small></span><input type="checkbox" data-setting="pieceBounceEnabled" role="switch"></label>
+        <label class="switch-setting bounce-toggle"><span><strong>Figuren-Bounce bei Hover</strong><small>Im Nur-Wippen-Stil wippen Offiziere mit halbem Winkel.</small></span><input type="checkbox" data-setting="pieceBounceEnabled" role="switch"></label>
+        <label class="switch-setting loop-toggle"><span><strong>Loop</strong><small>Solange die Maus auf der Figur ist.</small></span><input type="checkbox" data-setting="pieceBounceLoop" role="switch"></label>
+        <label class="select-setting bounce-style"><span>Animationsstil</span><select data-setting="pieceBounceStyle"><option value="rotate-wiggle">90°-Drehung + Bauern-Wippen</option><option value="wiggle-only">Nur Wippen für alle Figuren</option></select></label>
         <div class="range-grid bounce-controls">
-          <label class="range-setting"><span>Timing (Pause)</span><output data-value-for="pieceBounceTiming"></output><input type="range" min="0" max="2000" step="50" data-setting="pieceBounceTiming"></label>
-          <label class="range-setting"><span>Dauer</span><output data-value-for="pieceBounceDuration"></output><input type="range" min="200" max="1500" step="50" data-setting="pieceBounceDuration"></label>
+          <label class="range-setting"><span>Winkel fürs Wippen</span><output data-value-for="pieceBounceWiggleAngle"></output><input type="range" min="1" max="30" step="1" data-setting="pieceBounceWiggleAngle"></label>
+          <label class="range-setting" data-loop-pause><span>Timing (Pause)</span><output data-value-for="pieceBounceTiming"></output><input type="range" min="0" max="5000" step="50" data-setting="pieceBounceTiming"></label>
+          <label class="range-setting"><span>Drehdauer</span><output data-value-for="pieceBounceDuration"></output><input type="range" min="200" max="1500" step="50" data-setting="pieceBounceDuration"></label>
+          <label class="range-setting"><span>Wippdauer</span><output data-value-for="pieceBounceWiggleDuration"></output><input type="range" min="200" max="1500" step="50" data-setting="pieceBounceWiggleDuration"></label>
+        </div>
+        <div class="bounce-curve-panel">
+          <div class="bounce-curve-heading"><span><strong>Animationskurve</strong><small>Griffe ziehen oder mit Pfeiltasten bewegen.</small></span><button type="button" data-bezier-reset>Zuruecksetzen</button></div>
+          <div class="bounce-curve-tabs" role="group" aria-label="Animationskurve auswählen">
+            <button type="button" class="bounce-curve-tab" data-curve-tab="pieceBounceCurve" aria-pressed="true">Drehung</button>
+            <button type="button" class="bounce-curve-tab" data-curve-tab="pieceBounceWiggleCurve" aria-pressed="false">Wiggle</button>
+          </div>
+          <div class="bezier-editor" id="piece-bounce-curve-editor" role="tabpanel" data-bezier-editor="pieceBounceCurve"></div>
         </div>
       </section>
 
@@ -70,6 +83,7 @@
         </div>
         <div class="range-grid single-range">
           <label class="range-setting"><span>Groesse Bewegungsdots</span><output data-value-for="moveDotSize"></output><input type="range" min="5" max="50" step="5" data-setting="moveDotSize"></label>
+          <label class="range-setting"><span>Breite der Letztzug-Linie</span><output data-value-for="lastMoveLineWidth"></output><input type="range" min="1" max="100" step="1" data-setting="lastMoveLineWidth"></label>
         </div>
         <div class="switch-list">
           <label class="switch-setting"><span>Letzten Zug markieren</span><input type="checkbox" data-setting="markLastMove" role="switch"></label>
@@ -129,6 +143,7 @@
       <footer class="footer"><span id="save-status" role="status" aria-live="polite">Automatisch gespeichert</span><div class="footer-actions"><button id="export-settings" type="button">Export</button><button id="reset-settings" type="button">Zuruecksetzen</button></div></footer>
     </main>
     <script src="settings.js"></script>
+    <script src="bezier-editor.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

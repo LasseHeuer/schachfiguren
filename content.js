@@ -7,7 +7,6 @@
     if (!root) return;
 
     root.toggleAttribute("data-lfs-disabled", !settings.enabled);
-    root.toggleAttribute("data-lfs-mark-last-move", settings.markLastMove);
     root.toggleAttribute("data-lfs-square-move-dots", settings.squareMoveDots);
     root.toggleAttribute("data-lfs-graph-colors-disabled", !settings.analysisGraphColors);
     root.toggleAttribute("data-lfs-remove-outlines", settings.removeOutlines);
@@ -19,6 +18,7 @@
     root.toggleAttribute("data-lfs-monochrome-board", settings.monochromeBoard);
     root.toggleAttribute("data-lfs-square-outline", settings.squareOutline);
     root.toggleAttribute("data-lfs-rund-comic", settings.pieceSet === "rund_comic");
+    globalThis.LichessLastMoveLine?.update(settings);
     globalThis.LichessThreatCoding?.update(settings);
     globalThis.LichessPieceBounce?.update(settings);
 
@@ -48,8 +48,12 @@
     for (const [name, value] of Object.entries(variables)) root.style.setProperty(name, value);
 
     const base = chrome.runtime.getURL(`${settings.pieceSet}/`);
+    const complexPawnSet = settings.complexPawn && ["system_pixel", "system_eckig"].includes(settings.pieceSet);
     for (const piece of pieceNames) {
-      root.style.setProperty(`--lfs-piece-${piece}`, `url("${base}${piece}.svg")`);
+      const asset = complexPawnSet && ["wp", "bp"].includes(piece)
+        ? `${piece}_2`
+        : piece;
+      root.style.setProperty(`--lfs-piece-${piece}`, `url("${base}${asset}.svg")`);
     }
 
     root.toggleAttribute("data-lfs-ready", true);
@@ -150,7 +154,7 @@
     }).observe(document, { childList: true });
   }
 
-  chrome.storage.local.get(defaults, stored => {
+  chrome.storage.local.get(null, stored => {
     settings = normalize(stored);
     applyWhenReady();
   });

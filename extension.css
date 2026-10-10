@@ -168,8 +168,8 @@ html:not([data-lfs-disabled])[data-lfs-monochrome-board] body[data-board] .is2d 
 /* Keep Chessground's square markers above the threat colors. */
 html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board[data-lfs-threat-board]::before {
   background-image: var(--lfs-threat-background) !important;
-  background-position: center !important;
-  background-size: 100% 100% !important;
+  background-position: var(--lfs-threat-background-position, center) !important;
+  background-size: var(--lfs-threat-background-size, 100% 100%) !important;
   background-repeat: no-repeat !important;
 }
 
@@ -177,8 +177,17 @@ html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square.la
   background: none !important;
 }
 
-html:not([data-lfs-disabled])[data-lfs-mark-last-move] body[data-board] .is2d .cg-wrap cg-board square.last-move {
-  background: var(--lfs-last-move-color) !important;
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > svg.lfs-last-move-line {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > svg.lfs-last-move-line polygon {
+  fill: var(--lfs-last-move-color);
 }
 
 html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square.selected {
@@ -365,6 +374,33 @@ html:not([data-lfs-disabled])[data-lfs-rund-comic] .board-editor .spare piece.wh
 html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap piece.black,
 html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .puzzle__feedback piece.black,
 html:not([data-lfs-disabled])[data-lfs-rund-comic] .board-editor .spare piece.black {
+  background: var(--lfs-comic-piece) center / contain no-repeat !important;
+  -webkit-mask: none !important;
+  mask: none !important;
+}
+
+html:not([data-lfs-disabled]) .is2d .cg-wrap.orientation-white cg-board piece.black,
+html:not([data-lfs-disabled]) .is2d .cg-wrap.orientation-black cg-board piece.white {
+  background: none !important;
+  -webkit-mask: none !important;
+  mask: none !important;
+}
+
+html:not([data-lfs-disabled]) .is2d .cg-wrap.orientation-white cg-board piece.black::before,
+html:not([data-lfs-disabled]) .is2d .cg-wrap.orientation-black cg-board piece.white::before {
+  position: absolute;
+  inset: 0;
+  background: var(--lfs-bounce-piece-color) !important;
+  -webkit-mask: var(--lfs-bounce-piece-mask) center / contain no-repeat !important;
+  mask: var(--lfs-bounce-piece-mask) center / contain no-repeat !important;
+  content: "";
+  transform: rotate(180deg);
+  transform-origin: center;
+  pointer-events: none;
+}
+
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap.orientation-white cg-board piece.black::before,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap.orientation-black cg-board piece.white::before {
   background: var(--lfs-comic-piece) center / contain no-repeat !important;
   -webkit-mask: none !important;
   mask: none !important;
