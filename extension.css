@@ -309,3 +309,37 @@ html:not([data-lfs-disabled]) .is2d .cg-wrap piece.black.knight,
 html:not([data-lfs-disabled]) .is2d .puzzle__feedback piece.black.knight { background: var(--lfs-black-piece-color) !important; -webkit-mask: var(--lfs-piece-bn) center / contain no-repeat !important; mask: var(--lfs-piece-bn) center / contain no-repeat !important; }
 html:not([data-lfs-disabled]) .is2d .cg-wrap piece.black.pawn,
 html:not([data-lfs-disabled]) .is2d .puzzle__feedback piece.black.pawn { background: var(--lfs-black-piece-color) !important; -webkit-mask: var(--lfs-piece-bp) center / contain no-repeat !important; mask: var(--lfs-piece-bp) center / contain no-repeat !important; }
+
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap piece.white.king,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .puzzle__feedback piece.white.king { --lfs-comic-piece: var(--lfs-piece-wk); }
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap piece.white.queen,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .puzzle__feedback piece.white.queen { --lfs-comic-piece: var(--lfs-piece-wq); }
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap piece.white.rook,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .puzzle__feedback piece.white.rook { --lfs-comic-piece: var(--lfs-piece-wr); }
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap piece.white.bishop,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .puzzle__feedback piece.white.bishop { --lfs-comic-piece: var(--lfs-piece-wb); }
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap piece.white.knight,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .puzzle__feedback piece.white.knight { --lfs-comic-piece: var(--lfs-piece-wn); }
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap piece.white.pawn,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .puzzle__feedback piece.white.pawn { --lfs-comic-piece: var(--lfs-piece-wp); }
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap piece.black.king,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .puzzle__feedback piece.black.king { --lfs-comic-piece: var(--lfs-piece-bk); }
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap piece.black.queen,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .puzzle__feedback piece.black.queen { --lfs-comic-piece: var(--lfs-piece-bq); }
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap piece.black.rook,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .puzzle__feedback piece.black.rook { --lfs-comic-piece: var(--lfs-piece-br); }
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap piece.black.bishop,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .puzzle__feedback piece.black.bishop { --lfs-comic-piece: var(--lfs-piece-bb); }
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap piece.black.knight,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .puzzle__feedback piece.black.knight { --lfs-comic-piece: var(--lfs-piece-bn); }
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap piece.black.pawn,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .puzzle__feedback piece.black.pawn { --lfs-comic-piece: var(--lfs-piece-bp); }
+
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap piece.white,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .puzzle__feedback piece.white,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap piece.black,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .puzzle__feedback piece.black {
+  background: var(--lfs-comic-piece) center / contain no-repeat !important;
+  -webkit-mask: none !important;
+  mask: none !important;
+}

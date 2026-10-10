@@ -58,7 +58,7 @@
   function normalize(values = {}) {
     const result = { ...defaults, ...values };
 
-    if (!["system_pixel", "system_eckig", "rund"].includes(result.pieceSet)) {
+    if (!["system_pixel", "system_eckig", "rund", "rund_comic"].includes(result.pieceSet)) {
       result.pieceSet = defaults.pieceSet;
     }
     for (const [key, [min, max]] of Object.entries(ranges)) {

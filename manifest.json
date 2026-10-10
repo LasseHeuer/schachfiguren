@@ -29,7 +29,8 @@
       "resources": [
         "system_pixel/*.svg",
         "system_eckig/*.svg",
-        "rund/*.svg"
+        "rund/*.svg",
+        "rund_comic/*.svg"
       ],
       "matches": ["https://lichess.org/*"]
     }

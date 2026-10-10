@@ -18,6 +18,7 @@
     root.toggleAttribute("data-lfs-disable-animations", settings.disableAnimations);
     root.toggleAttribute("data-lfs-monochrome-board", settings.monochromeBoard);
     root.toggleAttribute("data-lfs-square-outline", settings.squareOutline);
+    root.toggleAttribute("data-lfs-rund-comic", settings.pieceSet === "rund_comic");
     globalThis.LichessThreatCoding?.update(settings);
 
     const variables = {
