@@ -25,19 +25,27 @@
     if (control.type !== "range") return;
     const output = document.querySelector(`[data-value-for="${control.dataset.setting}"]`);
     if (!output) return;
-    if (control.dataset.setting === "threatMoveDepth") {
+    if (["threatMoveDepth", "wedgePotentialCutoffValue", "wedgePotentialPerPieceCount"].includes(control.dataset.setting)) {
       output.value = control.value;
+      return;
+    }
+    if (control.dataset.setting.endsWith("Px")) {
+      output.value = `${control.value} px`;
+      return;
+    }
+    if (control.dataset.setting === "wedgeOpacity") {
+      output.value = `${Math.round(Number(control.value) * 100)}%`;
       return;
     }
     if (["pieceBounceTiming", "pieceBounceDuration", "pieceBounceWiggleDuration"].includes(control.dataset.setting)) {
       output.value = `${control.value} ms`;
       return;
     }
-    if (control.dataset.setting === "pieceBounceWiggleAngle") {
+    if (["pieceBounceWiggleAngle", "threatArcAngleDeg"].includes(control.dataset.setting)) {
       output.value = `${control.value}°`;
       return;
     }
-    if (["threatOwnSeeThrough", "threatOpponentSeeThrough", "threatDepthFactor"].includes(control.dataset.setting)) {
+    if (["threatOwnSeeThrough", "threatOpponentSeeThrough", "threatDepthFactor", "threatArcRadius", "threatArcThickness"].includes(control.dataset.setting)) {
       output.value = `${Math.round(Number(control.value) * 100)}%`;
       return;
     }

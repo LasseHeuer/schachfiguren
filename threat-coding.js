@@ -135,20 +135,17 @@
             let nextRow = row + dr;
             let nextCol = col + dc;
             let blocked = false;
-            let throughFactor = 1;
             let cumulativeFactor = 1;
             while (isInside(nextRow, nextCol)) {
               const occupant = board[nextRow][nextCol];
               if (blocked) {
-                cumulativeFactor *= throughFactor;
-                if (cumulativeFactor === 0) break;
                 const strength = pieceThreats[nextRow][nextCol] + (sign * cumulativeFactor);
                 pieceThreats[nextRow][nextCol] = Math.max(-1, Math.min(1, strength));
               }
               if (occupant) {
                 blocked = true;
-                throughFactor = occupant[0] === piece[0] ? ownSeeThrough : opponentSeeThrough;
-                cumulativeFactor *= throughFactor;
+                cumulativeFactor *= occupant[0] === piece[0] ? ownSeeThrough : opponentSeeThrough;
+                if (cumulativeFactor === 0) break;
               }
               nextRow += dr;
               nextCol += dc;
@@ -255,6 +252,8 @@
   function getAllowedDestinations(board, blackOrientation) {
     const destinations = new Set();
     for (const square of board.querySelectorAll(":scope > square.move-dest, :scope > square.premove-dest")) {
+      const style = getComputedStyle(square);
+      if (style.display === "none" || style.visibility === "hidden") continue;
       const destination = getLogicalSquare(square, board, blackOrientation);
       if (destination) destinations.add(`${destination.row},${destination.col}`);
     }
@@ -446,18 +445,26 @@
     showThreatImage(board, cacheKey, getThreatImage(cacheKey, colors, settings.threatGradientPercent));
   }
 
-  function getDragPreview(board) {
-    if (!activePieceDrag || activePieceDrag.board !== board) return null;
+  function getDragPreviewState(board) {
+    if (!pieceInteractionActive || !activePieceDrag || activePieceDrag.board !== board) return null;
     const blackOrientation = isBlackOrientation(board);
-    const position = getAllowedMovePreview(
-      board,
-      activePieceDrag.position,
-      activePieceDrag.source,
-      activePieceDrag.clientX,
-      activePieceDrag.clientY,
+    const target = getLogicalSquareAtPoint(board, activePieceDrag.clientX, activePieceDrag.clientY, blackOrientation);
+    const allowed = target && getAllowedDestinations(board, blackOrientation).has(`${target.row},${target.col}`);
+    const position = allowed
+      ? createPreviewPosition(activePieceDrag.position, activePieceDrag.source, target)
+      : null;
+    return {
+      position: position || activePieceDrag.position,
+      source: activePieceDrag.source,
+      target: position ? target : activePieceDrag.source,
+      legal: Boolean(position),
       blackOrientation
-    );
-    return { position: position || activePieceDrag.position, blackOrientation };
+    };
+  }
+
+  function getDragPreview(board) {
+    const preview = getDragPreviewState(board);
+    return preview ? { position: preview.position, blackOrientation: preview.blackOrientation } : null;
   }
 
   function getSelectedMovePreview(board, position, blackOrientation) {
@@ -569,15 +576,15 @@
       document.addEventListener("pointerdown", event => {
         lastPointerPosition = { x: event.clientX, y: event.clientY };
         if (event.button !== 0 || typeof event.target?.closest !== "function") return;
-        const piece = event.target.closest(".main-board cg-board piece");
-        if (!piece) return;
-        const board = piece.closest("cg-board");
+        const board = event.target.closest("cg-board");
+        if (!board || !board.matches(boardSelector)) return;
         const parsed = board ? readBoard(board) : null;
-        const source = parsed ? getLogicalSquare(piece, board, parsed.blackOrientation) : null;
-        pieceInteractionActive = true;
-        activePieceDrag = parsed && source && parsed.position[source.row][source.col]
-          ? { board, position: parsed.position, source, clientX: event.clientX, clientY: event.clientY }
+        const source = parsed
+          ? getLogicalSquareAtPoint(board, event.clientX, event.clientY, parsed.blackOrientation)
           : null;
+        if (!parsed || !source || !parsed.position[source.row][source.col]) return;
+        pieceInteractionActive = true;
+        activePieceDrag = { board, position: parsed.position, source, clientX: event.clientX, clientY: event.clientY };
       }, true);
       document.addEventListener("pointermove", event => {
         lastPointerPosition = { x: event.clientX, y: event.clientY };
@@ -625,5 +632,13 @@
     initialize();
   }
 
-  globalThis.LichessThreatCoding = { update, calculateThreatMap, createPreviewPosition, getBoardBaseColor, getOpacityColor, getThreatPixels };
+  globalThis.LichessThreatCoding = {
+    update,
+    calculateThreatMap,
+    createPreviewPosition,
+    getBoardBaseColor,
+    getOpacityColor,
+    getThreatPixels,
+    getInteractionPreview: getDragPreviewState
+  };
 })();

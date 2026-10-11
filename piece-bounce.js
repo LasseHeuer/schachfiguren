@@ -5,7 +5,9 @@
     ".mini-game cg-board piece.white:not(.ghost)",
     ".mini-game cg-board piece.black:not(.ghost)",
     ".board-editor .spare piece.white:not(.ghost)",
-    ".board-editor .spare piece.black:not(.ghost)"
+    ".board-editor .spare piece.black:not(.ghost)",
+    ".pocket piece.white:not(.ghost)",
+    ".pocket piece.black:not(.ghost)"
   ].join(", ");
   const activePieces = new Map();
   let settings = null;
@@ -152,9 +154,9 @@
       }
     }
 
-    const spare = target.closest(".board-editor .spare");
-    if (spare) {
-      for (const piece of spare.querySelectorAll("piece.white:not(.ghost), piece.black:not(.ghost)")) {
+    const pieceTray = target.closest(".board-editor .spare, .pocket");
+    if (pieceTray) {
+      for (const piece of pieceTray.querySelectorAll("piece.white:not(.ghost), piece.black:not(.ghost)")) {
         const rect = piece.getBoundingClientRect();
         if (event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom) {
           return piece;

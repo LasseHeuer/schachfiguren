@@ -104,6 +104,7 @@
             <label class="field"><span>Groesse der Bewegungsdots</span><input type="range" min="5" max="50" step="5" data-setting="moveDotSize"><output data-value-for="moveDotSize"></output></label>
             <label class="switch-field"><span><strong>Letzten Zug markieren</strong><small>Jedes Feld des letzten Zugs mit einer Mittellinie markieren.</small></span><input type="checkbox" data-setting="markLastMove" role="switch"></label>
             <label class="switch-field"><span><strong>Quadratische Bewegungsdots</strong><small>Statt runder Punkte kleine Quadrate anzeigen.</small></span><input type="checkbox" data-setting="squareMoveDots" role="switch"></label>
+            <label class="switch-field"><span><strong>Bewegungsdots in Spielerfarbe</strong><small>Farbe der aktiven Figur für ihre Bewegungsdots verwenden.</small></span><input type="checkbox" data-setting="moveDotsPlayerColor" role="switch"></label>
           </div>
           <div class="control-grid compact-grid">
             <label class="field field-wide"><span>Breite der Letztzug-Linie</span><input type="range" min="1" max="100" step="1" data-setting="lastMoveLineWidth"><output data-value-for="lastMoveLineWidth"></output></label>
@@ -122,6 +123,25 @@
             <label class="field"><span>Faktor der Zugtiefe</span><input type="range" min="0" max="1" step="0.01" data-setting="threatDepthFactor"><output data-value-for="threatDepthFactor"></output></label>
             <label class="field"><span>Maximale Mischung bei ±5</span><input type="range" min="0" max="100" step="1" data-setting="threatMaxMixPercent"><output data-value-for="threatMaxMixPercent"></output></label>
             <label class="field"><span>Verlauf</span><input type="range" min="0" max="100" step="1" data-setting="threatGradientPercent"><output data-value-for="threatGradientPercent"></output></label>
+          </div>
+          <div class="control-grid compact-grid">
+            <label class="switch-field"><span><strong>Keildarstellung aktivieren</strong><small>Angriffe und Potenzial-Züge mit Keilen darstellen.</small></span><input type="checkbox" data-setting="selectedPieceWedgeEnabled" role="switch"></label>
+            <label class="switch-field"><span><strong>Nur ausgewählte Figur</strong><small>Wenn aus, Keile für alle Figuren anzeigen.</small></span><input type="checkbox" data-setting="selectedPieceWedgeOnlySelected" role="switch"></label>
+            <label class="switch-field"><span><strong>Potenzial-Züge</strong><small>Angriffe von möglichen Zugfeldern aus anzeigen.</small></span><input type="checkbox" data-setting="wedgePotentialEnabled" role="switch"></label>
+            <label class="switch-field"><span><strong>Bedrohte Figuren mit Viertelkreis markieren</strong><small>Zeigt die Richtung der angreifenden Figuren. Die Farbe ist die des Gegners.</small></span><input type="checkbox" data-setting="threatenedPieceOutlineEnabled" role="switch"></label>
+          </div>
+          <div class="control-grid">
+            <label class="field"><span>Keil-Basisbreite</span><input type="range" min="1" max="20" step="0.1" data-setting="wedgeBaseWidthPx"><output data-value-for="wedgeBaseWidthPx"></output></label>
+            <label class="field"><span>Keil-Spitzenbreite</span><input type="range" min="0.5" max="10" step="0.1" data-setting="wedgeTipWidthPx"><output data-value-for="wedgeTipWidthPx"></output></label>
+            <label class="field"><span>Keil-Leuchtbreite</span><input type="range" min="0" max="20" step="0.1" data-setting="wedgeGlowWidthPx"><output data-value-for="wedgeGlowWidthPx"></output></label>
+            <label class="field"><span>Keil-Leuchtunschärfe</span><input type="range" min="0" max="18" step="0.1" data-setting="wedgeGlowBlurPx"><output data-value-for="wedgeGlowBlurPx"></output></label>
+            <label class="field"><span>Keil-Deckkraft</span><input type="range" min="0" max="1" step="0.01" data-setting="wedgeOpacity"><output data-value-for="wedgeOpacity"></output></label>
+            <label class="field"><span>Potenzial-Strategie</span><select data-setting="wedgePotentialStrategy"><option value="all">Alle Züge</option><option value="waterfall">Wasserfall</option></select></label>
+            <label class="field"><span>Mindestwert Zielfigur</span><input type="range" min="1" max="9" step="1" data-setting="wedgePotentialCutoffValue"><output data-value-for="wedgePotentialCutoffValue"></output></label>
+            <label class="field"><span>Züge pro Figur</span><input type="range" min="1" max="5" step="1" data-setting="wedgePotentialPerPieceCount"><output data-value-for="wedgePotentialPerPieceCount"></output></label>
+            <label class="field"><span>Kreisradius (ab Feldmitte)</span><input type="range" min="0" max="0.5" step="0.01" data-setting="threatArcRadius"><output data-value-for="threatArcRadius"></output></label>
+            <label class="field"><span>Kreisdicke</span><input type="range" min="0.01" max="0.4" step="0.01" data-setting="threatArcThickness"><output data-value-for="threatArcThickness"></output></label>
+            <label class="field"><span>Segmentwinkel</span><input type="range" min="10" max="120" step="1" data-setting="threatArcAngleDeg"><output data-value-for="threatArcAngleDeg"></output></label>
           </div>
         </section>
 

@@ -21,6 +21,7 @@
     globalThis.LichessLastMoveLine?.update(settings);
     globalThis.LichessThreatCoding?.update(settings);
     globalThis.LichessPieceBounce?.update(settings);
+    globalThis.LichessSelectedPieceWedge?.update(settings);
 
     const variables = {
       "--lfs-idle-mix-percent": `${settings.idleMixPercent}%`,
@@ -141,14 +142,15 @@
     if (message?.type !== "lfs-status") return;
 
     const root = document.documentElement;
-    const board = document.querySelector(".main-board cg-board");
+    const boards = [...document.querySelectorAll(".cg-wrap cg-board, .mini-game cg-board")];
+    const board = boards.find(candidate => candidate.getBoundingClientRect().height > 0) ?? boards[0];
     sendResponse({
       ready: root?.hasAttribute("data-lfs-ready") ?? false,
       enabled: root ? !root.hasAttribute("data-lfs-disabled") : false,
       piecesLoaded: Boolean(root?.style.getPropertyValue("--lfs-piece-wk")),
       boardPresent: Boolean(board),
       boardHeight: Math.round(board?.getBoundingClientRect().height ?? 0),
-      pieceCount: board?.querySelectorAll("piece").length ?? 0
+      pieceCount: board?.querySelectorAll(":scope > piece:not(.ghost)").length ?? 0
     });
   });
 

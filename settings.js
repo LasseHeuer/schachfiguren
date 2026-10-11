@@ -51,6 +51,22 @@
     pieceBounceWiggleDuration: 450,
     pieceBounceCurve: [0.43205979291130514, 9.699530416395712, 0.43205979291130514, -119.63553915279083],
     pieceBounceWiggleCurve: [0.1681075096130371, 7.01450587942914, 0.8627703530447823, -95.40328365388133],
+    selectedPieceWedgeEnabled: true,
+    selectedPieceWedgeOnlySelected: true,
+    moveDotsPlayerColor: false,
+    wedgeBaseWidthPx: 14.7,
+    wedgeTipWidthPx: 3.7,
+    wedgeGlowWidthPx: 1.9,
+    wedgeGlowBlurPx: 9.7,
+    wedgeOpacity: 0.51,
+    wedgePotentialEnabled: true,
+    wedgePotentialStrategy: "all",
+    wedgePotentialCutoffValue: 1,
+    wedgePotentialPerPieceCount: 1,
+    threatenedPieceOutlineEnabled: true,
+    threatArcRadius: 0.22,
+    threatArcThickness: 0.08,
+    threatArcAngleDeg: 90,
     removeOutlines: true,
     removeGlows: true,
     removeGradients: true,
@@ -65,6 +81,16 @@
     hoverDesaturation: [0, 100],
     moveDotSize: [5, 50],
     lastMoveLineWidth: [1, 100],
+    wedgeBaseWidthPx: [1, 20],
+    wedgeTipWidthPx: [0.5, 10],
+    wedgeGlowWidthPx: [0, 20],
+    wedgeGlowBlurPx: [0, 18],
+    wedgeOpacity: [0, 1],
+    wedgePotentialCutoffValue: [1, 9],
+    wedgePotentialPerPieceCount: [1, 5],
+    threatArcRadius: [0, 0.5],
+    threatArcThickness: [0.01, 0.4],
+    threatArcAngleDeg: [10, 120],
     threatOwnSeeThrough: [0, 1],
     threatOpponentSeeThrough: [0, 1],
     threatMoveDepth: [1, 5],
@@ -90,6 +116,9 @@
     if (!["rotate-wiggle", "wiggle-only"].includes(result.pieceBounceStyle)) {
       result.pieceBounceStyle = defaults.pieceBounceStyle;
     }
+    if (!["all", "waterfall"].includes(result.wedgePotentialStrategy)) {
+      result.wedgePotentialStrategy = defaults.wedgePotentialStrategy;
+    }
     for (const [key, [min, max]] of Object.entries(ranges)) {
       const value = Number(result[key]);
       result[key] = Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : defaults[key];
@@ -98,6 +127,8 @@
       result[key] = Number(result[key].toFixed(2));
     }
     result.threatMoveDepth = Math.round(result.threatMoveDepth);
+    result.wedgePotentialCutoffValue = Math.round(result.wedgePotentialCutoffValue);
+    result.wedgePotentialPerPieceCount = Math.round(result.wedgePotentialPerPieceCount);
     result.threatMaxMixPercent = Math.round(result.threatMaxMixPercent);
     result.threatGradientPercent = Math.round(result.threatGradientPercent);
     result.pieceBounceWiggleAngle = Math.round(result.pieceBounceWiggleAngle);
@@ -140,6 +171,11 @@
       "threatColoringEnabled",
       "pieceBounceEnabled",
       "pieceBounceLoop",
+      "selectedPieceWedgeEnabled",
+      "selectedPieceWedgeOnlySelected",
+      "moveDotsPlayerColor",
+      "threatenedPieceOutlineEnabled",
+      "wedgePotentialEnabled",
       "complexPawn"
     ]) {
       result[key] = Boolean(result[key]);

@@ -1,30 +1,30 @@
 * { box-sizing: border-box; }
 html { color-scheme: light; }
-body { width: 360px; max-height: min(620px, 100vh); margin: 0; overflow-y: auto; background: #f3f5f1; color: #202620; font-family: "Segoe UI", sans-serif; }
-.popup { padding: 11px 12px 9px; }
+body { width: 340px; max-height: min(560px, 100vh); margin: 0; overflow-y: auto; background: #f3f5f1; color: #202620; font-family: "Segoe UI", sans-serif; }
+.popup { padding: 8px 9px 7px; }
 .topbar, .brand, .power-toggle, .switch-setting, .color-setting, .color-row, .range-setting { display: flex; align-items: center; }
 .topbar { justify-content: space-between; min-height: 32px; }
 .brand { gap: 8px; font-size: 13px; }
 .brand-mark { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 8px; background: #26372d; color: #edf3ee; font: 800 11px "Segoe UI", sans-serif; }
 .power-toggle { gap: 7px; color: #536257; font-size: 10px; font-weight: 600; }
-#page-status { min-height: 14px; margin: 3px 0 8px; overflow: hidden; color: #798178; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.tabs { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; padding: 3px; border-radius: 8px; background: #e7ebe5; }
-.tab { min-width: 0; padding: 7px 2px; border: 0; border-radius: 6px; background: transparent; color: #667066; cursor: pointer; font: 600 9px "Segoe UI", sans-serif; }
+#page-status { min-height: 12px; margin: 2px 0 5px; overflow: hidden; color: #798178; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.tabs { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; padding: 2px; border-radius: 7px; background: #e7ebe5; }
+.tab { min-width: 0; padding: 6px 1px; border: 0; border-radius: 5px; background: transparent; color: #667066; cursor: pointer; font: 600 8px "Segoe UI", sans-serif; }
 .tab.active { background: #fff; color: #294535; box-shadow: 0 1px 3px #1b2c2010; }
-.panel { padding: 12px 2px 9px; }
+.panel { padding: 7px 1px 5px; }
 .panel[hidden] { display: none; }
 .select-setting { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #536057; font-size: 10px; }
 select { width: 205px; height: 30px; padding: 0 8px; border: 0; border-radius: 6px; background: #e9ede7; color: #26332a; font: 11px "Segoe UI", sans-serif; }
 .color-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
 .color-setting, .color-row { justify-content: space-between; gap: 8px; color: #586158; font-size: 9px; }
-.theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .theme { min-width: 0; margin: 0; padding: 5px 8px 7px; border: 0; border-radius: 7px; background: #e9ede7; }
 .theme legend { padding: 0 3px; color: #536257; font-size: 9px; font-weight: 700; }
 .color-row + .color-row { margin-top: 3px; }
 input[type="color"] { width: 31px; height: 21px; flex: 0 0 auto; padding: 0; border: 0; border-radius: 4px; background: transparent; cursor: pointer; }
 input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
 input[type="color"]::-webkit-color-swatch, input[type="color"]::-moz-color-swatch { border: 0; border-radius: 4px; }
-.range-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 12px; margin-top: 12px; }
+.range-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 9px; margin-top: 8px; }
 .range-setting { position: relative; flex-wrap: wrap; justify-content: space-between; gap: 2px 6px; color: #586158; font-size: 9px; }
 .range-setting output { color: #315c4a; font-size: 9px; font-variant-numeric: tabular-nums; font-weight: 700; }
 input[type="range"] { width: 100%; height: 13px; margin: 1px 0 0; accent-color: #47715b; }
@@ -55,6 +55,12 @@ input[type="range"] { width: 100%; height: 13px; margin: 1px 0 0; accent-color: 
 .threat-toggle { align-items: center; }
 .threat-range-grid { margin-top: 10px; }
 .threat-note { display: block; margin-top: 5px; color: #818980; font-size: 8px; }
+.analysis-subsection { margin-top: 7px; padding: 6px 7px; border-radius: 6px; background: #e9ede7; }
+.analysis-subsection summary { color: #435147; cursor: pointer; font-size: 9px; font-weight: 700; }
+.analysis-subsection[open] summary { margin-bottom: 6px; }
+.analysis-subsection .switch-setting + .switch-setting { margin-top: 4px; }
+.analysis-subsection .range-grid { margin-top: 5px; }
+.outline-width-setting { margin-top: 6px; }
 .color-picker { display: grid; gap: 9px; margin: 4px 2px 12px; padding: 12px; border: 1px solid #d3dbd2; border-radius: 8px; background: #fff; box-shadow: 0 5px 18px #1e2b2040; }
 .color-picker[hidden] { display: none; }
 .color-picker-header { display: flex; align-items: center; justify-content: space-between; color: #26372d; font-size: 11px; }
@@ -75,7 +81,7 @@ input[type="range"].fine-dragging, input[type="range"].fine-dragging:focus, inpu
 #color-picker-hue::-moz-range-thumb, #color-picker-saturation::-moz-range-thumb, #color-picker-value::-moz-range-thumb { width: 12px; height: 12px; border: 2px solid #fff; border-radius: 50%; background: #47715b; box-shadow: 0 0 0 1px #1c241d99; }
 #color-picker-hue::-moz-range-thumb { background: #a33; }
 .picker-hint { color: #818980; font-size: 9px; }
-.switch-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.switch-list { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px; margin-top: 7px; }
 .switch-setting { min-height: 29px; justify-content: space-between; gap: 8px; color: #536057; font-size: 9px; }
 .switch-setting small { display: block; margin-top: 3px; color: #818980; font-size: 8px; line-height: 1.25; }
 .effect-panel { display: grid; gap: 2px; }
@@ -96,6 +102,8 @@ body { background: #242821; color: #e8ebe5; }
 .brand-mark, .tab.active { background: #454b3d; color: #f2f4ef; }
 .power-toggle, .select-setting, .color-setting, .color-row, .range-setting, .switch-setting, .footer { color: #d1d7ce; }
 .tabs { background: #30342d; }
+.analysis-subsection { background: #30352e; }
+.analysis-subsection summary { color: #e1e6de; }
 .tab { color: #aeb6aa; }
 .tab:hover { background: #3a4037; color: #f2f4ef; }
 select, .theme, .color-picker-header button, .bounce-curve-heading button, .footer button { background: #343931; color: #e1e6de; }

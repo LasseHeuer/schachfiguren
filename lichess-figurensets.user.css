@@ -171,6 +171,32 @@ html:has(cg-board) .round__app:has(.main-board .cg-wrap.orientation-black) .mate
   --captured-king: url(/*[[figurenset]]*//bk.svg?v=2);
 }
 
+html:has(cg-board) .analyse__board:has(.cg-wrap.orientation-white) .material-top,
+html:has(cg-board) .analyse__board:has(.cg-wrap.orientation-black) .material-bottom,
+html:has(cg-board) .bot-game:has(.cg-wrap.orientation-white) .material-top,
+html:has(cg-board) .bot-game:has(.cg-wrap.orientation-black) .material-bottom {
+  --captured-piece-color: var(--white-piece-color);
+  --captured-pawn: url(/*[[figurenset]]*//wp.svg?v=2);
+  --captured-bishop: url(/*[[figurenset]]*//wb.svg?v=2);
+  --captured-knight: url(/*[[figurenset]]*//wn.svg?v=2);
+  --captured-rook: url(/*[[figurenset]]*//wr.svg?v=2);
+  --captured-queen: url(/*[[figurenset]]*//wq.svg?v=2);
+  --captured-king: url(/*[[figurenset]]*//wk.svg?v=2);
+}
+
+html:has(cg-board) .analyse__board:has(.cg-wrap.orientation-white) .material-bottom,
+html:has(cg-board) .analyse__board:has(.cg-wrap.orientation-black) .material-top,
+html:has(cg-board) .bot-game:has(.cg-wrap.orientation-white) .material-bottom,
+html:has(cg-board) .bot-game:has(.cg-wrap.orientation-black) .material-top {
+  --captured-piece-color: var(--black-piece-color);
+  --captured-pawn: url(/*[[figurenset]]*//bp.svg?v=2);
+  --captured-bishop: url(/*[[figurenset]]*//bb.svg?v=2);
+  --captured-knight: url(/*[[figurenset]]*//bn.svg?v=2);
+  --captured-rook: url(/*[[figurenset]]*//br.svg?v=2);
+  --captured-queen: url(/*[[figurenset]]*//bq.svg?v=2);
+  --captured-king: url(/*[[figurenset]]*//bk.svg?v=2);
+}
+
 html:has(cg-board) .eval-gauge {
   background: linear-gradient(
     to bottom,
@@ -276,64 +302,64 @@ body[data-board] .is2d .cg-wrap cg-board square.check {
 .is2d .cg-wrap piece.ghost { display: none !important; }
 
 /* WEISSE FIGUREN */
-.is2d .cg-wrap piece.white.king, .is2d .puzzle__feedback piece.white.king {
+.is2d .cg-wrap piece.white.king, .is2d .puzzle__feedback piece.white.king, #promotion-choice piece.white.king, .pocket piece.white.king {
   background: var(--white-piece-color) !important;
   -webkit-mask: url(/*[[figurenset]]*//wk.svg?v=2) center / contain no-repeat !important;
   mask: url(/*[[figurenset]]*//wk.svg?v=2) center / contain no-repeat !important;
 }
-.is2d .cg-wrap piece.white.queen, .is2d .puzzle__feedback piece.white.queen {
+.is2d .cg-wrap piece.white.queen, .is2d .puzzle__feedback piece.white.queen, #promotion-choice piece.white.queen, .pocket piece.white.queen {
   background: var(--white-piece-color) !important;
   -webkit-mask: url(/*[[figurenset]]*//wq.svg?v=2) center / contain no-repeat !important;
   mask: url(/*[[figurenset]]*//wq.svg?v=2) center / contain no-repeat !important;
 }
-.is2d .cg-wrap piece.white.rook, .is2d .puzzle__feedback piece.white.rook {
+.is2d .cg-wrap piece.white.rook, .is2d .puzzle__feedback piece.white.rook, #promotion-choice piece.white.rook, .pocket piece.white.rook {
   background: var(--white-piece-color) !important;
   -webkit-mask: url(/*[[figurenset]]*//wr.svg?v=2) center / contain no-repeat !important;
   mask: url(/*[[figurenset]]*//wr.svg?v=2) center / contain no-repeat !important;
 }
-.is2d .cg-wrap piece.white.bishop, .is2d .puzzle__feedback piece.white.bishop {
+.is2d .cg-wrap piece.white.bishop, .is2d .puzzle__feedback piece.white.bishop, #promotion-choice piece.white.bishop, .pocket piece.white.bishop {
   background: var(--white-piece-color) !important;
   -webkit-mask: url(/*[[figurenset]]*//wb.svg?v=2) center / contain no-repeat !important;
   mask: url(/*[[figurenset]]*//wb.svg?v=2) center / contain no-repeat !important;
 }
-.is2d .cg-wrap piece.white.knight, .is2d .puzzle__feedback piece.white.knight {
+.is2d .cg-wrap piece.white.knight, .is2d .puzzle__feedback piece.white.knight, #promotion-choice piece.white.knight, .pocket piece.white.knight {
   background: var(--white-piece-color) !important;
   -webkit-mask: url(/*[[figurenset]]*//wn.svg?v=2) center / contain no-repeat !important;
   mask: url(/*[[figurenset]]*//wn.svg?v=2) center / contain no-repeat !important;
 }
-.is2d .cg-wrap piece.white.pawn, .is2d .puzzle__feedback piece.white.pawn {
+.is2d .cg-wrap piece.white.pawn, .is2d .puzzle__feedback piece.white.pawn, #promotion-choice piece.white.pawn, .pocket piece.white.pawn {
   background: var(--white-piece-color) !important;
   -webkit-mask: url(/*[[figurenset]]*//wp.svg?v=2) center / contain no-repeat !important;
   mask: url(/*[[figurenset]]*//wp.svg?v=2) center / contain no-repeat !important;
 }
 
 /* SCHWARZE FIGUREN */
-.is2d .cg-wrap piece.black.king, .is2d .puzzle__feedback piece.black.king {
+.is2d .cg-wrap piece.black.king, .is2d .puzzle__feedback piece.black.king, #promotion-choice piece.black.king, .pocket piece.black.king {
   background: var(--black-piece-color) !important;
   -webkit-mask: url(/*[[figurenset]]*//bk.svg?v=2) center / contain no-repeat !important;
   mask: url(/*[[figurenset]]*//bk.svg?v=2) center / contain no-repeat !important;
 }
-.is2d .cg-wrap piece.black.queen, .is2d .puzzle__feedback piece.black.queen {
+.is2d .cg-wrap piece.black.queen, .is2d .puzzle__feedback piece.black.queen, #promotion-choice piece.black.queen, .pocket piece.black.queen {
   background: var(--black-piece-color) !important;
   -webkit-mask: url(/*[[figurenset]]*//bq.svg?v=2) center / contain no-repeat !important;
   mask: url(/*[[figurenset]]*//bq.svg?v=2) center / contain no-repeat !important;
 }
-.is2d .cg-wrap piece.black.rook, .is2d .puzzle__feedback piece.black.rook {
+.is2d .cg-wrap piece.black.rook, .is2d .puzzle__feedback piece.black.rook, #promotion-choice piece.black.rook, .pocket piece.black.rook {
   background: var(--black-piece-color) !important;
   -webkit-mask: url(/*[[figurenset]]*//br.svg?v=2) center / contain no-repeat !important;
   mask: url(/*[[figurenset]]*//br.svg?v=2) center / contain no-repeat !important;
 }
-.is2d .cg-wrap piece.black.bishop, .is2d .puzzle__feedback piece.black.bishop {
+.is2d .cg-wrap piece.black.bishop, .is2d .puzzle__feedback piece.black.bishop, #promotion-choice piece.black.bishop, .pocket piece.black.bishop {
   background: var(--black-piece-color) !important;
   -webkit-mask: url(/*[[figurenset]]*//bb.svg?v=2) center / contain no-repeat !important;
   mask: url(/*[[figurenset]]*//bb.svg?v=2) center / contain no-repeat !important;
 }
-.is2d .cg-wrap piece.black.knight, .is2d .puzzle__feedback piece.black.knight {
+.is2d .cg-wrap piece.black.knight, .is2d .puzzle__feedback piece.black.knight, #promotion-choice piece.black.knight, .pocket piece.black.knight {
   background: var(--black-piece-color) !important;
   -webkit-mask: url(/*[[figurenset]]*//bn.svg?v=2) center / contain no-repeat !important;
   mask: url(/*[[figurenset]]*//bn.svg?v=2) center / contain no-repeat !important;
 }
-.is2d .cg-wrap piece.black.pawn, .is2d .puzzle__feedback piece.black.pawn {
+.is2d .cg-wrap piece.black.pawn, .is2d .puzzle__feedback piece.black.pawn, #promotion-choice piece.black.pawn, .pocket piece.black.pawn {
   background: var(--black-piece-color) !important;
   -webkit-mask: url(/*[[figurenset]]*//bp.svg?v=2) center / contain no-repeat !important;
   mask: url(/*[[figurenset]]*//bp.svg?v=2) center / contain no-repeat !important;
