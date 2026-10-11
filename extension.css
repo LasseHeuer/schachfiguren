@@ -189,7 +189,8 @@ html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board > svg.lfs-last-move-line {
 }
 
 html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-selected-piece-wedge,
-html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-arc {
+html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-arc,
+html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-count-labels {
   position: absolute;
   inset: 0;
   z-index: 2;
@@ -197,6 +198,10 @@ html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-arc {
   height: 100%;
   overflow: visible;
   pointer-events: none;
+}
+
+html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-count-labels {
+  z-index: 6 !important;
 }
 
 html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board > svg.lfs-last-move-line polygon {

@@ -53,12 +53,17 @@
     pieceBounceWiggleCurve: [0.1681075096130371, 7.01450587942914, 0.8627703530447823, -95.40328365388133],
     selectedPieceWedgeEnabled: true,
     selectedPieceWedgeOnlySelected: true,
+    defenseLinesEnabled: true,
     moveDotsPlayerColor: false,
     wedgeBaseWidthPx: 14.7,
     wedgeTipWidthPx: 3.7,
     wedgeGlowWidthPx: 1.9,
     wedgeGlowBlurPx: 9.7,
     wedgeOpacity: 0.51,
+    defenseLineLength: 0.3,
+    defenseLineThicknessPx: 4,
+    defenseLineDistance: 0.3,
+    defenseLineOpacity: 0.75,
     wedgePotentialEnabled: true,
     wedgePotentialStrategy: "all",
     wedgePotentialCutoffValue: 1,
@@ -67,6 +72,10 @@
     threatArcRadius: 0.22,
     threatArcThickness: 0.08,
     threatArcAngleDeg: 90,
+    threatCountLabelsEnabled: true,
+    threatCountOffsetRadius: 0.5,
+    threatCountFontSizePx: 16,
+    threatCountTextOutlineEnabled: true,
     removeOutlines: true,
     removeGlows: true,
     removeGradients: true,
@@ -86,11 +95,17 @@
     wedgeGlowWidthPx: [0, 20],
     wedgeGlowBlurPx: [0, 18],
     wedgeOpacity: [0, 1],
+    defenseLineLength: [0.05, 0.5],
+    defenseLineThicknessPx: [0.5, 20],
+    defenseLineDistance: [0, 0.5],
+    defenseLineOpacity: [0, 1],
     wedgePotentialCutoffValue: [1, 9],
     wedgePotentialPerPieceCount: [1, 5],
     threatArcRadius: [0, 0.5],
     threatArcThickness: [0.01, 0.4],
     threatArcAngleDeg: [10, 120],
+    threatCountOffsetRadius: [0, 3],
+    threatCountFontSizePx: [8, 48],
     threatOwnSeeThrough: [0, 1],
     threatOpponentSeeThrough: [0, 1],
     threatMoveDepth: [1, 5],
@@ -132,6 +147,7 @@
     result.threatMaxMixPercent = Math.round(result.threatMaxMixPercent);
     result.threatGradientPercent = Math.round(result.threatGradientPercent);
     result.pieceBounceWiggleAngle = Math.round(result.pieceBounceWiggleAngle);
+    result.threatCountFontSizePx = Math.round(result.threatCountFontSizePx);
     result.lastMoveLineWidth = Math.round(result.lastMoveLineWidth);
     result.pieceBounceTiming = Math.round(result.pieceBounceTiming / 50) * 50;
     result.pieceBounceDuration = Math.round(result.pieceBounceDuration / 50) * 50;
@@ -173,8 +189,11 @@
       "pieceBounceLoop",
       "selectedPieceWedgeEnabled",
       "selectedPieceWedgeOnlySelected",
+      "defenseLinesEnabled",
       "moveDotsPlayerColor",
       "threatenedPieceOutlineEnabled",
+      "threatCountLabelsEnabled",
+      "threatCountTextOutlineEnabled",
       "wedgePotentialEnabled",
       "complexPawn"
     ]) {

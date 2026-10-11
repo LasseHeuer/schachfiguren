@@ -33,8 +33,12 @@
       output.value = `${control.value} px`;
       return;
     }
-    if (control.dataset.setting === "wedgeOpacity") {
+    if (["wedgeOpacity", "defenseLineOpacity"].includes(control.dataset.setting)) {
       output.value = `${Math.round(Number(control.value) * 100)}%`;
+      return;
+    }
+    if (["defenseLineLength", "defenseLineDistance"].includes(control.dataset.setting)) {
+      output.value = `${Math.round(Number(control.value) * 100)}% Feld`;
       return;
     }
     if (["pieceBounceTiming", "pieceBounceDuration", "pieceBounceWiggleDuration"].includes(control.dataset.setting)) {
@@ -47,6 +51,10 @@
     }
     if (["threatOwnSeeThrough", "threatOpponentSeeThrough", "threatDepthFactor", "threatArcRadius", "threatArcThickness"].includes(control.dataset.setting)) {
       output.value = `${Math.round(Number(control.value) * 100)}%`;
+      return;
+    }
+    if (control.dataset.setting === "threatCountOffsetRadius") {
+      output.value = `${Math.round(Number(control.value) * 100)}% des Radius`;
       return;
     }
     output.value = `${control.value}%`;

@@ -90,6 +90,7 @@ output { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 10
 .range-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 10px; }
 .threat-controls { grid-template-columns: 1fr; align-items: center; }
 .threat-range-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 12px; }
+.control-group-label { margin: 15px 0 9px; color: #536257; font-size: 10px; font-weight: 700; }
 .switch-field { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 49px; }
 .switch-field strong { display: block; margin-bottom: 4px; color: #475147; font-size: 11px; }
 input[type="checkbox"][role="switch"] { position: relative; width: 36px; height: 21px; flex: 0 0 auto; margin: 0; appearance: none; border: 0; border-radius: 20px; background: #cbd1ca; cursor: pointer; transition: background .15s; }

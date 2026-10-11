@@ -136,6 +136,67 @@
     return threatened;
   }
 
+  function getDefenseLines(position, blackOrientation) {
+    const lines = [];
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const defender = position[row][col];
+        if (!defender) continue;
+        const source = { row, col };
+        for (const target of getAttackedPieces(position, source, blackOrientation)) {
+          if (position[target.row][target.col]?.color === defender.color) {
+            lines.push({ source, target, color: defender.color });
+          }
+        }
+      }
+    }
+    return lines;
+  }
+
+  function getThreatCountLabels(position, blackOrientation) {
+    const counts = new Map();
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const sourcePiece = position[row][col];
+        if (!sourcePiece) continue;
+        const source = { row, col };
+        for (const target of getAttackedPieces(position, source, blackOrientation)) {
+          const targetPiece = position[target.row][target.col];
+          const key = `${target.row},${target.col}`;
+          if (!counts.has(key)) counts.set(key, { target, defenders: [], attackers: [] });
+          counts.get(key)[targetPiece.color === sourcePiece.color ? "defenders" : "attackers"].push({ source, color: sourcePiece.color });
+        }
+      }
+    }
+
+    const labels = [];
+    for (const { target, defenders, attackers } of counts.values()) {
+      if (!attackers.length) continue;
+      const net = defenders.length - attackers.length;
+      if (!net) continue;
+      const winners = net > 0 ? defenders : attackers;
+      let directionX = 0;
+      let directionY = 0;
+      for (const relation of winners) {
+        const dx = relation.source.col - target.col;
+        const dy = relation.source.row - target.row;
+        const length = Math.hypot(dx, dy);
+        directionX += dx / length;
+        directionY += dy / length;
+      }
+      const directionLength = Math.hypot(directionX, directionY);
+      labels.push({
+        target,
+        text: net > 0 ? `+${net}` : `${-net}`,
+        color: net > 0 ? position[target.row][target.col].color : attackers[0].color,
+        direction: directionLength > 0.0001
+          ? { x: directionX / directionLength, y: directionY / directionLength }
+          : { x: 0, y: -1 }
+      });
+    }
+    return labels;
+  }
+
   function clearThreatenedPieceOutline(element) {
     element.removeAttribute("data-lfs-threatened-piece");
   }
@@ -396,8 +457,14 @@
       wedges.push(...getPotentialWedges(parsed.position, source, destinations, parsed.blackOrientation, settings)
         .map(wedge => ({ ...wedge, color: piece.color })));
     }
-    renderThreatArcs(board, entry, threats);
-    if (!wedges.length) {
+    const defenseLines = settings.defenseLinesEnabled
+      ? getDefenseLines(parsed.position, parsed.blackOrientation)
+      : [];
+    const countLabels = settings.threatCountLabelsEnabled
+      ? getThreatCountLabels(parsed.position, parsed.blackOrientation)
+      : [];
+    renderThreatArcs(board, entry, threats, countLabels);
+    if (!wedges.length && !defenseLines.length) {
       entry.svg?.remove();
       entry.svg = null;
       return;
@@ -464,25 +531,52 @@
       entry.svg.append(wedge);
     }
 
+    for (const connection of defenseLines) {
+      const sourceCenter = { x: connection.source.col + 0.5, y: connection.source.row + 0.5 };
+      const targetCenter = { x: connection.target.col + 0.5, y: connection.target.row + 0.5 };
+      const dx = sourceCenter.x - targetCenter.x;
+      const dy = sourceCenter.y - targetCenter.y;
+      const length = Math.hypot(dx, dy);
+      const unitX = dx / length;
+      const unitY = dy / length;
+      const start = settings.defenseLineDistance;
+      const end = settings.defenseLineDistance + settings.defenseLineLength;
+      const line = document.createElementNS(svgNamespace, "line");
+      line.setAttribute("x1", String(targetCenter.x + unitX * start));
+      line.setAttribute("y1", String(targetCenter.y + unitY * start));
+      line.setAttribute("x2", String(targetCenter.x + unitX * end));
+      line.setAttribute("y2", String(targetCenter.y + unitY * end));
+      line.setAttribute("stroke", connection.color === "w" ? settings.whitePieceColor : settings.blackPieceColor);
+      line.setAttribute("stroke-width", String(settings.defenseLineThicknessPx * widthScale));
+      line.setAttribute("stroke-linecap", "butt");
+      line.setAttribute("opacity", String(settings.defenseLineOpacity));
+      entry.svg.append(line);
+    }
+
   }
 
   // One arc per attacker, centred on the attacker's direction. Overlapping arcs of the same colour merge into a wider arc.
-  function renderThreatArcs(board, entry, threats) {
+  function renderThreatArcs(board, entry, threats, countLabels = []) {
+    if (!threats.length && !countLabels.length) {
+      entry.arcSvg?.remove();
+      entry.arcSvg = null;
+      entry.countSvg?.remove();
+      entry.countSvg = null;
+      return;
+    }
     if (!threats.length) {
       entry.arcSvg?.remove();
       entry.arcSvg = null;
-      return;
-    }
-    if (!entry.arcSvg) {
+    } else if (!entry.arcSvg) {
       entry.arcSvg = document.createElementNS(svgNamespace, "svg");
       entry.arcSvg.classList.add("lfs-threat-arc");
       entry.arcSvg.setAttribute("viewBox", "0 0 8 8");
       entry.arcSvg.setAttribute("aria-hidden", "true");
     }
-    if (entry.arcSvg.parentNode !== board || entry.arcSvg !== board.lastElementChild) board.append(entry.arcSvg);
+    if (entry.arcSvg && entry.arcSvg.parentNode !== board) board.append(entry.arcSvg);
 
     const halfAngle = settings.threatArcAngleDeg * Math.PI / 360;
-    const paths = [];
+    const arcs = [];
     for (const threat of threats) {
       const center = { x: threat.square.col + 0.5, y: threat.square.row + 0.5 };
       const color = threat.color === "w" ? settings.blackPieceColor : settings.whitePieceColor;
@@ -492,15 +586,54 @@
         path.setAttribute("d", createArcGeometry(center, settings.threatArcRadius, settings.threatArcRadius + settings.threatArcThickness, angle - halfAngle, angle + halfAngle));
         path.setAttribute("fill", color);
         path.setAttribute("pointer-events", "none");
-        paths.push(path);
+        arcs.push(path);
       }
     }
-    entry.arcSvg.replaceChildren(...paths);
+    entry.arcSvg?.replaceChildren(...arcs);
+
+    if (!countLabels.length) {
+      entry.countSvg?.remove();
+      entry.countSvg = null;
+      return;
+    }
+    if (!entry.countSvg) {
+      entry.countSvg = document.createElementNS(svgNamespace, "svg");
+      entry.countSvg.classList.add("lfs-threat-count-labels");
+      entry.countSvg.setAttribute("viewBox", "0 0 8 8");
+      entry.countSvg.setAttribute("aria-hidden", "true");
+    }
+    if (entry.countSvg.parentNode !== board) board.append(entry.countSvg);
+
+    const boardWidth = board.getBoundingClientRect().width;
+    const fontSize = boardWidth > 0 ? settings.threatCountFontSizePx * 8 / boardWidth : 0;
+    const labelRadius = settings.threatArcRadius + settings.threatArcThickness
+      + settings.threatArcRadius * settings.threatCountOffsetRadius;
+    const labels = [];
+    for (const label of countLabels) {
+      const text = document.createElementNS(svgNamespace, "text");
+      text.setAttribute("x", String(label.target.col + 0.5 + label.direction.x * labelRadius));
+      text.setAttribute("y", String(label.target.row + 0.5 + label.direction.y * labelRadius));
+      text.setAttribute("fill", label.color === "w" ? settings.whitePieceColor : settings.blackPieceColor);
+      text.setAttribute("font-size", String(fontSize));
+      text.setAttribute("font-family", "sans-serif");
+      text.setAttribute("font-weight", "700");
+      text.setAttribute("text-anchor", "middle");
+      text.setAttribute("dominant-baseline", "central");
+      if (settings.threatCountTextOutlineEnabled) {
+        text.setAttribute("stroke", "#151515");
+        text.setAttribute("stroke-width", String(fontSize * 0.14));
+        text.setAttribute("paint-order", "stroke");
+      }
+      text.setAttribute("pointer-events", "none");
+      text.textContent = label.text;
+      labels.push(text);
+    }
+    entry.countSvg.replaceChildren(...labels);
   }
 
   function observeBoard(board) {
     if (observedBoards.has(board)) return;
-    const entry = { svg: null, frame: 0 };
+    const entry = { svg: null, arcSvg: null, countSvg: null, frame: 0 };
     observedBoards.set(board, entry);
 
     const boardObserver = new MutationObserver(mutations => {
@@ -547,6 +680,7 @@
       for (const piece of board.querySelectorAll(":scope > piece")) clearThreatenedPieceOutline(piece);
       entry.svg?.remove();
       entry.arcSvg?.remove();
+      entry.countSvg?.remove();
       observedBoards.delete(board);
     }
   }

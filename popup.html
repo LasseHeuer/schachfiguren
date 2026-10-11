@@ -122,11 +122,30 @@
           </div>
         </details>
         <details class="analysis-subsection">
+          <summary>Deckungslinien</summary>
+          <label class="switch-setting"><span><strong>Deckungslinien aktivieren</strong><small>Keile von deckenden zu eigenen gedeckten Figuren anzeigen.</small></span><input type="checkbox" data-setting="defenseLinesEnabled" role="switch"></label>
+          <div class="range-grid">
+            <label class="range-setting"><span>Dicke</span><output data-value-for="defenseLineThicknessPx"></output><input type="range" min="0.5" max="20" step="0.1" data-setting="defenseLineThicknessPx"></label>
+            <label class="range-setting"><span>Länge des Strichs</span><output data-value-for="defenseLineLength"></output><input type="range" min="0.05" max="0.5" step="0.01" data-setting="defenseLineLength"></label>
+            <label class="range-setting"><span>Abstand zum Feldmittelpunkt</span><output data-value-for="defenseLineDistance"></output><input type="range" min="0" max="0.5" step="0.01" data-setting="defenseLineDistance"></label>
+            <label class="range-setting range-wide"><span>Deckkraft</span><output data-value-for="defenseLineOpacity"></output><input type="range" min="0" max="1" step="0.01" data-setting="defenseLineOpacity"></label>
+          </div>
+        </details>
+        <details class="analysis-subsection">
           <summary>Bedrohte Figuren</summary>
           <label class="switch-setting"><span><strong>Bedrohte Figuren mit Viertelkreis markieren</strong><small>Zeigt die Richtung der angreifenden Figuren. Die Farbe ist die des Gegners.</small></span><input type="checkbox" data-setting="threatenedPieceOutlineEnabled" role="switch"></label>
           <label class="range-setting outline-width-setting"><span>Kreisradius (ab Feldmitte)</span><output data-value-for="threatArcRadius"></output><input type="range" min="0" max="0.5" step="0.01" data-setting="threatArcRadius"></label>
           <label class="range-setting outline-width-setting"><span>Kreisdicke</span><output data-value-for="threatArcThickness"></output><input type="range" min="0.01" max="0.4" step="0.01" data-setting="threatArcThickness"></label>
           <label class="range-setting"><span>Segmentwinkel</span><output data-value-for="threatArcAngleDeg"></output><input type="range" min="10" max="120" step="1" data-setting="threatArcAngleDeg"></label>
+        </details>
+        <details class="analysis-subsection">
+          <summary>Angriffs- und Deckungszahlen</summary>
+          <label class="switch-setting"><span><strong>Zahlen anzeigen</strong><small>Saldo aus Deckungen und Angriffen je Figur.</small></span><input type="checkbox" data-setting="threatCountLabelsEnabled" role="switch"></label>
+          <label class="switch-setting"><span><strong>Textkontur</strong><small>Umrandet Zahlen für besseren Kontrast.</small></span><input type="checkbox" data-setting="threatCountTextOutlineEnabled" role="switch"></label>
+          <div class="range-grid">
+            <label class="range-setting"><span>Versatz relativ zum Kreisradius</span><output data-value-for="threatCountOffsetRadius"></output><input type="range" min="0" max="3" step="0.05" data-setting="threatCountOffsetRadius"></label>
+            <label class="range-setting"><span>Schriftgröße</span><output data-value-for="threatCountFontSizePx"></output><input type="range" min="8" max="48" step="1" data-setting="threatCountFontSizePx"></label>
+          </div>
         </details>
       </section>
 
