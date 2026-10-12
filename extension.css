@@ -120,6 +120,10 @@ html:not([data-lfs-disabled]) body piece:not(cg-board piece) {
   z-index: 2147483647 !important;
 }
 
+html:not([data-lfs-disabled]) body #promotion-choice {
+  z-index: 2147483647 !important;
+}
+
 html:not([data-lfs-disabled]) #top:hover {
   z-index: 2147483647 !important;
 }
@@ -632,30 +636,34 @@ html:not([data-lfs-disabled])[data-lfs-rund-comic] .pocket piece.black[data-lfs-
   min-height: 32px !important;
   padding: 4px 8px !important;
   background: var(--c-bg-high, #eee) !important;
+  cursor: pointer !important;
 }
 
-#lfs-analysis-toolbar .lfs-analysis-toolbar-header strong {
+#lfs-analysis-toolbar .lfs-analysis-toolbar-title {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  appearance: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
   font-weight: 700 !important;
+  text-align: left !important;
+  cursor: pointer !important;
 }
 
 #lfs-analysis-toolbar .lfs-analysis-toolbar-master {
   display: flex !important;
   align-items: center !important;
+  margin-left: auto !important;
   gap: 4px !important;
   cursor: pointer !important;
 }
 
-#lfs-analysis-toolbar button {
-  min-width: 24px !important;
-  min-height: 24px !important;
-  padding: 0 !important;
-  border: 0 !important;
-  border-radius: 0 !important;
+#lfs-analysis-toolbar .lfs-analysis-toolbar-title:hover {
   background: transparent !important;
-  cursor: pointer !important;
 }
 
-#lfs-analysis-toolbar button:hover,
 #lfs-analysis-toolbar .lfs-analysis-toolbar-feature:hover {
   background: var(--c-bg-high, #eee) !important;
 }
@@ -689,10 +697,66 @@ html:not([data-lfs-disabled])[data-lfs-rund-comic] .pocket piece.black[data-lfs-
   display: none !important;
 }
 
-#lfs-analysis-toolbar input[type="checkbox"] {
+#lfs-analysis-toolbar input[type="checkbox"][role="switch"] {
+  position: relative !important;
+  display: block !important;
   flex: 0 0 auto !important;
-  width: 14px !important;
-  height: 14px !important;
+  width: 30px !important;
+  height: 18px !important;
   margin: 0 !important;
-  accent-color: var(--c-primary, #629924) !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  border: 1px solid #b7c0b5 !important;
+  border-radius: 999px !important;
+  background: #d5dbd2 !important;
+  cursor: pointer !important;
+  transition: background 150ms ease, border-color 150ms ease !important;
+}
+
+#lfs-analysis-toolbar input[type="checkbox"][role="switch"]::before {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  content: "";
+  transition: transform 150ms ease;
+}
+
+#lfs-analysis-toolbar input[type="checkbox"][role="switch"]:checked {
+  border-color: #788878 !important;
+  background: #788878 !important;
+}
+
+#lfs-analysis-toolbar input[type="checkbox"][role="switch"]:checked::before {
+  transform: translateX(12px);
+}
+
+#lfs-analysis-toolbar input[type="checkbox"][role="switch"]:focus-visible {
+  outline: 2px solid #788878 !important;
+  outline-offset: 2px !important;
+}
+
+html:not(.light) #lfs-analysis-toolbar input[type="checkbox"][role="switch"] {
+  border-color: #626a5f !important;
+  background: #4c534a !important;
+}
+
+html:not(.light) #lfs-analysis-toolbar input[type="checkbox"][role="switch"]::before {
+  background: #e8ebe5;
+}
+
+html:not(.light) #lfs-analysis-toolbar input[type="checkbox"][role="switch"]:checked {
+  border-color: #99a595 !important;
+  background: #99a595 !important;
+}
+
+html:not(.light) #lfs-analysis-toolbar input[type="checkbox"][role="switch"]:checked::before {
+  background: #262b25;
+}
+
+html:not(.light) #lfs-analysis-toolbar input[type="checkbox"][role="switch"]:focus-visible {
+  outline-color: #99a595 !important;
 }

@@ -3,10 +3,10 @@
   const pieceNames = ["wk", "wq", "wr", "wb", "wn", "wp", "bk", "bq", "br", "bb", "bn", "bp"];
   const analysisFeatures = [
     ["threatColoringEnabled", "Bedrohungsfarben"],
-    ["selectedPieceWedgeEnabled", "Keile"],
+    ["selectedPieceWedgeEnabled", "Kandidatenzüge"],
     ["selectedPieceWedgeOnlySelected", "Keile nur für Auswahl", "selectedPieceWedgeEnabled"],
     ["wedgeBasePiecePreviewEnabled", "Figur an Keilbasis", "selectedPieceWedgeEnabled"],
-    ["threatenedPieceOutlineEnabled", "Angriffsanzeigen"],
+    ["threatenedPieceOutlineEnabled", "Angriffe"],
     ["defenseCirclesEnabled", "Verteidigungen"],
     ["threatCenterOutlineEnabled", "Figurenkontur"],
     ["threatCenterHatchExchangeFilterEnabled", "Nur haltbare Schraffur", "threatCenterOutlineEnabled"]
@@ -25,12 +25,17 @@
 
       const header = document.createElement("div");
       header.className = "lfs-analysis-toolbar-header";
-      const title = document.createElement("strong");
+      const title = document.createElement("button");
+      title.type = "button";
+      title.className = "lfs-analysis-toolbar-title";
       title.textContent = "Analyse";
+      title.setAttribute("aria-label", "Analyseleiste ausklappen");
+      title.setAttribute("aria-expanded", "false");
       const masterLabel = document.createElement("label");
       masterLabel.className = "lfs-analysis-toolbar-master";
       analysisEnabledInput = document.createElement("input");
       analysisEnabledInput.type = "checkbox";
+      analysisEnabledInput.setAttribute("role", "switch");
       analysisEnabledInput.setAttribute("aria-label", "Alle Analysefunktionen aktivieren oder deaktivieren");
       analysisEnabledInput.addEventListener("click", event => {
         if (event.detail) setTimeout(() => analysisEnabledInput.blur(), 0);
@@ -41,24 +46,18 @@
         apply(document.documentElement);
         chrome.storage.local.set({ analysisEnabled: value });
       });
-      const masterText = document.createElement("span");
-      masterText.textContent = "Alle";
-      masterLabel.append(analysisEnabledInput, masterText);
-      const toggle = document.createElement("button");
-      toggle.type = "button";
-      toggle.textContent = "-";
-      toggle.setAttribute("aria-label", "Analyseleiste einklappen");
-      toggle.setAttribute("aria-expanded", "true");
+      masterLabel.append(analysisEnabledInput);
       const featureList = document.createElement("div");
       featureList.className = "lfs-analysis-toolbar-features";
-      toggle.addEventListener("click", event => {
+      featureList.hidden = true;
+      header.addEventListener("click", event => {
+        if (event.target.closest(".lfs-analysis-toolbar-master")) return;
         featureList.hidden = !featureList.hidden;
-        toggle.textContent = featureList.hidden ? "+" : "-";
-        toggle.setAttribute("aria-expanded", String(!featureList.hidden));
-        toggle.setAttribute("aria-label", featureList.hidden ? "Analyseleiste ausklappen" : "Analyseleiste einklappen");
-        if (event.detail) toggle.blur();
+        title.setAttribute("aria-expanded", String(!featureList.hidden));
+        title.setAttribute("aria-label", featureList.hidden ? "Analyseleiste ausklappen" : "Analyseleiste einklappen");
+        if (event.detail) title.blur();
       });
-      header.append(title, masterLabel, toggle);
+      header.append(title, masterLabel);
       analysisToolbar.append(header, featureList);
 
       for (const [key, labelText, parentKey] of analysisFeatures) {
@@ -66,6 +65,7 @@
         label.className = parentKey ? "lfs-analysis-toolbar-feature lfs-analysis-toolbar-child" : "lfs-analysis-toolbar-feature";
         const input = document.createElement("input");
         input.type = "checkbox";
+        input.setAttribute("role", "switch");
         input.addEventListener("click", event => {
           if (event.detail) setTimeout(() => input.blur(), 0);
         });
