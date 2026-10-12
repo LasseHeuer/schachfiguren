@@ -177,7 +177,7 @@
           if (!victim || victim.color === attacker.color) continue;
           const key = `${target.row},${target.col}`;
           if (!threatened[victim.color].has(key)) threatened[victim.color].set(key, []);
-          threatened[victim.color].get(key).push({ row, col });
+          threatened[victim.color].get(key).push({ row, col, type: attacker.type });
         }
       }
     }
@@ -498,7 +498,7 @@
       const radii = new Map();
       figureRadiiCache.set(pieceSet, radii);
       Promise.all(Object.entries(figureAssetLetters).flatMap(([type, letter]) => ["w", "b"].map(async color => {
-        const response = await fetch(chrome.runtime.getURL(`${pieceSet}/${color}${letter}.svg`));
+        const response = await fetch(chrome.runtime.getURL(pieceSet === "cage" ? `cage/cage_${letter}.svg` : `${pieceSet}/${color}${letter}.svg`));
         const measured = measureOutlineRadii(await response.text());
         const previous = radii.get(type);
         radii.set(type, previous ? measured.map((radius, index) => Math.max(radius, previous[index])) : measured);
@@ -863,6 +863,27 @@
     }
   }
 
+  // Knight lines keep the straight line's end points and only bend between them.
+  function createKnightCurvePath(line, innerRadius, outerRadius) {
+    const { center, direction, normal, offset } = line;
+    const start = { x: center.x + direction.x * outerRadius + normal.x * offset, y: center.y + direction.y * outerRadius + normal.y * offset };
+    const end = { x: center.x + direction.x * innerRadius + normal.x * offset, y: center.y + direction.y * innerRadius + normal.y * offset };
+    const chord = { x: end.x - start.x, y: end.y - start.y };
+    // The control point lies beside the chord; with a quadratic curve, the bulge at its peak is half this offset.
+    const control = {
+      x: (start.x + end.x) / 2 - chord.y * 2 * settings.threatLineCurvature,
+      y: (start.y + end.y) / 2 + chord.x * 2 * settings.threatLineCurvature
+    };
+    const path = document.createElementNS(svgNamespace, "path");
+    path.setAttribute("d", `M ${start.x} ${start.y} Q ${control.x} ${control.y} ${end.x} ${end.y}`);
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", line.color);
+    path.setAttribute("stroke-width", String(settings.threatLineThickness));
+    path.setAttribute("stroke-linecap", "butt");
+    path.setAttribute("pointer-events", "none");
+    return path;
+  }
+
   function renderLineSet(svg, segments, figureRadii) {
     const linesByDirection = new Map();
     const boundingSquareHalfSizes = new Map();
@@ -910,7 +931,8 @@
           normal,
           offset,
           innerRadius,
-          outerRadius
+          outerRadius,
+          curved: segment.sourceType === "knight"
         });
       }
     }
@@ -949,6 +971,10 @@
       // Neighbouring lines may leave little room; a line keeps at least one thickness so it never disappears.
       outerRadius = Math.max(outerRadius, innerRadius + settings.threatLineThickness);
       const { center, direction, normal, offset } = line;
+      if (line.curved) {
+        svg.append(createKnightCurvePath(line, innerRadius, outerRadius));
+        continue;
+      }
       const element = document.createElementNS(svgNamespace, "line");
       element.setAttribute("x1", String(center.x + direction.x * outerRadius + normal.x * offset));
       element.setAttribute("y1", String(center.y + direction.y * outerRadius + normal.y * offset));
@@ -1029,6 +1055,7 @@
         target: connection.target,
         angle: Math.atan2(connection.source.row - connection.target.row, connection.source.col - connection.target.col),
         type: parsed.position[connection.target.row][connection.target.col].type,
+        sourceType: parsed.position[connection.source.row][connection.source.col].type,
         color: connection.color === "w" ? settings.whitePieceColor : settings.blackPieceColor
       }))
       : [];
@@ -1145,6 +1172,7 @@
           target: threat.square,
           angle: Math.atan2(attacker.row - threat.square.row, attacker.col - threat.square.col),
           type: threat.type,
+          sourceType: attacker.type,
           color,
           category: "attack"
         });

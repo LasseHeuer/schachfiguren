@@ -45,10 +45,7 @@
 
     if (!entry.svg) Object.assign(entry, createOverlay(board));
     else {
-      const firstPiece = board.querySelector(":scope > piece");
-      if (entry.svg.parentNode !== board || entry.svg.nextSibling !== firstPiece) {
-        board.insertBefore(entry.svg, firstPiece);
-      }
+      if (entry.svg.parentNode !== board) board.insertBefore(entry.svg, board.querySelector(":scope > piece"));
     }
     const [first, second] = [...squares].map(square => {
       const rect = square.getBoundingClientRect();

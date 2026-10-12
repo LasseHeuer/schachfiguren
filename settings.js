@@ -107,6 +107,7 @@
     threatLineGap: 0.04,
     threatLineGapPercent: 40,
     threatLineFigureMargin: 0.04,
+    threatLineCurvature: 0.3,
     threatSquareCornerRadiusPercent: 10,
     threatCenterCircleEnabled: false,
     threatCenterCircleDiameterPercent: 3,
@@ -151,6 +152,7 @@
     threatLineGap: [0, 0.2],
     threatLineGapPercent: [0, 50],
     threatLineFigureMargin: [-0.1, 0.2],
+    threatLineCurvature: [-0.5, 0.5],
     threatSquareCornerRadiusPercent: [0, 50],
 
     threatCenterCircleDiameterPercent: [0, 100],
@@ -193,7 +195,7 @@
       result.pieceBounceWiggleCurve = values.pieceBounceCurve ?? defaults.pieceBounceWiggleCurve;
     }
 
-    if (!["system_pixel", "system_eckig", "rund", "rund_comic"].includes(result.pieceSet)) {
+    if (!["system_pixel", "system_eckig", "rund", "rund_comic", "cage"].includes(result.pieceSet)) {
       result.pieceSet = defaults.pieceSet;
     }
     if (!["rotate-wiggle", "wiggle-only"].includes(result.pieceBounceStyle)) {

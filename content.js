@@ -51,9 +51,11 @@
     const base = chrome.runtime.getURL(`${settings.pieceSet}/`);
     const complexPawnSet = settings.complexPawn && ["system_pixel", "system_eckig"].includes(settings.pieceSet);
     for (const piece of pieceNames) {
-      const asset = complexPawnSet && ["wp", "bp"].includes(piece)
-        ? `${piece}_2`
-        : piece;
+      const asset = settings.pieceSet === "cage"
+        ? `cage_${piece[1]}`
+        : complexPawnSet && ["wp", "bp"].includes(piece)
+          ? `${piece}_2`
+          : piece;
       root.style.setProperty(`--lfs-piece-${piece}`, `url("${base}${asset}.svg")`);
     }
 

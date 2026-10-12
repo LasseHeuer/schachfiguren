@@ -30,7 +30,8 @@
         "system_pixel/*.svg",
         "system_eckig/*.svg",
         "rund/*.svg",
-        "rund_comic/*.svg"
+        "rund_comic/*.svg",
+        "cage/*.svg"
       ],
       "matches": ["https://lichess.org/*"]
     }

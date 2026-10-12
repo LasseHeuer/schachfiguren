@@ -449,7 +449,9 @@
     if (!pieceInteractionActive || !activePieceDrag || activePieceDrag.board !== board) return null;
     const blackOrientation = isBlackOrientation(board);
     const target = getLogicalSquareAtPoint(board, activePieceDrag.clientX, activePieceDrag.clientY, blackOrientation);
-    const allowed = target && getAllowedDestinations(board, blackOrientation).has(`${target.row},${target.col}`);
+    // The board editor (Stellung aufbauen) has no legal destinations, so every field is a valid target there.
+    const isEditor = Boolean(board.closest(".board-editor"));
+    const allowed = target && (isEditor || getAllowedDestinations(board, blackOrientation).has(`${target.row},${target.col}`));
     const position = allowed
       ? createPreviewPosition(activePieceDrag.position, activePieceDrag.source, target)
       : null;
