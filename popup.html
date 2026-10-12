@@ -32,14 +32,14 @@
         </div>
         <label class="switch-setting bounce-toggle"><span><strong>Figuren-Bounce bei Hover</strong><small>Im Nur-Wippen-Stil wippen Offiziere mit halbem Winkel.</small></span><input type="checkbox" data-setting="pieceBounceEnabled" role="switch"></label>
         <label class="switch-setting loop-toggle"><span><strong>Loop</strong><small>Solange die Maus auf der Figur ist.</small></span><input type="checkbox" data-setting="pieceBounceLoop" role="switch"></label>
-        <label class="select-setting bounce-style"><span>Animationsstil</span><select data-setting="pieceBounceStyle"><option value="rotate-wiggle">90°-Drehung + Bauern-Wippen</option><option value="wiggle-only">Nur Wippen für alle Figuren</option></select></label>
-        <div class="range-grid bounce-controls">
+        <label class="select-setting bounce-style" data-depends-on="pieceBounceEnabled"><span>Animationsstil</span><select data-setting="pieceBounceStyle"><option value="rotate-wiggle">90°-Drehung + Bauern-Wippen</option><option value="wiggle-only">Nur Wippen für alle Figuren</option></select></label>
+        <div class="range-grid bounce-controls" data-depends-on="pieceBounceEnabled">
           <label class="range-setting"><span>Winkel fürs Wippen</span><output data-value-for="pieceBounceWiggleAngle"></output><input type="range" min="1" max="30" step="1" data-setting="pieceBounceWiggleAngle"></label>
-          <label class="range-setting" data-loop-pause><span>Timing (Pause)</span><output data-value-for="pieceBounceTiming"></output><input type="range" min="0" max="5000" step="50" data-setting="pieceBounceTiming"></label>
-          <label class="range-setting"><span>Drehdauer</span><output data-value-for="pieceBounceDuration"></output><input type="range" min="200" max="1500" step="50" data-setting="pieceBounceDuration"></label>
+          <label class="range-setting" data-depends-on="pieceBounceEnabled pieceBounceLoop"><span>Timing (Pause)</span><output data-value-for="pieceBounceTiming"></output><input type="range" min="0" max="5000" step="50" data-setting="pieceBounceTiming"></label>
+          <label class="range-setting" data-depends-on="pieceBounceEnabled pieceBounceStyle=rotate-wiggle"><span>Drehdauer</span><output data-value-for="pieceBounceDuration"></output><input type="range" min="200" max="1500" step="50" data-setting="pieceBounceDuration"></label>
           <label class="range-setting"><span>Wippdauer</span><output data-value-for="pieceBounceWiggleDuration"></output><input type="range" min="200" max="1500" step="50" data-setting="pieceBounceWiggleDuration"></label>
         </div>
-        <div class="bounce-curve-panel">
+        <div class="bounce-curve-panel" data-depends-on="pieceBounceEnabled">
           <div class="bounce-curve-heading"><span><strong>Animationskurve</strong><small>Griffe ziehen oder mit Pfeiltasten bewegen.</small></span><button type="button" data-bezier-reset>Zuruecksetzen</button></div>
           <div class="bounce-curve-tabs" role="group" aria-label="Animationskurve auswählen">
             <button type="button" class="bounce-curve-tab" data-curve-tab="pieceBounceCurve" aria-pressed="true">Drehung</button>
@@ -83,7 +83,7 @@
         </div>
         <div class="range-grid single-range">
           <label class="range-setting"><span>Groesse Bewegungsdots</span><output data-value-for="moveDotSize"></output><input type="range" min="5" max="50" step="5" data-setting="moveDotSize"></label>
-          <label class="range-setting"><span>Breite der Letztzug-Linie</span><output data-value-for="lastMoveLineWidth"></output><input type="range" min="1" max="100" step="1" data-setting="lastMoveLineWidth"></label>
+          <label class="range-setting" data-depends-on="markLastMove"><span>Breite der Letztzug-Linie</span><output data-value-for="lastMoveLineWidth"></output><input type="range" min="1" max="100" step="1" data-setting="lastMoveLineWidth"></label>
         </div>
         <div class="switch-list">
           <label class="switch-setting"><span>Letzten Zug markieren</span><input type="checkbox" data-setting="markLastMove" role="switch"></label>
@@ -94,7 +94,7 @@
 
       <section class="panel threat-panel" id="panel-bedrohungen" role="tabpanel" aria-labelledby="tab-bedrohungen" data-panel="bedrohungen" hidden>
         <label class="switch-setting threat-toggle"><span><strong>Bedrohungsfarben aktivieren</strong><small>Mischt Spielerfarbe in die bestehenden Brettfarben ein.</small></span><input type="checkbox" data-setting="threatColoringEnabled" role="switch"></label>
-        <div class="range-grid threat-range-grid">
+        <div class="range-grid threat-range-grid" data-depends-on="threatColoringEnabled">
           <label class="range-setting"><span>Durch eigene Figuren sehen</span><output data-value-for="threatOwnSeeThrough"></output><input type="range" min="0" max="1" step="0.01" data-setting="threatOwnSeeThrough"></label>
           <label class="range-setting"><span>Durch Gegner sehen</span><output data-value-for="threatOpponentSeeThrough"></output><input type="range" min="0" max="1" step="0.01" data-setting="threatOpponentSeeThrough"></label>
           <label class="range-setting"><span>Zugtiefe</span><output data-value-for="threatMoveDepth"></output><input type="range" min="1" max="5" step="1" data-setting="threatMoveDepth"></label>
@@ -108,43 +108,93 @@
           <label class="switch-setting"><span><strong>Keildarstellung aktivieren</strong><small>Angriffe und Potenzial-Züge darstellen.</small></span><input type="checkbox" data-setting="selectedPieceWedgeEnabled" role="switch"></label>
           <label class="switch-setting"><span><strong>Nur ausgewählte Figur</strong><small>Wenn aus, Keile für alle Figuren anzeigen.</small></span><input type="checkbox" data-setting="selectedPieceWedgeOnlySelected" role="switch"></label>
           <div class="range-grid">
-            <label class="range-setting"><span>Basisbreite</span><output data-value-for="wedgeBaseWidthPx"></output><input type="range" min="1" max="20" step="0.1" data-setting="wedgeBaseWidthPx"></label>
-            <label class="range-setting"><span>Spitzenbreite</span><output data-value-for="wedgeTipWidthPx"></output><input type="range" min="0.5" max="10" step="0.1" data-setting="wedgeTipWidthPx"></label>
-            <label class="range-setting"><span>Leuchtbreite</span><output data-value-for="wedgeGlowWidthPx"></output><input type="range" min="0" max="20" step="0.1" data-setting="wedgeGlowWidthPx"></label>
-            <label class="range-setting"><span>Leuchtunschärfe</span><output data-value-for="wedgeGlowBlurPx"></output><input type="range" min="0" max="18" step="0.1" data-setting="wedgeGlowBlurPx"></label>
-            <label class="range-setting range-wide"><span>Deckkraft</span><output data-value-for="wedgeOpacity"></output><input type="range" min="0" max="1" step="0.01" data-setting="wedgeOpacity"></label>
+            <label class="range-setting" data-depends-on="selectedPieceWedgeEnabled"><span>Basisbreite</span><output data-value-for="wedgeBaseWidthPx"></output><input type="range" min="1" max="20" step="0.1" data-setting="wedgeBaseWidthPx"></label>
+            <label class="range-setting" data-depends-on="selectedPieceWedgeEnabled"><span>Spitzenbreite</span><output data-value-for="wedgeTipWidthPx"></output><input type="range" min="0.5" max="10" step="0.1" data-setting="wedgeTipWidthPx"></label>
+            <label class="range-setting" data-depends-on="selectedPieceWedgeEnabled"><span>Leuchtbreite</span><output data-value-for="wedgeGlowWidthPx"></output><input type="range" min="0" max="20" step="0.1" data-setting="wedgeGlowWidthPx"></label>
+            <label class="range-setting" data-depends-on="selectedPieceWedgeEnabled"><span>Leuchtunschärfe</span><output data-value-for="wedgeGlowBlurPx"></output><input type="range" min="0" max="18" step="0.1" data-setting="wedgeGlowBlurPx"></label>
+            <label class="range-setting range-wide" data-depends-on="selectedPieceWedgeEnabled"><span>Deckkraft</span><output data-value-for="wedgeOpacity"></output><input type="range" min="0" max="1" step="0.01" data-setting="wedgeOpacity"></label>
           </div>
           <label class="switch-setting"><span><strong>Potenzial-Züge</strong><small>Angriffe von möglichen Zugfeldern aus anzeigen.</small></span><input type="checkbox" data-setting="wedgePotentialEnabled" role="switch"></label>
-          <label class="select-setting"><span>Strategie</span><select data-setting="wedgePotentialStrategy"><option value="all">Alle Züge</option><option value="waterfall">Wasserfall</option></select></label>
+          <label class="select-setting" data-depends-on="selectedPieceWedgeEnabled wedgePotentialEnabled"><span>Strategie</span><select data-setting="wedgePotentialStrategy"><option value="all">Alle Züge</option><option value="waterfall">Wasserfall</option></select></label>
           <div class="range-grid">
-            <label class="range-setting"><span>Mindestwert Zielfigur</span><output data-value-for="wedgePotentialCutoffValue"></output><input type="range" min="1" max="9" step="1" data-setting="wedgePotentialCutoffValue"></label>
-            <label class="range-setting"><span>Züge pro Figur</span><output data-value-for="wedgePotentialPerPieceCount"></output><input type="range" min="1" max="5" step="1" data-setting="wedgePotentialPerPieceCount"></label>
+            <label class="range-setting" data-depends-on="selectedPieceWedgeEnabled wedgePotentialEnabled wedgePotentialStrategy=all"><span>Mindestwert Zielfigur</span><output data-value-for="wedgePotentialCutoffValue"></output><input type="range" min="1" max="9" step="1" data-setting="wedgePotentialCutoffValue"></label>
+            <label class="range-setting" data-depends-on="selectedPieceWedgeEnabled wedgePotentialEnabled"><span>Züge pro Figur</span><output data-value-for="wedgePotentialPerPieceCount"></output><input type="range" min="1" max="5" step="1" data-setting="wedgePotentialPerPieceCount"></label>
           </div>
         </details>
         <details class="analysis-subsection">
-          <summary>Deckungslinien</summary>
-          <label class="switch-setting"><span><strong>Deckungslinien aktivieren</strong><small>Keile von deckenden zu eigenen gedeckten Figuren anzeigen.</small></span><input type="checkbox" data-setting="defenseLinesEnabled" role="switch"></label>
-          <div class="range-grid">
-            <label class="range-setting"><span>Dicke</span><output data-value-for="defenseLineThicknessPx"></output><input type="range" min="0.5" max="20" step="0.1" data-setting="defenseLineThicknessPx"></label>
-            <label class="range-setting"><span>Länge des Strichs</span><output data-value-for="defenseLineLength"></output><input type="range" min="0.05" max="0.5" step="0.01" data-setting="defenseLineLength"></label>
-            <label class="range-setting"><span>Abstand zum Feldmittelpunkt</span><output data-value-for="defenseLineDistance"></output><input type="range" min="0" max="0.5" step="0.01" data-setting="defenseLineDistance"></label>
-            <label class="range-setting range-wide"><span>Deckkraft</span><output data-value-for="defenseLineOpacity"></output><input type="range" min="0" max="1" step="0.01" data-setting="defenseLineOpacity"></label>
+          <summary>Angriffs- und Verteidigungsanzeigen</summary>
+          <label class="switch-setting"><span><strong>Angriffsrichtungen aktivieren</strong><small>Zeigt Angriffsrichtungen am bedrohten Feld.</small></span><input type="checkbox" data-setting="threatenedPieceOutlineEnabled" role="switch"></label>
+          <div data-threat-role="attack" data-depends-on="threatenedPieceOutlineEnabled">
+          <label class="select-setting threat-display-select"><span>Angriffsdarstellung</span><select data-setting="threatAttackDisplayMode"><option value="segments">Kreissegmente</option><option value="lines">Linien</option><option value="square">Eckig</option></select></label>
+
+          <p class="display-setting-label" data-threat-display-label="segments">Kreissegment-Einstellungen</p>
+          <div class="range-grid" data-threat-display-group="segments">
+            <label class="range-setting outline-width-setting"><span>Radius (ab Feldmitte)</span><output data-value-for="threatArcRadius"></output><input type="range" min="0.3" max="0.7" step="0.01" data-setting="threatArcRadius"></label>
+            <label class="range-setting outline-width-setting"><span>Segmentdicke</span><output data-value-for="threatArcThickness"></output><input type="range" min="0.01" max="0.08" step="0.01" data-setting="threatArcThickness"></label>
+            <label class="range-setting"><span>Segmentwinkel</span><output data-value-for="threatArcAngleDeg"></output><input type="range" min="10" max="120" step="1" data-setting="threatArcAngleDeg"></label>
+            <label class="range-setting"><span>Lückenbreite in Prozent</span><output data-value-for="threatArcGapPercent"></output><input type="range" min="0" max="50" step="1" data-setting="threatArcGapPercent"></label>
+            <label class="range-setting"><span>Abstand doppelter Segmente in Prozent</span><output data-value-for="threatArcRadialGapPercent"></output><input type="range" min="50" max="200" step="1" data-setting="threatArcRadialGapPercent"></label>
+            <label class="range-setting"><span>Abstand zur Figur (Kollisionsrand)</span><output data-value-for="segmentFigureMargin"></output><input type="range" min="0" max="0.2" step="0.01" data-setting="segmentFigureMargin"></label>
+          </div>
+          <p class="display-setting-label" data-threat-display-label="lines" hidden>Linieneinstellungen</p>
+          <div class="range-grid" data-threat-display-group="lines" hidden>
+            <label class="range-setting"><span>Radius zum Feldmittelpunkt</span><output data-value-for="threatLineRadius"></output><input type="range" min="0.1" max="0.5" step="0.01" data-setting="threatLineRadius"></label>
+            <label class="range-setting"><span>Linienlänge (in % der Feldbreite)</span><output data-value-for="threatLineLength"></output><input type="range" min="0" max="0.3" step="0.01" data-setting="threatLineLength"></label>
+            <label class="range-setting"><span>Liniendicke</span><output data-value-for="threatLineThickness"></output><input type="range" min="0.005" max="0.1" step="0.005" data-setting="threatLineThickness"></label>
+            <label class="range-setting"><span>Abstand gleichgerichteter Linien</span><output data-value-for="threatLineGap"></output><input type="range" min="0" max="0.2" step="0.01" data-setting="threatLineGap"></label>
+            <label class="range-setting"><span>Lückenbreite in Prozent</span><output data-value-for="threatLineGapPercent"></output><input type="range" min="0" max="50" step="1" data-setting="threatLineGapPercent"></label>
+            <label class="range-setting"><span>Abstand zur Figur (Kollisionsrand)</span><output data-value-for="threatLineFigureMargin"></output><input type="range" min="-0.1" max="0.2" step="0.01" data-setting="threatLineFigureMargin"></label>
+          </div>
+          <p class="display-setting-label" data-threat-display-label="square" hidden>Eckige Segment-Einstellungen</p>
+          <div class="range-grid" data-threat-display-group="square" hidden>
+            <label class="range-setting outline-width-setting"><span>Radius (ab Feldmitte)</span><output data-value-for="threatSquareRadius"></output><input type="range" min="0.3" max="0.7" step="0.01" data-setting="threatSquareRadius"></label>
+            <label class="range-setting outline-width-setting"><span>Segmentdicke</span><output data-value-for="threatSquareThickness"></output><input type="range" min="0.01" max="0.08" step="0.01" data-setting="threatSquareThickness"></label>
+            <label class="range-setting"><span>Segmentwinkel</span><output data-value-for="threatSquareAngleDeg"></output><input type="range" min="10" max="120" step="1" data-setting="threatSquareAngleDeg"></label>
+            <label class="range-setting"><span>Lückenbreite in Prozent</span><output data-value-for="threatSquareGapPercent"></output><input type="range" min="0" max="50" step="1" data-setting="threatSquareGapPercent"></label>
+            <label class="range-setting"><span>Abstand doppelter Segmente in Prozent</span><output data-value-for="threatSquareRadialGapPercent"></output><input type="range" min="0" max="100" step="1" data-setting="threatSquareRadialGapPercent"></label>
+            <label class="range-setting"><span>Abstand zur Figur (Kollisionsrand)</span><output data-value-for="threatSquareFigureMargin"></output><input type="range" min="0" max="0.2" step="0.01" data-setting="threatSquareFigureMargin"></label>
+            <label class="range-setting"><span>Abrundung der Ecken</span><output data-value-for="threatSquareCornerRadiusPercent"></output><input type="range" min="0" max="50" step="1" data-setting="threatSquareCornerRadiusPercent"></label>
+          </div>
+          </div>
+          <label class="switch-setting"><span><strong>Verteidigungsrichtungen aktivieren</strong><small>Zeigt Verbindungen von deckenden zu eigenen Figuren.</small></span><input type="checkbox" data-setting="defenseCirclesEnabled" role="switch"></label>
+          <div data-threat-role="defense" data-depends-on="defenseCirclesEnabled">
+          <label class="select-setting threat-display-select"><span>Verteidigungsdarstellung</span><select data-setting="threatDefenseDisplayMode"><option value="segments">Kreissegmente</option><option value="lines">Linien</option><option value="square">Eckig</option></select></label>
+            <p class="display-setting-label" data-threat-display-label="segments">Kreissegment-Einstellungen</p>
+            <div class="range-grid" data-threat-display-group="segments">
+              <label class="range-setting outline-width-setting"><span>Radius (ab Feldmitte)</span><output data-value-for="threatArcRadius"></output><input type="range" min="0.3" max="0.7" step="0.01" data-setting="threatArcRadius"></label>
+              <label class="range-setting outline-width-setting"><span>Segmentdicke</span><output data-value-for="threatArcThickness"></output><input type="range" min="0.01" max="0.08" step="0.01" data-setting="threatArcThickness"></label>
+              <label class="range-setting"><span>Segmentwinkel</span><output data-value-for="threatArcAngleDeg"></output><input type="range" min="10" max="120" step="1" data-setting="threatArcAngleDeg"></label>
+              <label class="range-setting"><span>Lückenbreite in Prozent</span><output data-value-for="threatArcGapPercent"></output><input type="range" min="0" max="50" step="1" data-setting="threatArcGapPercent"></label>
+              <label class="range-setting"><span>Abstand doppelter Segmente in Prozent</span><output data-value-for="threatArcRadialGapPercent"></output><input type="range" min="50" max="200" step="1" data-setting="threatArcRadialGapPercent"></label>
+              <label class="range-setting"><span>Abstand zur Figur (Kollisionsrand)</span><output data-value-for="segmentFigureMargin"></output><input type="range" min="0" max="0.2" step="0.01" data-setting="segmentFigureMargin"></label>
+            </div>
+            <p class="display-setting-label" data-threat-display-label="lines" hidden>Linieneinstellungen</p>
+            <div class="range-grid" data-threat-display-group="lines" hidden>
+              <label class="range-setting"><span>Radius zum Feldmittelpunkt</span><output data-value-for="threatLineRadius"></output><input type="range" min="0.1" max="0.5" step="0.01" data-setting="threatLineRadius"></label>
+              <label class="range-setting"><span>Linienlänge (in % der Feldbreite)</span><output data-value-for="threatLineLength"></output><input type="range" min="0" max="0.3" step="0.01" data-setting="threatLineLength"></label>
+              <label class="range-setting"><span>Liniendicke</span><output data-value-for="threatLineThickness"></output><input type="range" min="0.005" max="0.1" step="0.005" data-setting="threatLineThickness"></label>
+              <label class="range-setting"><span>Abstand gleichgerichteter Linien</span><output data-value-for="threatLineGap"></output><input type="range" min="0" max="0.2" step="0.01" data-setting="threatLineGap"></label>
+              <label class="range-setting"><span>Lückenbreite in Prozent</span><output data-value-for="threatLineGapPercent"></output><input type="range" min="0" max="50" step="1" data-setting="threatLineGapPercent"></label>
+              <label class="range-setting"><span>Abstand zur Figur (Kollisionsrand)</span><output data-value-for="threatLineFigureMargin"></output><input type="range" min="-0.1" max="0.2" step="0.01" data-setting="threatLineFigureMargin"></label>
+            </div>
+            <p class="display-setting-label" data-threat-display-label="square" hidden>Eckige Segment-Einstellungen</p>
+            <div class="range-grid" data-threat-display-group="square" hidden>
+              <label class="range-setting outline-width-setting"><span>Radius (ab Feldmitte)</span><output data-value-for="threatSquareRadius"></output><input type="range" min="0.3" max="0.7" step="0.01" data-setting="threatSquareRadius"></label>
+              <label class="range-setting outline-width-setting"><span>Segmentdicke</span><output data-value-for="threatSquareThickness"></output><input type="range" min="0.01" max="0.08" step="0.01" data-setting="threatSquareThickness"></label>
+              <label class="range-setting"><span>Segmentwinkel</span><output data-value-for="threatSquareAngleDeg"></output><input type="range" min="10" max="120" step="1" data-setting="threatSquareAngleDeg"></label>
+              <label class="range-setting"><span>Lückenbreite in Prozent</span><output data-value-for="threatSquareGapPercent"></output><input type="range" min="0" max="50" step="1" data-setting="threatSquareGapPercent"></label>
+              <label class="range-setting"><span>Abstand doppelter Segmente in Prozent</span><output data-value-for="threatSquareRadialGapPercent"></output><input type="range" min="0" max="100" step="1" data-setting="threatSquareRadialGapPercent"></label>
+              <label class="range-setting"><span>Abstand zur Figur (Kollisionsrand)</span><output data-value-for="threatSquareFigureMargin"></output><input type="range" min="0" max="0.2" step="0.01" data-setting="threatSquareFigureMargin"></label>
+              <label class="range-setting"><span>Abrundung der Ecken</span><output data-value-for="threatSquareCornerRadiusPercent"></output><input type="range" min="0" max="50" step="1" data-setting="threatSquareCornerRadiusPercent"></label>
+            </div>
           </div>
         </details>
         <details class="analysis-subsection">
-          <summary>Bedrohte Figuren</summary>
-          <label class="switch-setting"><span><strong>Bedrohte Figuren mit Viertelkreis markieren</strong><small>Zeigt die Richtung der angreifenden Figuren. Die Farbe ist die des Gegners.</small></span><input type="checkbox" data-setting="threatenedPieceOutlineEnabled" role="switch"></label>
-          <label class="range-setting outline-width-setting"><span>Kreisradius (ab Feldmitte)</span><output data-value-for="threatArcRadius"></output><input type="range" min="0" max="0.5" step="0.01" data-setting="threatArcRadius"></label>
-          <label class="range-setting outline-width-setting"><span>Kreisdicke</span><output data-value-for="threatArcThickness"></output><input type="range" min="0.01" max="0.4" step="0.01" data-setting="threatArcThickness"></label>
-          <label class="range-setting"><span>Segmentwinkel</span><output data-value-for="threatArcAngleDeg"></output><input type="range" min="10" max="120" step="1" data-setting="threatArcAngleDeg"></label>
-        </details>
-        <details class="analysis-subsection">
-          <summary>Angriffs- und Deckungszahlen</summary>
-          <label class="switch-setting"><span><strong>Zahlen anzeigen</strong><small>Saldo aus Deckungen und Angriffen je Figur.</small></span><input type="checkbox" data-setting="threatCountLabelsEnabled" role="switch"></label>
-          <label class="switch-setting"><span><strong>Textkontur</strong><small>Umrandet Zahlen für besseren Kontrast.</small></span><input type="checkbox" data-setting="threatCountTextOutlineEnabled" role="switch"></label>
-          <div class="range-grid">
-            <label class="range-setting"><span>Versatz relativ zum Kreisradius</span><output data-value-for="threatCountOffsetRadius"></output><input type="range" min="0" max="3" step="0.05" data-setting="threatCountOffsetRadius"></label>
-            <label class="range-setting"><span>Schriftgröße</span><output data-value-for="threatCountFontSizePx"></output><input type="range" min="8" max="48" step="1" data-setting="threatCountFontSizePx"></label>
+          <summary>Kreis im Zentrum</summary>
+          <label class="switch-setting"><span><strong>Kreis im Zentrum</strong><small>Zeigt einen Kreis in der Figur, wenn sie mehr angegriffen als verteidigt wird.</small></span><input type="checkbox" data-setting="threatCenterCircleEnabled" role="switch"></label>
+          <div class="range-grid" data-depends-on="threatCenterCircleEnabled">
+            <label class="range-setting" data-depends-on="threatCenterCircleEnabled"><span>Durchmesser in Prozent</span><output data-value-for="threatCenterCircleDiameterPercent"></output><input type="range" min="0" max="100" step="1" data-setting="threatCenterCircleDiameterPercent"></label>
+            <label class="range-setting" data-depends-on="threatCenterCircleEnabled"><span>Dicke der Kreislinie in Prozent</span><output data-value-for="threatCenterCircleThicknessPercent"></output><input type="range" min="0" max="100" step="1" data-setting="threatCenterCircleThicknessPercent"></label>
           </div>
         </details>
       </section>
@@ -185,7 +235,7 @@
         <small class="picker-hint">Shift beim Ziehen: viermal langsamere Einstellung</small>
       </section>
 
-      <footer class="footer"><span id="save-status" role="status" aria-live="polite">Automatisch gespeichert</span><div class="footer-actions"><button id="export-settings" type="button">Export</button><button id="reset-settings" type="button">Zuruecksetzen</button></div></footer>
+      <footer class="footer"><span id="save-status" role="status" aria-live="polite">Automatisch gespeichert</span><div class="footer-actions"><button id="export-settings" type="button">Export</button><button id="copy-settings" type="button">Zwischenablage</button><button id="reset-settings" type="button">Zuruecksetzen</button></div></footer>
     </main>
     <script src="settings.js"></script>
     <script src="bezier-editor.js"></script>

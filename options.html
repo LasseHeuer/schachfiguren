@@ -128,10 +128,6 @@
             <label class="switch-field"><span><strong>Keildarstellung aktivieren</strong><small>Angriffe und Potenzial-Züge mit Keilen darstellen.</small></span><input type="checkbox" data-setting="selectedPieceWedgeEnabled" role="switch"></label>
             <label class="switch-field"><span><strong>Nur ausgewählte Figur</strong><small>Wenn aus, Keile für alle Figuren anzeigen.</small></span><input type="checkbox" data-setting="selectedPieceWedgeOnlySelected" role="switch"></label>
             <label class="switch-field"><span><strong>Potenzial-Züge</strong><small>Angriffe von möglichen Zugfeldern aus anzeigen.</small></span><input type="checkbox" data-setting="wedgePotentialEnabled" role="switch"></label>
-            <label class="switch-field"><span><strong>Bedrohte Figuren mit Viertelkreis markieren</strong><small>Zeigt die Richtung der angreifenden Figuren. Die Farbe ist die des Gegners.</small></span><input type="checkbox" data-setting="threatenedPieceOutlineEnabled" role="switch"></label>
-            <label class="switch-field"><span><strong>Deckungslinien aktivieren</strong><small>Keile von deckenden zu eigenen gedeckten Figuren anzeigen.</small></span><input type="checkbox" data-setting="defenseLinesEnabled" role="switch"></label>
-            <label class="switch-field"><span><strong>Angriffs- und Deckungszahlen</strong><small>Zeigt je Figur den Saldo aus Deckungen und Angriffen.</small></span><input type="checkbox" data-setting="threatCountLabelsEnabled" role="switch"></label>
-            <label class="switch-field"><span><strong>Textkontur für Zahlen</strong><small>Umrandet Zahlen für besseren Kontrast.</small></span><input type="checkbox" data-setting="threatCountTextOutlineEnabled" role="switch"></label>
           </div>
           <div class="control-grid">
             <label class="field"><span>Keil-Basisbreite</span><input type="range" min="1" max="20" step="0.1" data-setting="wedgeBaseWidthPx"><output data-value-for="wedgeBaseWidthPx"></output></label>
@@ -142,21 +138,51 @@
             <label class="field"><span>Potenzial-Strategie</span><select data-setting="wedgePotentialStrategy"><option value="all">Alle Züge</option><option value="waterfall">Wasserfall</option></select></label>
             <label class="field"><span>Mindestwert Zielfigur</span><input type="range" min="1" max="9" step="1" data-setting="wedgePotentialCutoffValue"><output data-value-for="wedgePotentialCutoffValue"></output></label>
             <label class="field"><span>Züge pro Figur</span><input type="range" min="1" max="5" step="1" data-setting="wedgePotentialPerPieceCount"><output data-value-for="wedgePotentialPerPieceCount"></output></label>
-            <label class="field"><span>Kreisradius (ab Feldmitte)</span><input type="range" min="0" max="0.5" step="0.01" data-setting="threatArcRadius"><output data-value-for="threatArcRadius"></output></label>
-            <label class="field"><span>Kreisdicke</span><input type="range" min="0.01" max="0.4" step="0.01" data-setting="threatArcThickness"><output data-value-for="threatArcThickness"></output></label>
+          </div>
+          <p class="control-group-label">Angriffs- und Verteidigungsanzeigen</p>
+          <div class="control-grid compact-grid">
+            <label class="switch-field"><span><strong>Angriffsrichtungen aktivieren</strong><small>Zeigt Angriffsrichtungen am bedrohten Feld.</small></span><input type="checkbox" data-setting="threatenedPieceOutlineEnabled" role="switch"></label>
+            <label class="switch-field"><span><strong>Verteidigungsrichtungen aktivieren</strong><small>Zeigt Verbindungen von deckenden zu eigenen Figuren.</small></span><input type="checkbox" data-setting="defenseCirclesEnabled" role="switch"></label>
+          </div>
+          <div class="control-grid threat-display-mode">
+            <label class="field"><span>Angriffsdarstellung</span><select data-setting="threatAttackDisplayMode"><option value="segments">Kreissegmente</option><option value="lines">Linien</option><option value="square">Eckig</option></select></label>
+            <label class="field"><span>Verteidigungsdarstellung</span><select data-setting="threatDefenseDisplayMode"><option value="segments">Kreissegmente</option><option value="lines">Linien</option><option value="square">Eckig</option></select></label>
+          </div>
+          <p class="control-group-label" data-threat-display-label="segments">Kreissegment-Einstellungen</p>
+          <div class="control-grid" data-threat-display-group="segments">
+            <label class="field"><span>Radius (ab Feldmitte)</span><input type="range" min="0.3" max="0.7" step="0.01" data-setting="threatArcRadius"><output data-value-for="threatArcRadius"></output></label>
+            <label class="field"><span>Segmentdicke</span><input type="range" min="0.01" max="0.08" step="0.01" data-setting="threatArcThickness"><output data-value-for="threatArcThickness"></output></label>
             <label class="field"><span>Segmentwinkel</span><input type="range" min="10" max="120" step="1" data-setting="threatArcAngleDeg"><output data-value-for="threatArcAngleDeg"></output></label>
+            <label class="field"><span>Lückenbreite in Prozent</span><input type="range" min="0" max="50" step="1" data-setting="threatArcGapPercent"><output data-value-for="threatArcGapPercent"></output></label>
+            <label class="field"><span>Abstand doppelter Segmente in Prozent</span><input type="range" min="50" max="200" step="1" data-setting="threatArcRadialGapPercent"><output data-value-for="threatArcRadialGapPercent"></output></label>
+            <label class="field"><span>Abstand zur Figur (Kollisionsrand)</span><input type="range" min="0" max="0.2" step="0.01" data-setting="segmentFigureMargin"><output data-value-for="segmentFigureMargin"></output></label>
           </div>
-          <p class="control-group-label">Deckungslinien</p>
-          <div class="control-grid">
-            <label class="field"><span>Dicke</span><input type="range" min="0.5" max="20" step="0.1" data-setting="defenseLineThicknessPx"><output data-value-for="defenseLineThicknessPx"></output></label>
-            <label class="field"><span>Länge des Strichs</span><input type="range" min="0.05" max="0.5" step="0.01" data-setting="defenseLineLength"><output data-value-for="defenseLineLength"></output></label>
-            <label class="field"><span>Abstand zum Feldmittelpunkt</span><input type="range" min="0" max="0.5" step="0.01" data-setting="defenseLineDistance"><output data-value-for="defenseLineDistance"></output></label>
-            <label class="field"><span>Deckkraft</span><input type="range" min="0" max="1" step="0.01" data-setting="defenseLineOpacity"><output data-value-for="defenseLineOpacity"></output></label>
+          <p class="control-group-label" data-threat-display-label="lines" hidden>Linieneinstellungen</p>
+          <div class="control-grid" data-threat-display-group="lines" hidden>
+            <label class="field"><span>Radius zum Feldmittelpunkt</span><input type="range" min="0.1" max="0.5" step="0.01" data-setting="threatLineRadius"><output data-value-for="threatLineRadius"></output></label>
+            <label class="field"><span>Linienlänge (in % der Feldbreite)</span><input type="range" min="0" max="0.3" step="0.01" data-setting="threatLineLength"><output data-value-for="threatLineLength"></output></label>
+            <label class="field"><span>Liniendicke</span><input type="range" min="0.005" max="0.1" step="0.005" data-setting="threatLineThickness"><output data-value-for="threatLineThickness"></output></label>
+            <label class="field"><span>Abstand gleichgerichteter Linien</span><input type="range" min="0" max="0.2" step="0.01" data-setting="threatLineGap"><output data-value-for="threatLineGap"></output></label>
+            <label class="field"><span>Lückenbreite in Prozent</span><input type="range" min="0" max="50" step="1" data-setting="threatLineGapPercent"><output data-value-for="threatLineGapPercent"></output></label>
+            <label class="field"><span>Abstand zur Figur (Kollisionsrand)</span><input type="range" min="-0.1" max="0.2" step="0.01" data-setting="threatLineFigureMargin"><output data-value-for="threatLineFigureMargin"></output></label>
           </div>
-          <p class="control-group-label">Angriffs- und Deckungszahlen</p>
+          <p class="control-group-label" data-threat-display-label="square" hidden>Eckige Segment-Einstellungen</p>
+          <div class="control-grid" data-threat-display-group="square" hidden>
+            <label class="field"><span>Radius (ab Feldmitte)</span><input type="range" min="0.3" max="0.7" step="0.01" data-setting="threatSquareRadius"><output data-value-for="threatSquareRadius"></output></label>
+            <label class="field"><span>Segmentdicke</span><input type="range" min="0.01" max="0.08" step="0.01" data-setting="threatSquareThickness"><output data-value-for="threatSquareThickness"></output></label>
+            <label class="field"><span>Segmentwinkel</span><input type="range" min="10" max="120" step="1" data-setting="threatSquareAngleDeg"><output data-value-for="threatSquareAngleDeg"></output></label>
+            <label class="field"><span>Lückenbreite in Prozent</span><input type="range" min="0" max="50" step="1" data-setting="threatSquareGapPercent"><output data-value-for="threatSquareGapPercent"></output></label>
+            <label class="field"><span>Abstand doppelter Segmente in Prozent</span><input type="range" min="0" max="100" step="1" data-setting="threatSquareRadialGapPercent"><output data-value-for="threatSquareRadialGapPercent"></output></label>
+            <label class="field"><span>Abstand zur Figur (Kollisionsrand)</span><input type="range" min="0" max="0.2" step="0.01" data-setting="threatSquareFigureMargin"><output data-value-for="threatSquareFigureMargin"></output></label>
+            <label class="field"><span>Abrundung der Ecken</span><input type="range" min="0" max="50" step="1" data-setting="threatSquareCornerRadiusPercent"><output data-value-for="threatSquareCornerRadiusPercent"></output></label>
+          </div>
+          <p class="control-group-label">Kreis im Zentrum</p>
+          <div class="control-grid compact-grid">
+            <label class="switch-field"><span><strong>Kreis im Zentrum aktivieren</strong><small>Zeigt einen Kreis in der Figur, wenn sie mehr angegriffen als verteidigt wird. Die Farbe ist die des Angreifers.</small></span><input type="checkbox" data-setting="threatCenterCircleEnabled" role="switch"></label>
+          </div>
           <div class="control-grid">
-            <label class="field"><span>Versatz relativ zum Kreisradius</span><input type="range" min="0" max="3" step="0.05" data-setting="threatCountOffsetRadius"><output data-value-for="threatCountOffsetRadius"></output></label>
-            <label class="field"><span>Schriftgröße</span><input type="range" min="8" max="48" step="1" data-setting="threatCountFontSizePx"><output data-value-for="threatCountFontSizePx"></output></label>
+            <label class="field"><span>Durchmesser in Prozent</span><input type="range" min="0" max="100" step="1" data-setting="threatCenterCircleDiameterPercent"><output data-value-for="threatCenterCircleDiameterPercent"></output></label>
+            <label class="field"><span>Dicke der Kreislinie in Prozent</span><input type="range" min="0" max="100" step="1" data-setting="threatCenterCircleThicknessPercent"><output data-value-for="threatCenterCircleThicknessPercent"></output></label>
           </div>
         </section>
 

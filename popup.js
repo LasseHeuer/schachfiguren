@@ -22,7 +22,19 @@
   let bounceCurveEditor = null;
   globalThis.LichessSettings.bindFineInputs([...controls, ...colorPickerRanges]);
 
+  const uiStateKey = "popupUiState";
+  const detailsSections = [...document.querySelectorAll("details")];
+
+  function loadUiState() {
+    return JSON.parse(localStorage.getItem(uiStateKey)) ?? {};
+  }
+
+  function saveUiState(patch) {
+    localStorage.setItem(uiStateKey, JSON.stringify({ ...loadUiState(), ...patch }));
+  }
+
   function setTab(name, focus = false) {
+    saveUiState({ tab: name });
     for (const tab of tabs) {
       const active = tab.dataset.tab === name;
       tab.classList.toggle("active", active);
@@ -35,43 +47,29 @@
     }
   }
 
+  // Duplicated sections (attack and defense) each have their own output element, so all of them are updated.
   function updateOutput(control) {
     if (control.type !== "range") return;
-    const output = document.querySelector(`[data-value-for="${control.dataset.setting}"]`);
-    if (!output) return;
+    const text = formatOutput(control);
+    for (const output of document.querySelectorAll(`[data-value-for="${control.dataset.setting}"]`)) output.value = text;
+  }
+
+  function formatOutput(control) {
     if (["threatMoveDepth", "wedgePotentialCutoffValue", "wedgePotentialPerPieceCount"].includes(control.dataset.setting)) {
-      output.value = control.value;
-      return;
+      return control.value;
     }
-    if (control.dataset.setting.endsWith("Px")) {
-      output.value = `${control.value} px`;
-      return;
-    }
-    if (["wedgeOpacity", "defenseLineOpacity"].includes(control.dataset.setting)) {
-      output.value = `${Math.round(Number(control.value) * 100)}%`;
-      return;
-    }
-    if (["defenseLineLength", "defenseLineDistance"].includes(control.dataset.setting)) {
-      output.value = `${Math.round(Number(control.value) * 100)}% Feld`;
-      return;
-    }
+    if (control.dataset.setting.endsWith("Px")) return `${control.value} px`;
+    if (control.dataset.setting === "wedgeOpacity") return `${Math.round(Number(control.value) * 100)}%`;
     if (["pieceBounceTiming", "pieceBounceDuration", "pieceBounceWiggleDuration"].includes(control.dataset.setting)) {
-      output.value = `${control.value} ms`;
-      return;
+      return `${control.value} ms`;
     }
-    if (["pieceBounceWiggleAngle", "threatArcAngleDeg"].includes(control.dataset.setting)) {
-      output.value = `${control.value}°`;
-      return;
+    if (["pieceBounceWiggleAngle", "threatArcAngleDeg", "threatSquareAngleDeg"].includes(control.dataset.setting)) {
+      return `${control.value}°`;
     }
-    if (["threatOwnSeeThrough", "threatOpponentSeeThrough", "threatDepthFactor", "threatArcRadius", "threatArcThickness"].includes(control.dataset.setting)) {
-      output.value = `${Math.round(Number(control.value) * 100)}%`;
-      return;
+    if (["threatOwnSeeThrough", "threatOpponentSeeThrough", "threatDepthFactor", "threatArcRadius", "threatArcThickness", "segmentFigureMargin", "threatSquareRadius", "threatSquareThickness", "threatSquareFigureMargin", "threatLineRadius", "threatLineLength", "threatLineThickness", "threatLineGap", "threatLineFigureMargin"].includes(control.dataset.setting)) {
+      return `${Math.round(Number(control.value) * 100)}%`;
     }
-    if (control.dataset.setting === "threatCountOffsetRadius") {
-      output.value = `${Math.round(Number(control.value) * 100)}% Radius`;
-      return;
-    }
-    output.value = `${control.value}%`;
+    return `${control.value}%`;
   }
 
   function hexToHsv(hex) {
@@ -176,13 +174,14 @@
     const settings = globalThis.LichessSettings.normalize(values);
     currentSettings = settings;
     setCurveTab(activeCurveKey);
-    updateLoopControls(settings.pieceBounceLoop);
     for (const control of controls) {
       const value = settings[control.dataset.setting];
       if (control.type === "checkbox") control.checked = value;
       else control.value = value;
       updateOutput(control);
     }
+    updateThreatDisplayControls();
+    updateDependentControls();
   }
 
   function saveControl(control) {
@@ -190,6 +189,7 @@
       : control.type === "range" ? Number(control.value)
         : control.value;
     currentSettings[control.dataset.setting] = value;
+    syncDuplicateControls(control);
     chrome.storage.local.set({ [control.dataset.setting]: value }, () => {
       saveStatus.textContent = "Gespeichert";
     });
@@ -210,8 +210,37 @@
     bounceCurveEditor?.setValue(currentSettings[key], globalThis.LichessSettings.defaults[key]);
   }
 
-  function updateLoopControls(enabled) {
-    for (const control of document.querySelectorAll("[data-loop-pause]")) control.hidden = !enabled;
+  // data-depends-on lists conditions separated by spaces: "name" needs a checked checkbox, "name=value" needs that select value.
+  function isConditionMet(condition) {
+    const [name, value] = condition.split("=");
+    const control = document.querySelector(`[data-setting="${name}"]`);
+    return value === undefined ? control.checked : control.value === value;
+  }
+
+  // Dropdowns and sliders are only shown while their conditions (data-depends-on) are met.
+  function updateDependentControls() {
+    for (const element of document.querySelectorAll("[data-depends-on]")) {
+      element.hidden = !element.dataset.dependsOn.split(" ").every(isConditionMet);
+    }
+  }
+
+  function updateThreatDisplayControls() {
+    for (const role of ["attack", "defense"]) {
+      const mode = document.querySelector(`[data-setting="threat${role === "attack" ? "Attack" : "Defense"}DisplayMode"]`).value;
+      for (const group of document.querySelectorAll(`[data-threat-role="${role}"] [data-threat-display-group], [data-threat-role="${role}"] [data-threat-display-label]`)) {
+        group.hidden = (group.dataset.threatDisplayGroup ?? group.dataset.threatDisplayLabel) !== mode;
+      }
+    }
+  }
+
+  // Attack and defense sections each show their own sliders; equal settings are kept in sync.
+  function syncDuplicateControls(control) {
+    for (const other of controls) {
+      if (other === control || other.dataset.setting !== control.dataset.setting) continue;
+      if (other.type === "checkbox") other.checked = control.checked;
+      else other.value = control.value;
+      updateOutput(other);
+    }
   }
 
   function showPageStatus() {
@@ -309,6 +338,7 @@
     if (control.type === "range") {
       control.addEventListener("input", () => {
         updateOutput(control);
+        syncDuplicateControls(control);
         currentSettings[control.dataset.setting] = Number(control.value);
         clearTimeout(rangeTimers.get(control));
         rangeTimers.set(control, setTimeout(() => saveControl(control), 140));
@@ -319,12 +349,13 @@
       });
     } else if (control.type === "color") {
       control.addEventListener("input", () => saveControl(control));
-    } else {
-      control.addEventListener("change", () => {
-        saveControl(control);
-        if (control.dataset.setting === "pieceBounceLoop") updateLoopControls(control.checked);
-      });
-    }
+      } else {
+        control.addEventListener("change", () => {
+          saveControl(control);
+          if (["threatAttackDisplayMode", "threatDefenseDisplayMode"].includes(control.dataset.setting)) updateThreatDisplayControls();
+          updateDependentControls();
+        });
+      }
   }
 
   document.getElementById("reset-settings").addEventListener("click", () => {
@@ -335,13 +366,17 @@
     });
   });
 
-  document.getElementById("export-settings").addEventListener("click", () => {
-    const contents = JSON.stringify({
+  function getSettingsExportContents() {
+    return JSON.stringify({
       format: "lichess-figurensets-settings",
       version: 1,
       exportedAt: new Date().toISOString(),
       settings: globalThis.LichessSettings.normalize(currentSettings)
     }, null, 2);
+  }
+
+  document.getElementById("export-settings").addEventListener("click", () => {
+    const contents = getSettingsExportContents();
     chrome.downloads.download({
       url: `data:application/json;charset=utf-8,${encodeURIComponent(contents)}`,
       filename: "lichess-figurensets-einstellungen.json",
@@ -353,6 +388,26 @@
         : "Download gestartet";
     });
   });
+
+  document.getElementById("copy-settings").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(getSettingsExportContents());
+      saveStatus.textContent = "Einstellungen kopiert";
+    } catch {
+      saveStatus.textContent = "Kopieren fehlgeschlagen";
+    }
+  });
+
+  const uiState = loadUiState();
+  if (tabs.some(tab => tab.dataset.tab === uiState.tab)) setTab(uiState.tab);
+  for (const details of detailsSections) {
+    const key = details.querySelector("summary")?.textContent.trim();
+    if (!key) continue;
+    details.open = Boolean(uiState.details?.[key]);
+    details.addEventListener("toggle", () => {
+      saveUiState({ details: { ...loadUiState().details, [key]: details.open } });
+    });
+  }
 
   chrome.storage.local.get(null, values => {
     showSettings(values);

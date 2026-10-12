@@ -50,6 +50,8 @@ h2 { margin-bottom: 4px; font: 700 16px Manrope, sans-serif; letter-spacing: -.0
 .section-heading p { margin: 0; color: var(--muted); font-size: 11px; }
 .control-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 17px; }
 .field { display: grid; align-content: start; gap: 5px; color: #475147; font-size: 10px; font-weight: 600; }
+.field[hidden], .switch-field[hidden] { display: none !important; }
+.control-grid[hidden], .control-group-label[hidden] { display: none !important; }
 .field-wide { grid-column: 1 / -1; }
 .field small, .switch-field small { color: var(--muted); font-size: 10px; font-weight: 400; line-height: 1.45; }
 select { width: 100%; height: 34px; padding: 0 9px; border: 0; border-radius: 6px; background: #f3f5f1; color: var(--ink); font-size: 11px; }
@@ -90,6 +92,7 @@ output { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 10
 .range-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 10px; }
 .threat-controls { grid-template-columns: 1fr; align-items: center; }
 .threat-range-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 12px; }
+.threat-display-mode { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
 .control-group-label { margin: 15px 0 9px; color: #536257; font-size: 10px; font-weight: 700; }
 .switch-field { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 49px; }
 .switch-field strong { display: block; margin-bottom: 4px; color: #475147; font-size: 11px; }

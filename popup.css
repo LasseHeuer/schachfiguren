@@ -15,6 +15,8 @@ body { width: 340px; max-height: min(560px, 100vh); margin: 0; overflow-y: auto;
 .panel[hidden] { display: none; }
 .select-setting { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: #536057; font-size: 10px; }
 select { width: 205px; height: 30px; padding: 0 8px; border: 0; border-radius: 6px; background: #e9ede7; color: #26332a; font: 11px "Segoe UI", sans-serif; }
+.threat-display-select select { width: 180px; flex: 0 0 180px; }
+.threat-display-select span { min-width: 0; }
 .color-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
 .color-setting, .color-row { justify-content: space-between; gap: 8px; color: #586158; font-size: 9px; }
 .theme-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
@@ -26,6 +28,8 @@ input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
 input[type="color"]::-webkit-color-swatch, input[type="color"]::-moz-color-swatch { border: 0; border-radius: 4px; }
 .range-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 9px; margin-top: 8px; }
 .range-setting { position: relative; flex-wrap: wrap; justify-content: space-between; gap: 2px 6px; color: #586158; font-size: 9px; }
+.range-setting[hidden], .switch-setting[hidden], .select-setting[hidden] { display: none !important; }
+.range-grid[hidden] { display: none !important; }
 .range-setting output { color: #315c4a; font-size: 9px; font-variant-numeric: tabular-nums; font-weight: 700; }
 input[type="range"] { width: 100%; height: 13px; margin: 1px 0 0; accent-color: #47715b; }
 .range-wide { grid-column: 1 / -1; }
@@ -60,6 +64,8 @@ input[type="range"] { width: 100%; height: 13px; margin: 1px 0 0; accent-color: 
 .analysis-subsection[open] summary { margin-bottom: 6px; }
 .analysis-subsection .switch-setting + .switch-setting { margin-top: 4px; }
 .analysis-subsection .range-grid { margin-top: 5px; }
+.display-setting-label { margin: 9px 0 4px; color: #536257; font-size: 9px; font-weight: 700; }
+.display-setting-label[hidden] { display: none; }
 .outline-width-setting { margin-top: 6px; }
 .color-picker { display: grid; gap: 9px; margin: 4px 2px 12px; padding: 12px; border: 1px solid #d3dbd2; border-radius: 8px; background: #fff; box-shadow: 0 5px 18px #1e2b2040; }
 .color-picker[hidden] { display: none; }
@@ -104,6 +110,7 @@ body { background: #242821; color: #e8ebe5; }
 .tabs { background: #30342d; }
 .analysis-subsection { background: #30352e; }
 .analysis-subsection summary { color: #e1e6de; }
+.display-setting-label { color: #d5dbd2; }
 .tab { color: #aeb6aa; }
 .tab:hover { background: #3a4037; color: #f2f4ef; }
 select, .theme, .color-picker-header button, .bounce-curve-heading button, .footer button { background: #343931; color: #e1e6de; }
@@ -133,7 +140,7 @@ input[type="range"]::-moz-range-thumb { width: 10px; height: 10px; border: 0; bo
 .bounce-curve-panel { background: #30352e; }
 .bounce-curve-tab { background: #444b42; color: #e1e6de; }
 .bounce-curve-tab[aria-pressed="true"] { background: #72927a; color: #101712; }
-.bounce-controls [data-loop-pause][hidden] { display: none !important; }
+
 .bounce-curve-heading { color: #e1e6de; }
 .bounce-curve-heading small { color: #a6aea3; }
 .threat-toggle { color: #e1e6de; }

@@ -458,6 +458,7 @@
       source: activePieceDrag.source,
       target: position ? target : activePieceDrag.source,
       legal: Boolean(position),
+      basePosition: activePieceDrag.position,
       blackOrientation
     };
   }

@@ -3,10 +3,12 @@
     enabled: true,
     pieceSet: "system_eckig",
     complexPawn: true,
-    boardLightLight: "#dfdee0",
+    boardLightLight: "#dedae6",
     boardDarkLight: "#d6dbd5",
     monochromeBoard: false,
     squareOutline: false,
+    boardScalePercent: 83,
+    boardVerticalOffset: 0,
     lastMoveLight: "#dae0d7",
     lastMoveLineWidth: 16,
     selectedLight: "#ffffff",
@@ -22,9 +24,9 @@
     hoverMixDark: "#282727",
     markLastMove: true,
     idleMixPercent: 40,
-    hoverMixPercent: 60,
+    hoverMixPercent: 80,
     hoverDesaturation: 60,
-    moveDotSize: 10,
+    moveDotSize: 5,
     squareMoveDots: true,
     whitePieceColor: "#d1521d",
     blackPieceColor: "#2ba4d1",
@@ -42,46 +44,80 @@
     buttonBackgroundDark: "#333332",
     buttonBackgroundLight: "#bdbdbd",
     clockSize: 90,
+    menuScalePercent: 90,
     pieceBounceEnabled: true,
     pieceBounceLoop: true,
     pieceBounceStyle: "wiggle-only",
     pieceBounceWiggleAngle: 8,
     pieceBounceTiming: 1100,
     pieceBounceDuration: 700,
-    pieceBounceWiggleDuration: 450,
+    pieceBounceWiggleDuration: 550,
     pieceBounceCurve: [0.43205979291130514, 9.699530416395712, 0.43205979291130514, -119.63553915279083],
-    pieceBounceWiggleCurve: [0.1681075096130371, 7.01450587942914, 0.8627703530447823, -95.40328365388133],
+    pieceBounceWiggleCurve: [0.1681075096130371, -8.821559392769496, 0.634965942019508, -93.04401927854734],
     selectedPieceWedgeEnabled: true,
     selectedPieceWedgeOnlySelected: true,
-    defenseLinesEnabled: true,
-    moveDotsPlayerColor: false,
-    wedgeBaseWidthPx: 14.7,
-    wedgeTipWidthPx: 3.7,
-    wedgeGlowWidthPx: 1.9,
-    wedgeGlowBlurPx: 9.7,
-    wedgeOpacity: 0.51,
-    defenseLineLength: 0.3,
-    defenseLineThicknessPx: 4,
-    defenseLineDistance: 0.3,
-    defenseLineOpacity: 0.75,
+    defenseCirclesEnabled: true,
+    defenseLineAnimationDistancePercent: 4,
+    defenseLineAnimationLoopMs: 1200,
+    defenseLineAnimationOffsetMs: 80,
+    defenseLineBaseWidthPx: 8.8,
+    defenseLineCurve: [0.3917787642706008, 8.307138808892704, 0.830204827444894, -104.16703496108303],
+    defenseLineEndOffset: 0.3,
+    defenseLineGlowBlurPx: 9,
+    defenseLineGlowWidthPx: 0,
+    defenseLineStartOffset: 0.32,
+    defenseLineTipWidthPx: 1.2,
+    threatCountFontSizePx: 14,
+    threatCountLabelsEnabled: true,
+    threatCountOffsetRadius: 0.35,
+    threatCountTextOutlineEnabled: false,
+    threatPinnedOutlineDark: "#383838",
+    threatPinnedOutlineLight: "#f0f0f0",
+    threatPinnedOutlineWidth: 1.5,
+    threatPinnedPieceBrightness: 27,
+    threatPinnedPieceDesaturation: 38,
+    threatAttackDisplayMode: "square",
+    threatDefenseDisplayMode: "lines",
+    moveDotsPlayerColor: true,
+    wedgeBaseWidthPx: 14.4,
+    wedgeTipWidthPx: 1.5,
+    wedgeGlowWidthPx: 0,
+    wedgeGlowBlurPx: 15.3,
+    wedgeOpacity: 0.3,
     wedgePotentialEnabled: true,
     wedgePotentialStrategy: "all",
     wedgePotentialCutoffValue: 1,
-    wedgePotentialPerPieceCount: 1,
+    wedgePotentialPerPieceCount: 3,
     threatenedPieceOutlineEnabled: true,
-    threatArcRadius: 0.22,
-    threatArcThickness: 0.08,
-    threatArcAngleDeg: 90,
-    threatCountLabelsEnabled: true,
-    threatCountOffsetRadius: 0.5,
-    threatCountFontSizePx: 16,
-    threatCountTextOutlineEnabled: true,
+    threatArcRadius: 0.45,
+    threatArcThickness: 0.04,
+    threatArcAngleDeg: 45,
+    threatArcGapPercent: 13,
+    threatArcRadialGapPercent: 50,
+    segmentFigureMargin: 0.05,
+    threatSquareRadius: 0.5,
+    threatSquareThickness: 0.04,
+    threatSquareAngleDeg: 45,
+    threatSquareGapPercent: 17,
+    threatSquareRadialGapPercent: 65,
+    threatSquareFigureMargin: 0.05,
+    threatLineRadius: 0.3,
+    threatLineLength: 0.12,
+    threatLineThickness: 0.035,
+    threatLineGap: 0.04,
+    threatLineGapPercent: 40,
+    threatLineFigureMargin: 0.04,
+    threatSquareCornerRadiusPercent: 10,
+    threatCenterCircleEnabled: false,
+    threatCenterCircleDiameterPercent: 3,
+    threatCenterCircleThicknessPercent: 14,
     removeOutlines: true,
     removeGlows: true,
     removeGradients: true,
     removeShadows: true,
     removeRoundedCorners: true,
-    disableAnimations: false
+    disableAnimations: false,
+    threatenedPieceOutlineWidthPx: 1.5
   });
 
   const ranges = {
@@ -95,17 +131,30 @@
     wedgeGlowWidthPx: [0, 20],
     wedgeGlowBlurPx: [0, 18],
     wedgeOpacity: [0, 1],
-    defenseLineLength: [0.05, 0.5],
-    defenseLineThicknessPx: [0.5, 20],
-    defenseLineDistance: [0, 0.5],
-    defenseLineOpacity: [0, 1],
     wedgePotentialCutoffValue: [1, 9],
     wedgePotentialPerPieceCount: [1, 5],
-    threatArcRadius: [0, 0.5],
-    threatArcThickness: [0.01, 0.4],
+    threatArcRadius: [0.3, 0.7],
+    threatArcThickness: [0.01, 0.08],
     threatArcAngleDeg: [10, 120],
-    threatCountOffsetRadius: [0, 3],
-    threatCountFontSizePx: [8, 48],
+    threatArcGapPercent: [0, 50],
+    threatArcRadialGapPercent: [50, 200],
+    segmentFigureMargin: [0, 0.2],
+    threatSquareRadius: [0.3, 0.7],
+    threatSquareThickness: [0.01, 0.08],
+    threatSquareAngleDeg: [10, 120],
+    threatSquareGapPercent: [0, 50],
+    threatSquareRadialGapPercent: [0, 100],
+    threatSquareFigureMargin: [0, 0.2],
+    threatLineRadius: [0.1, 0.5],
+    threatLineLength: [0, 0.3],
+    threatLineThickness: [0.005, 0.1],
+    threatLineGap: [0, 0.2],
+    threatLineGapPercent: [0, 50],
+    threatLineFigureMargin: [-0.1, 0.2],
+    threatSquareCornerRadiusPercent: [0, 50],
+
+    threatCenterCircleDiameterPercent: [0, 100],
+    threatCenterCircleThicknessPercent: [0, 100],
     threatOwnSeeThrough: [0, 1],
     threatOpponentSeeThrough: [0, 1],
     threatMoveDepth: [1, 5],
@@ -121,6 +170,25 @@
 
   function normalize(values = {}) {
     const result = { ...defaults, ...values };
+    if (!Object.prototype.hasOwnProperty.call(values, "defenseCirclesEnabled")) {
+      result.defenseCirclesEnabled = values.defenseLinesEnabled ?? defaults.defenseCirclesEnabled;
+    }
+    for (const key of [
+      "defenseLinesEnabled",
+      "defenseLineLength",
+      "defenseLineThicknessPx",
+      "defenseLineDistance",
+      "defenseLineOpacity",
+      "defenseLineSegmentsEnabled",
+      "defenseLineSegmentsSyncEnabled",
+      "defenseLineSegmentRadius",
+      "defenseLineSegmentThickness",
+      "defenseLineSegmentAngleDeg",
+      "defenseLineSegmentGapPercent",
+      "defenseLineSegmentRadialGapPercent",
+      "threatDisplayMode",
+      "threatLineBoardEdgeMargin"
+    ]) delete result[key];
     if (!Object.prototype.hasOwnProperty.call(values, "pieceBounceWiggleCurve")) {
       result.pieceBounceWiggleCurve = values.pieceBounceCurve ?? defaults.pieceBounceWiggleCurve;
     }
@@ -133,6 +201,11 @@
     }
     if (!["all", "waterfall"].includes(result.wedgePotentialStrategy)) {
       result.wedgePotentialStrategy = defaults.wedgePotentialStrategy;
+    }
+    const displayModes = ["segments", "lines", "square"];
+    const legacyDisplayMode = displayModes.includes(values.threatDisplayMode) ? values.threatDisplayMode : defaults.threatAttackDisplayMode;
+    for (const key of ["threatAttackDisplayMode", "threatDefenseDisplayMode"]) {
+      result[key] = displayModes.includes(values[key]) ? values[key] : legacyDisplayMode;
     }
     for (const [key, [min, max]] of Object.entries(ranges)) {
       const value = Number(result[key]);
@@ -147,8 +220,18 @@
     result.threatMaxMixPercent = Math.round(result.threatMaxMixPercent);
     result.threatGradientPercent = Math.round(result.threatGradientPercent);
     result.pieceBounceWiggleAngle = Math.round(result.pieceBounceWiggleAngle);
-    result.threatCountFontSizePx = Math.round(result.threatCountFontSizePx);
+    result.threatCenterCircleDiameterPercent = Math.round(result.threatCenterCircleDiameterPercent);
+    result.threatCenterCircleThicknessPercent = Math.round(result.threatCenterCircleThicknessPercent);
     result.lastMoveLineWidth = Math.round(result.lastMoveLineWidth);
+
+    result.threatArcGapPercent = Math.round(result.threatArcGapPercent);
+    result.threatArcRadialGapPercent = Math.round(result.threatArcRadialGapPercent);
+    result.threatSquareAngleDeg = Math.round(result.threatSquareAngleDeg);
+    result.threatSquareGapPercent = Math.round(result.threatSquareGapPercent);
+    result.threatSquareRadialGapPercent = Math.round(result.threatSquareRadialGapPercent);
+    result.threatLineGapPercent = Math.round(result.threatLineGapPercent);
+    result.threatSquareCornerRadiusPercent = Math.round(result.threatSquareCornerRadiusPercent);
+
     result.pieceBounceTiming = Math.round(result.pieceBounceTiming / 50) * 50;
     result.pieceBounceDuration = Math.round(result.pieceBounceDuration / 50) * 50;
     result.pieceBounceWiggleDuration = Math.round(result.pieceBounceWiggleDuration / 50) * 50;
@@ -189,11 +272,12 @@
       "pieceBounceLoop",
       "selectedPieceWedgeEnabled",
       "selectedPieceWedgeOnlySelected",
-      "defenseLinesEnabled",
+      "defenseCirclesEnabled",
+
+
       "moveDotsPlayerColor",
       "threatenedPieceOutlineEnabled",
-      "threatCountLabelsEnabled",
-      "threatCountTextOutlineEnabled",
+      "threatCenterCircleEnabled",
       "wedgePotentialEnabled",
       "complexPawn"
     ]) {

@@ -2,6 +2,7 @@
   const { defaults, normalize } = globalThis.LichessSettings;
   const controls = [...document.querySelectorAll("[data-setting]")];
   const curveTabs = [...document.querySelectorAll("[data-curve-tab]")];
+  const threatDisplayGroups = [...document.querySelectorAll("[data-threat-display-group], [data-threat-display-label]")];
   const status = document.getElementById("save-status");
   let bounceCurveEditor = null;
   let activeCurveKey = "pieceBounceCurve";
@@ -19,6 +20,7 @@
       else control.value = value;
       updateOutput(control);
     }
+    updateThreatDisplayControls();
   }
 
   function updateOutput(control) {
@@ -33,28 +35,20 @@
       output.value = `${control.value} px`;
       return;
     }
-    if (["wedgeOpacity", "defenseLineOpacity"].includes(control.dataset.setting)) {
+    if (control.dataset.setting === "wedgeOpacity") {
       output.value = `${Math.round(Number(control.value) * 100)}%`;
-      return;
-    }
-    if (["defenseLineLength", "defenseLineDistance"].includes(control.dataset.setting)) {
-      output.value = `${Math.round(Number(control.value) * 100)}% Feld`;
       return;
     }
     if (["pieceBounceTiming", "pieceBounceDuration", "pieceBounceWiggleDuration"].includes(control.dataset.setting)) {
       output.value = `${control.value} ms`;
       return;
     }
-    if (["pieceBounceWiggleAngle", "threatArcAngleDeg"].includes(control.dataset.setting)) {
+    if (["pieceBounceWiggleAngle", "threatArcAngleDeg", "threatSquareAngleDeg"].includes(control.dataset.setting)) {
       output.value = `${control.value}°`;
       return;
     }
-    if (["threatOwnSeeThrough", "threatOpponentSeeThrough", "threatDepthFactor", "threatArcRadius", "threatArcThickness"].includes(control.dataset.setting)) {
+    if (["threatOwnSeeThrough", "threatOpponentSeeThrough", "threatDepthFactor", "threatArcRadius", "threatArcThickness", "segmentFigureMargin", "threatSquareRadius", "threatSquareThickness", "threatSquareFigureMargin", "threatLineRadius", "threatLineLength", "threatLineThickness", "threatLineGap", "threatLineFigureMargin"].includes(control.dataset.setting)) {
       output.value = `${Math.round(Number(control.value) * 100)}%`;
-      return;
-    }
-    if (control.dataset.setting === "threatCountOffsetRadius") {
-      output.value = `${Math.round(Number(control.value) * 100)}% des Radius`;
       return;
     }
     output.value = `${control.value}%`;
@@ -88,6 +82,22 @@
     for (const control of document.querySelectorAll("[data-loop-pause]")) control.hidden = !enabled;
   }
 
+  function updateThreatDisplayControls() {
+    const attackMode = document.querySelector('[data-setting="threatAttackDisplayMode"]').value;
+    const defenseMode = document.querySelector('[data-setting="threatDefenseDisplayMode"]').value;
+    const modeNames = { segments: "Kreissegment-Einstellungen", lines: "Linieneinstellungen", square: "Eckige Segment-Einstellungen" };
+    for (const group of threatDisplayGroups) {
+      const mode = group.dataset.threatDisplayGroup ?? group.dataset.threatDisplayLabel;
+      if (group.dataset.threatDisplayLabel) {
+        const roles = [attackMode === mode && "Angriff", defenseMode === mode && "Verteidigung"].filter(Boolean);
+        group.textContent = `${roles.join(" + ")}: ${modeNames[mode]}`;
+        group.hidden = !roles.length;
+      } else {
+        group.hidden = attackMode !== mode && defenseMode !== mode;
+      }
+    }
+  }
+
   bounceCurveEditor = globalThis.LichessBezierEditor.mount(
     document.querySelector('[data-bezier-editor="pieceBounceCurve"]'),
     defaults.pieceBounceCurve,
@@ -101,6 +111,7 @@
       updateOutput(control);
       saveControl(control);
       if (control.dataset.setting === "pieceBounceLoop") updateLoopControls(control.checked);
+      if (["threatAttackDisplayMode", "threatDefenseDisplayMode"].includes(control.dataset.setting)) updateThreatDisplayControls();
       if (control.dataset.setting === "enabled") {
         document.body.classList.toggle("extension-disabled", !control.checked);
       }
