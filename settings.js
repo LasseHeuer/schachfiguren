@@ -54,6 +54,9 @@
     pieceBounceWiggleDuration: 550,
     pieceBounceCurve: [0.43205979291130514, 9.699530416395712, 0.43205979291130514, -119.63553915279083],
     pieceBounceWiggleCurve: [0.1681075096130371, -8.821559392769496, 0.634965942019508, -93.04401927854734],
+    moveAnimationLichessSpeed: true,
+    moveAnimationDuration: 250,
+    moveAnimationCurve: [0.42, 0, 0.58, -90],
     selectedPieceWedgeEnabled: true,
     selectedPieceWedgeOnlySelected: true,
     defenseCirclesEnabled: true,
@@ -84,7 +87,6 @@
     wedgeGlowWidthPx: 0,
     wedgeGlowBlurPx: 15.3,
     wedgeOpacity: 0.3,
-    wedgePotentialEnabled: true,
     wedgePotentialStrategy: "all",
     wedgePotentialCutoffValue: 1,
     wedgePotentialPerPieceCount: 3,
@@ -109,9 +111,9 @@
     threatLineFigureMargin: 0.04,
     threatLineCurvature: 0.3,
     threatSquareCornerRadiusPercent: 10,
-    threatCenterCircleEnabled: false,
-    threatCenterCircleDiameterPercent: 3,
-    threatCenterCircleThicknessPercent: 14,
+    threatCenterOutlineEnabled: false,
+    threatCenterOutlineWidthPercent: 4,
+    threatCenterOutlineOpacity: 85,
     removeOutlines: true,
     removeGlows: true,
     removeGradients: true,
@@ -155,8 +157,8 @@
     threatLineCurvature: [-0.5, 0.5],
     threatSquareCornerRadiusPercent: [0, 50],
 
-    threatCenterCircleDiameterPercent: [0, 100],
-    threatCenterCircleThicknessPercent: [0, 100],
+    threatCenterOutlineWidthPercent: [0, 20],
+    threatCenterOutlineOpacity: [0, 100],
     threatOwnSeeThrough: [0, 1],
     threatOpponentSeeThrough: [0, 1],
     threatMoveDepth: [1, 5],
@@ -166,12 +168,21 @@
     pieceBounceWiggleAngle: [1, 30],
     pieceBounceTiming: [0, 5000],
     pieceBounceDuration: [200, 1500],
-    pieceBounceWiggleDuration: [200, 1500]
+    pieceBounceWiggleDuration: [200, 1500],
+    moveAnimationDuration: [0, 500]
   };
   const colors = Object.keys(defaults).filter(key => /Color|Light|Dark/.test(key) && typeof defaults[key] === "string");
 
   function normalize(values = {}) {
     const result = { ...defaults, ...values };
+    if (!Object.prototype.hasOwnProperty.call(values, "threatCenterOutlineEnabled")) {
+      result.threatCenterOutlineEnabled = values.threatCenterCircleEnabled ?? defaults.threatCenterOutlineEnabled;
+    }
+    delete result.threatCenterCircleEnabled;
+    delete result.threatCenterCircleDiameterPercent;
+    delete result.threatCenterCircleThicknessPercent;
+    delete result.wedgePotentialWithoutSelection;
+    delete result.wedgePotentialEnabled;
     if (!Object.prototype.hasOwnProperty.call(values, "defenseCirclesEnabled")) {
       result.defenseCirclesEnabled = values.defenseLinesEnabled ?? defaults.defenseCirclesEnabled;
     }
@@ -222,8 +233,7 @@
     result.threatMaxMixPercent = Math.round(result.threatMaxMixPercent);
     result.threatGradientPercent = Math.round(result.threatGradientPercent);
     result.pieceBounceWiggleAngle = Math.round(result.pieceBounceWiggleAngle);
-    result.threatCenterCircleDiameterPercent = Math.round(result.threatCenterCircleDiameterPercent);
-    result.threatCenterCircleThicknessPercent = Math.round(result.threatCenterCircleThicknessPercent);
+    result.threatCenterOutlineWidthPercent = Number(result.threatCenterOutlineWidthPercent.toFixed(1));
     result.lastMoveLineWidth = Math.round(result.lastMoveLineWidth);
 
     result.threatArcGapPercent = Math.round(result.threatArcGapPercent);
@@ -234,10 +244,11 @@
     result.threatLineGapPercent = Math.round(result.threatLineGapPercent);
     result.threatSquareCornerRadiusPercent = Math.round(result.threatSquareCornerRadiusPercent);
 
-    result.pieceBounceTiming = Math.round(result.pieceBounceTiming / 50) * 50;
-    result.pieceBounceDuration = Math.round(result.pieceBounceDuration / 50) * 50;
-    result.pieceBounceWiggleDuration = Math.round(result.pieceBounceWiggleDuration / 50) * 50;
-    for (const key of ["pieceBounceCurve", "pieceBounceWiggleCurve"]) {
+    result.pieceBounceTiming = Math.round(result.pieceBounceTiming / 10) * 10;
+    result.pieceBounceDuration = Math.round(result.pieceBounceDuration / 10) * 10;
+    result.pieceBounceWiggleDuration = Math.round(result.pieceBounceWiggleDuration / 10) * 10;
+    result.moveAnimationDuration = Math.round(result.moveAnimationDuration / 10) * 10;
+    for (const key of ["pieceBounceCurve", "pieceBounceWiggleCurve", "moveAnimationCurve"]) {
       const curve = Array.isArray(result[key]) ? result[key].map(Number) : null;
       if (!curve || curve.length !== 4 || !curve.every(Number.isFinite)) {
         result[key] = [...defaults[key]];
@@ -279,8 +290,8 @@
 
       "moveDotsPlayerColor",
       "threatenedPieceOutlineEnabled",
-      "threatCenterCircleEnabled",
-      "wedgePotentialEnabled",
+      "threatCenterOutlineEnabled",
+      "moveAnimationLichessSpeed",
       "complexPawn"
     ]) {
       result[key] = Boolean(result[key]);

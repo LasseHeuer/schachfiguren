@@ -1,9 +1,9 @@
 (() => {
   const pieceSelector = [
-    ".main-board cg-board piece.white:not(.ghost)",
-    ".main-board cg-board piece.black:not(.ghost)",
-    ".mini-game cg-board piece.white:not(.ghost)",
-    ".mini-game cg-board piece.black:not(.ghost)",
+    ".main-board cg-board piece.white:not(.ghost):not(.dragging):not(.anim)",
+    ".main-board cg-board piece.black:not(.ghost):not(.dragging):not(.anim)",
+    ".mini-game cg-board piece.white:not(.ghost):not(.dragging):not(.anim)",
+    ".mini-game cg-board piece.black:not(.ghost):not(.dragging):not(.anim)",
     ".board-editor .spare piece.white:not(.ghost)",
     ".board-editor .spare piece.black:not(.ghost)",
     ".pocket piece.white:not(.ghost)",
@@ -17,20 +17,8 @@
     return settings?.enabled && settings.pieceBounceEnabled && !settings.disableAnimations;
   }
 
-  function stop(piece, state = activePieces.get(piece)) {
-    if (!state || state.stopped) return;
-    state.stopped = true;
-    if (state.pauseTimer) clearTimeout(state.pauseTimer);
-    state.resumePause?.();
-    state.animation?.cancel();
-    piece.removeAttribute("data-lfs-bounce-running");
-    activePieces.delete(piece);
-  }
-
-  function finishCurrentStep(piece) {
-    const state = activePieces.get(piece);
-    if (!state) return;
-    state.finishAfterCycle = true;
+  // Ends a running pause early and resumes the loop without waiting for the timer.
+  function endPause(state) {
     if (!state.pauseTimer) return;
     clearTimeout(state.pauseTimer);
     state.pauseTimer = null;
@@ -39,18 +27,75 @@
     resumePause?.();
   }
 
+  function stop(piece, state = activePieces.get(piece)) {
+    if (!state || state.stopped) return;
+    state.stopped = true;
+    endPause(state);
+    state.animation?.cancel();
+    piece.removeAttribute("data-lfs-bounce-running");
+    activePieces.delete(piece);
+  }
+
+  function getOrientationOffset(piece) {
+    const orientation = piece.closest(".cg-wrap")?.classList;
+    return (
+      (orientation?.contains("orientation-white") && piece.classList.contains("black")) ||
+      (orientation?.contains("orientation-black") && piece.classList.contains("white"))
+    ) ? 180 : 0;
+  }
+
+  async function returnToBase(piece, state) {
+    if (!state.angle || !piece.isConnected) return true;
+    const angle = Math.round((state.angle % 360) / 360) * 360;
+    const currentTransform = getComputedStyle(piece, "::before").transform;
+    const targetTransform = `rotate(${getOrientationOffset(piece) + angle}deg)`;
+    const animation = piece.animate([
+      { transform: currentTransform },
+      { transform: targetTransform }
+    ], {
+      duration: Math.max(80, Math.min(180, settings.pieceBounceDuration * 0.2)),
+      easing: "ease-out",
+      fill: "forwards",
+      pseudoElement: "::before"
+    });
+    const previousAnimation = state.animation;
+    state.animation = animation;
+    previousAnimation?.cancel();
+
+    try {
+      await animation.finished;
+    } catch (error) {
+      if (error?.name !== "AbortError") console.error(error);
+      return false;
+    }
+
+    if (activePieces.get(piece) !== state) return false;
+    state.angle = 0;
+    animation.cancel();
+    return true;
+  }
+
+  function finishCurrentStep(piece) {
+    const state = activePieces.get(piece);
+    if (!state) return;
+    state.finishAfterCycle = true;
+    endPause(state);
+  }
+
   async function animateWhileHovered(piece, state) {
-    while (activePieces.get(piece) === state && isEnabled() && piece.isConnected && !state.finishAfterCycle && (settings.pieceBounceLoop || state.steps === 0)) {
+    while (activePieces.get(piece) === state && isEnabled() && piece.isConnected) {
+      if (state.finishAfterCycle || (!settings.pieceBounceLoop && state.steps > 0)) {
+        const returned = await returnToBase(piece, state);
+        if (!returned || activePieces.get(piece) !== state || !isEnabled() || !piece.isConnected) break;
+        if (state.finishAfterCycle || !settings.pieceBounceLoop) break;
+        continue;
+      }
+
       const angle = state.angle;
       const isPawn = piece.classList.contains("pawn");
       const isWiggle = isPawn || settings.pieceBounceStyle === "wiggle-only";
       const rotation = isWiggle ? 0 : 90;
-      const board = piece.closest("cg-board");
-      const orientation = board?.closest(".cg-wrap")?.classList;
-      const orientationOffset = board && (
-        (orientation?.contains("orientation-white") && piece.classList.contains("black")) ||
-        (orientation?.contains("orientation-black") && piece.classList.contains("white"))
-      ) ? 180 : 0;
+      const orientationOffset = getOrientationOffset(piece);
       const curve = isWiggle ? settings.pieceBounceWiggleCurve : settings.pieceBounceCurve;
       const [handle1Time, handle1Value, handle2Time, handle2Value] = curve;
       // Normalize the saved 90-degree curve so its timing stays the same at every rotation size.
@@ -74,16 +119,18 @@
       });
       const previousAnimation = state.animation;
       state.animation = animation;
-      state.angle += rotation;
+      state.angle = (state.angle + rotation) % 360;
       previousAnimation?.cancel();
 
       try {
         await animation.finished;
-      } catch {
+      } catch (error) {
+        if (error?.name !== "AbortError") console.error(error);
         break;
       }
       state.steps++;
-      if (activePieces.get(piece) !== state || !isEnabled() || !piece.isConnected || state.finishAfterCycle || !settings.pieceBounceLoop) break;
+      if (activePieces.get(piece) !== state || !isEnabled() || !piece.isConnected) break;
+      if (state.finishAfterCycle || !settings.pieceBounceLoop) continue;
 
       if (settings.pieceBounceTiming > 0) {
         await new Promise(resolve => {
@@ -96,20 +143,11 @@
         });
       }
     }
-    if (state.finishAfterCycle || !settings.pieceBounceLoop) {
-      state.stopped = true;
-      if (state.pauseTimer) clearTimeout(state.pauseTimer);
-      state.resumePause?.();
-      state.animation?.cancel();
-      piece.removeAttribute("data-lfs-bounce-running");
-      activePieces.delete(piece);
-      return;
-    }
     stop(piece, state);
   }
 
   function start(piece) {
-    if (!isEnabled() || typeof piece.animate !== "function") return;
+    if (!isEnabled() || typeof piece.animate !== "function" || piece.matches(".dragging, .anim")) return;
     const currentState = activePieces.get(piece);
     if (currentState) {
       currentState.finishAfterCycle = false;
@@ -144,7 +182,7 @@
       const boardRect = board.getBoundingClientRect();
       const halfWidth = boardRect.width / 16;
       const halfHeight = boardRect.height / 16;
-      for (const piece of board.querySelectorAll(":scope > piece.white:not(.ghost), :scope > piece.black:not(.ghost)")) {
+      for (const piece of board.querySelectorAll(":scope > piece.white:not(.ghost):not(.dragging):not(.anim), :scope > piece.black:not(.ghost):not(.dragging):not(.anim)")) {
         const rect = piece.getBoundingClientRect();
         const centerX = rect.left + rect.width / 2;
         const centerY = rect.top + rect.height / 2;
@@ -178,9 +216,17 @@
   document.addEventListener("pointerover", updateHoveredPiece, true);
   document.addEventListener("pointermove", updateHoveredPiece, true);
   document.addEventListener("pointerout", updateHoveredPiece, true);
+  new MutationObserver(records => {
+    for (const record of records) {
+      const piece = record.target;
+      if (piece.localName !== "piece" || !piece.matches(".dragging, .anim")) continue;
+      finishCurrentStep(piece);
+      if (hoveredPiece === piece) hoveredPiece = null;
+    }
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ["class"], subtree: true });
   window.addEventListener("blur", () => {
     if (!hoveredPiece) return;
-    stop(hoveredPiece);
+    finishCurrentStep(hoveredPiece);
     hoveredPiece = null;
   });
 
@@ -195,14 +241,7 @@
       return;
     }
     if (!settings.pieceBounceLoop) {
-      for (const state of activePieces.values()) {
-        if (!state.pauseTimer) continue;
-        clearTimeout(state.pauseTimer);
-        state.pauseTimer = null;
-        const resumePause = state.resumePause;
-        state.resumePause = null;
-        resumePause?.();
-      }
+      for (const state of activePieces.values()) endPause(state);
     }
     for (const piece of document.querySelectorAll(pieceSelector)) {
       if (piece.matches(":hover")) start(piece);

@@ -232,6 +232,16 @@ html:has(cg-board) piece:not(cg-board piece) {
   z-index: 2147483647 !important;
 }
 
+html:has(cg-board) #top:hover {
+  z-index: 2147483647 !important;
+}
+
+html:has(cg-board) body:has(#top:hover) .cg-wrap cg-board,
+html:has(cg-board) body:has(#top:hover) .cg-wrap > piece,
+html:has(cg-board) body:has(#top:hover) piece:not(cg-board piece) {
+  z-index: 0 !important;
+}
+
 /* Lichess-Seitenhintergrund. Die Vollbild-Ebene darueber mischt ihn mit. */
 html::before {
   content: "";

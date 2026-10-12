@@ -117,6 +117,16 @@ html:not([data-lfs-disabled]) body piece:not(cg-board piece) {
   z-index: 2147483647 !important;
 }
 
+html:not([data-lfs-disabled]) #top:hover {
+  z-index: 2147483647 !important;
+}
+
+html:not([data-lfs-disabled]) body:has(#top:hover) .cg-wrap cg-board,
+html:not([data-lfs-disabled]) body:has(#top:hover) .cg-wrap > piece,
+html:not([data-lfs-disabled]) body:has(#top:hover) piece:not(cg-board piece) {
+  z-index: 0 !important;
+}
+
 html:not([data-lfs-disabled])::before {
   content: "";
   position: fixed;
@@ -197,7 +207,7 @@ html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board > svg.lfs-last-move-line {
 
 html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-selected-piece-wedge,
 html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-arc,
-html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-center-circles {
+html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-center-outline {
   position: absolute;
   inset: 0;
   z-index: 2;
@@ -207,7 +217,7 @@ html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-center-circles {
   pointer-events: none;
 }
 
-html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-center-circles {
+html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-center-outline {
   z-index: 6 !important;
 }
 
@@ -231,6 +241,10 @@ html:not([data-lfs-disabled])[data-lfs-square-move-dots] body[data-board] .is2d 
 html:not([data-lfs-disabled])[data-lfs-square-move-dots] body[data-board] .is2d .cg-wrap cg-board square.premove-dest:not(.oc) {
   background: linear-gradient(var(--lfs-active-move-dot-color, var(--lfs-selected-square-color)), var(--lfs-active-move-dot-color, var(--lfs-selected-square-color))) center /
     var(--lfs-square-move-dot-size) var(--lfs-square-move-dot-size) no-repeat !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square[data-lfs-move-outline] {
+  background-image: none !important;
 }
 
 html:not([data-lfs-disabled]) .is2d cg-board[data-lfs-selected-piece-color="w"] {
@@ -508,14 +522,18 @@ html:not([data-lfs-disabled])[data-lfs-rund-comic] .pocket piece.black {
 }
 
 html:not([data-lfs-disabled]) .is2d .cg-wrap.orientation-white cg-board piece.black,
-html:not([data-lfs-disabled]) .is2d .cg-wrap.orientation-black cg-board piece.white {
+html:not([data-lfs-disabled]) .is2d .cg-wrap.orientation-black cg-board piece.white,
+html:not([data-lfs-disabled]) .is2d .cg-wrap.orientation-white > piece.black,
+html:not([data-lfs-disabled]) .is2d .cg-wrap.orientation-black > piece.white {
   background: none !important;
   -webkit-mask: none !important;
   mask: none !important;
 }
 
 html:not([data-lfs-disabled]) .is2d .cg-wrap.orientation-white cg-board piece.black::before,
-html:not([data-lfs-disabled]) .is2d .cg-wrap.orientation-black cg-board piece.white::before {
+html:not([data-lfs-disabled]) .is2d .cg-wrap.orientation-black cg-board piece.white::before,
+html:not([data-lfs-disabled]) .is2d .cg-wrap.orientation-white > piece.black::before,
+html:not([data-lfs-disabled]) .is2d .cg-wrap.orientation-black > piece.white::before {
   position: absolute;
   inset: 0;
   background: var(--lfs-bounce-piece-color) !important;
@@ -528,7 +546,9 @@ html:not([data-lfs-disabled]) .is2d .cg-wrap.orientation-black cg-board piece.wh
 }
 
 html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap.orientation-white cg-board piece.black::before,
-html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap.orientation-black cg-board piece.white::before {
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap.orientation-black cg-board piece.white::before,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap.orientation-white > piece.black::before,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap.orientation-black > piece.white::before {
   background: var(--lfs-comic-piece) center / contain no-repeat !important;
   -webkit-mask: none !important;
   mask: none !important;

@@ -6,6 +6,8 @@
     B: [[-1, -1], [-1, 1], [1, -1], [1, 1]],
     Q: [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]
   };
+  const pieceTypeNames = ["pawn", "knight", "bishop", "rook", "queen", "king"];
+  const pieceCodes = { pawn: "P", knight: "N", bishop: "B", rook: "R", queen: "Q", king: "K" };
   const boardSelector = "body[data-board] .cg-wrap cg-board, .mini-game cg-board";
   const selectedSquareSelector = "body[data-board] .cg-wrap cg-board > square.selected, .mini-game cg-board > square.selected";
 
@@ -14,9 +16,11 @@
   let documentObserver = null;
   let themeObserver = null;
   const threatImageCache = new Map();
+  let threatCanvas = null;
   const displayedThreatKeys = new WeakMap();
   const pendingThreatKeys = new WeakMap();
   const dirtyBoards = new Set();
+  const waitingBoards = new Set();
   let renderFrame = 0;
   let renderAllBoards = true;
   let pieceInteractionActive = false;
@@ -62,35 +66,11 @@
   }
 
   function getNextMoves(row, col, piece, board) {
-    const type = piece[1];
+    if (piece[1] !== "P") return getInitialMoves(row, col, piece, board);
+
     const moves = [];
-    const vectors = getDirections(piece);
-
-    if (type === "P") {
-      const nextRow = row + (piece[0] === "w" ? -1 : 1);
-      if (isInside(nextRow, col) && !board[nextRow][col]) moves.push([nextRow, col]);
-      return moves;
-    }
-
-    if (type === "N" || type === "K") {
-      for (const [dr, dc] of vectors) {
-        const nextRow = row + dr;
-        const nextCol = col + dc;
-        if (isInside(nextRow, nextCol)) moves.push([nextRow, nextCol]);
-      }
-      return moves;
-    }
-
-    for (const [dr, dc] of vectors) {
-      let nextRow = row + dr;
-      let nextCol = col + dc;
-      while (isInside(nextRow, nextCol)) {
-        moves.push([nextRow, nextCol]);
-        if (board[nextRow][nextCol]) break;
-        nextRow += dr;
-        nextCol += dc;
-      }
-    }
+    const nextRow = row + (piece[0] === "w" ? -1 : 1);
+    if (isInside(nextRow, col) && !board[nextRow][col]) moves.push([nextRow, col]);
     return moves;
   }
 
@@ -184,14 +164,18 @@
     return (row + col) % 2 === 0 ? lightSquareColor : darkSquareColor;
   }
 
-  function getOpacityColor(value, options, baseColor) {
+  function getOpacityRgb(value, options, baseColor) {
     const normalized = Math.max(-5, Math.min(5, Number(value) || 0));
     const base = Array.isArray(baseColor) ? baseColor : parseHexColor(baseColor);
-    if (normalized === 0) return toRgbString(base);
+    if (normalized === 0) return base.map(channel => Math.round(channel));
     const tint = parseHexColor(normalized > 0 ? options.whitePieceColor : options.blackPieceColor);
     const maxMix = Math.max(0, Math.min(100, Number(options.threatMaxMixPercent) || 0)) / 100;
     const amount = Math.min(Math.abs(normalized) / 5, 1) * maxMix;
-    return toRgbString(base.map((channel, index) => channel + ((tint[index] - channel) * amount)));
+    return base.map((channel, index) => Math.round(channel + ((tint[index] - channel) * amount)));
+  }
+
+  function getOpacityColor(value, options, baseColor) {
+    return toRgbString(getOpacityRgb(value, options, baseColor));
   }
 
   function isBlackOrientation(board) {
@@ -277,11 +261,10 @@
     for (const element of board.querySelectorAll(":scope > piece")) {
       if (element.classList.contains("ghost")) continue;
       const side = element.classList.contains("white") ? "w" : element.classList.contains("black") ? "b" : "";
-      const type = ["pawn", "knight", "bishop", "rook", "queen", "king"].find(name => element.classList.contains(name));
+      const type = pieceTypeNames.find(name => element.classList.contains(name));
       const square = getLogicalSquare(element, board, blackOrientation);
       if (!side || !type || !square || !isInside(square.row, square.col) || position[square.row][square.col]) return null;
-      const pieceCode = { pawn: "P", knight: "N", bishop: "B", rook: "R", queen: "Q", king: "K" }[type];
-      position[square.row][square.col] = side + pieceCode;
+      position[square.row][square.col] = side + pieceCodes[type];
       pieceCount++;
     }
 
@@ -306,15 +289,11 @@
       return cached;
     }
 
-    const canvas = document.createElement("canvas");
-    canvas.width = 256;
-    canvas.height = 256;
-    const context = canvas.getContext("2d");
-    const imageData = context.createImageData(canvas.width, canvas.height);
-    imageData.data.set(getThreatPixels(colors, transitionPercent));
-    context.putImageData(imageData, 0, 0);
+    threatCanvas ??= Object.assign(document.createElement("canvas"), { width: 256, height: 256 });
+    const context = threatCanvas.getContext("2d");
+    context.putImageData(new ImageData(getThreatPixels(colors, transitionPercent), 256, 256), 0, 0);
 
-    const url = canvas.toDataURL("image/png");
+    const url = threatCanvas.toDataURL("image/png");
     const image = document.createElement("img");
     let ready;
     if (typeof image.decode === "function") {
@@ -356,9 +335,14 @@
       .flatMap(piece => piece.getAnimations())
       .filter(animation => animation.transitionProperty === "transform" && animation.playState === "running");
     if (!animations.length) return false;
+    if (waitingBoards.has(board)) return true;
 
+    waitingBoards.add(board);
     Promise.all(animations.map(animation => animation.finished.catch(() => undefined)))
-      .then(() => scheduleRender(board));
+      .then(() => {
+        waitingBoards.delete(board);
+        scheduleRender(board);
+      });
     return true;
   }
 
@@ -385,22 +369,30 @@
     const axisBlends = Array.from({ length: size }, (_, pixel) =>
       getAxisBlend((pixel + 0.5) / size, transitionPercent)
     );
-    const pixels = new Uint8ClampedArray(size * size * 4);
+    // Blend each board row across the columns once; the pixel loop then only mixes two rows vertically.
+    const strips = new Float64Array(8 * size * 3);
+    for (let row = 0; row < 8; row++) {
+      for (let x = 0; x < size; x++) {
+        const [fromCol, toCol, colBlend] = axisBlends[x];
+        const from = colors[row][fromCol];
+        const to = colors[row][toCol];
+        const offset = (row * size + x) * 3;
+        for (let channel = 0; channel < 3; channel++) {
+          strips[offset + channel] = from[channel] + (to[channel] - from[channel]) * colBlend;
+        }
+      }
+    }
 
+    const pixels = new Uint8ClampedArray(size * size * 4);
     for (let y = 0; y < size; y++) {
       const [fromRow, toRow, rowBlend] = axisBlends[y];
       for (let x = 0; x < size; x++) {
-        const [fromCol, toCol, colBlend] = axisBlends[x];
-        const topLeft = colors[fromRow][fromCol];
-        const topRight = colors[fromRow][toCol];
-        const bottomLeft = colors[toRow][fromCol];
-        const bottomRight = colors[toRow][toCol];
+        const top = (fromRow * size + x) * 3;
+        const bottom = (toRow * size + x) * 3;
         const offset = (y * size + x) * 4;
-
         for (let channel = 0; channel < 3; channel++) {
-          const top = topLeft[channel] + (topRight[channel] - topLeft[channel]) * colBlend;
-          const bottom = bottomLeft[channel] + (bottomRight[channel] - bottomLeft[channel]) * colBlend;
-          pixels[offset + channel] = top + (bottom - top) * rowBlend;
+          const topValue = strips[top + channel];
+          pixels[offset + channel] = topValue + (strips[bottom + channel] - topValue) * rowBlend;
         }
         pixels[offset + 3] = 255;
       }
@@ -417,8 +409,7 @@
         const screenRow = blackOrientation ? 7 - row : row;
         const screenCol = blackOrientation ? 7 - col : col;
         const baseColor = getBoardBaseColor(row, col, settings);
-        const color = getOpacityColor(threatMap[row][col], settings, baseColor);
-        colors[screenRow][screenCol] = color.match(/\d+/g).map(Number);
+        colors[screenRow][screenCol] = getOpacityRgb(threatMap[row][col], settings, baseColor);
       }
     }
     const cacheKey = `${settings.threatGradientPercent}:${JSON.stringify(colors)}`;
@@ -532,6 +523,8 @@
     if (mutation.type === "attributes") {
       const target = mutation.target;
       if (target.matches("cg-board, .cg-wrap")) return mutation.attributeName === "class";
+      // Moving-piece transforms are rewritten on every Chessground animation frame.
+      if (mutation.attributeName === "style" && target.matches("piece.anim")) return false;
       return target.matches("piece, square");
     }
     return [...mutation.addedNodes, ...mutation.removedNodes].some(node =>
@@ -555,7 +548,8 @@
     for (const board of boards) {
       if (observedBoards.has(board)) continue;
       const boardObserver = new MutationObserver(mutations => {
-        if (mutations.some(isRelevantBoardMutation)) scheduleRender(board);
+        if (!mutations.some(isRelevantBoardMutation) || board.querySelector(":scope > piece.anim")) return;
+        scheduleRender(board);
       });
       boardObserver.observe(board, {
         attributes: true,

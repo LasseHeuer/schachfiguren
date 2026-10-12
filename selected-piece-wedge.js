@@ -3,11 +3,18 @@
   const svgNamespace = "http://www.w3.org/2000/svg";
   const pieceTypes = ["pawn", "knight", "bishop", "rook", "queen", "king"];
   const pieceValues = { pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 100 };
+  const maxUnselectedPotentialWedgesPerColor = 3;
   const slidingDirections = {
     bishop: [[-1, -1], [-1, 1], [1, -1], [1, 1]],
     rook: [[-1, 0], [1, 0], [0, -1], [0, 1]],
     queen: [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]
   };
+  const pieceDirections = {
+    ...slidingDirections,
+    knight: [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]],
+    king: [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]
+  };
+  const pieceNamesByLetter = { P: "pawn", N: "knight", B: "bishop", R: "rook", Q: "queen", K: "king" };
   const observedBoards = new Map();
   let settings = null;
   let documentObserver = null;
@@ -72,10 +79,7 @@
         if (!piece) continue;
         const screenRow = preview.blackOrientation ? 7 - row : row;
         const screenCol = preview.blackOrientation ? 7 - col : col;
-        position[screenRow][screenCol] = {
-          color: piece[0],
-          type: { P: "pawn", N: "knight", B: "bishop", R: "rook", Q: "queen", K: "king" }[piece[1]]
-        };
+        position[screenRow][screenCol] = { color: piece[0], type: pieceNamesByLetter[piece[1]] };
       }
     }
     const focus = preview.legal ? preview.target : preview.source;
@@ -90,15 +94,10 @@
     if (!piece) return [];
     const targets = [];
     const pawnDirection = (piece.color === "w") !== blackOrientation ? -1 : 1;
-    const directions = {
-      bishop: [[-1, -1], [-1, 1], [1, -1], [1, 1]],
-      rook: [[-1, 0], [1, 0], [0, -1], [0, 1]],
-      queen: [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]],
-      knight: [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]],
-      king: [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]],
-      pawn: [[pawnDirection, -1], [pawnDirection, 1]]
-    }[piece.type];
-    const sliding = ["bishop", "rook", "queen"].includes(piece.type);
+    const directions = piece.type === "pawn"
+      ? [[pawnDirection, -1], [pawnDirection, 1]]
+      : pieceDirections[piece.type];
+    const sliding = Boolean(slidingDirections[piece.type]);
 
     for (const [dr, dc] of directions) {
       let row = source.row + dr;
@@ -235,7 +234,7 @@
     return connections;
   }
 
-  // Pieces that are attacked by more enemy pieces than they are defended by, with the attacking color.
+  // Include attacks from cheaper pieces even when the target has defenders.
   function getOverloadedPieces(position, blackOrientation) {
     const counts = new Map();
     for (let row = 0; row < 8; row++) {
@@ -248,14 +247,19 @@
           const key = `${target.row},${target.col}`;
           if (!counts.has(key)) counts.set(key, { target, defenders: 0, attackers: [] });
           if (targetPiece.color === sourcePiece.color) counts.get(key).defenders++;
-          else counts.get(key).attackers.push(sourcePiece.color);
+          else counts.get(key).attackers.push(sourcePiece);
         }
       }
     }
 
     const overloaded = [];
     for (const { target, defenders, attackers } of counts.values()) {
-      if (attackers.length > defenders) overloaded.push({ target, color: attackers[0] });
+      const targetPiece = position[target.row][target.col];
+      const cheaperAttacker = targetPiece.type === "king"
+        ? null
+        : attackers.find(attacker => pieceValues[attacker.type] < pieceValues[targetPiece.type]);
+      if (cheaperAttacker) overloaded.push({ target, color: cheaperAttacker.color });
+      else if (attackers.length > defenders) overloaded.push({ target, color: attackers[0].color });
     }
     return overloaded;
   }
@@ -308,6 +312,70 @@
     return threats;
   }
 
+  function clearMoveOutlineMarkers(board) {
+    for (const square of board.querySelectorAll(":scope > square[data-lfs-move-outline]")) {
+      square.removeAttribute("data-lfs-move-outline");
+    }
+  }
+
+  function syncCenterOutlineImage(image, transforms = new Map()) {
+    const piece = image._lfsPieceElement;
+    if (!piece) {
+      image.style.removeProperty("transform");
+      return;
+    }
+
+    let transform = transforms.get(piece);
+    if (!transform) {
+      const orientation = piece.closest(".cg-wrap")?.classList;
+      const rotated = (orientation?.contains("orientation-white") && piece.classList.contains("black"))
+        || (orientation?.contains("orientation-black") && piece.classList.contains("white"));
+      transform = rotated ? "rotate(180deg)" : "none";
+      transforms.set(piece, transform);
+    }
+    if (image.style.transform !== transform) image.style.transform = transform;
+    image.style.transformOrigin = "center";
+    image.style.transformBox = "fill-box";
+  }
+
+  function getDraggingPiece(board) {
+    return board.querySelector(":scope > piece.dragging")
+      ?? board.closest(".cg-wrap")?.querySelector(":scope > piece.dragging")
+      ?? null;
+  }
+
+  function updateMoveOutlinePreviews(board, position, source, piece, blackOrientation) {
+    clearMoveOutlineMarkers(board);
+    if (!settings?.threatCenterOutlineEnabled || !settings.threatCenterOutlineWidthPercent || !settings.threatCenterOutlineOpacity || !source || !piece) return [];
+
+    const pieceElement = piece.element ?? getDraggingPiece(board);
+    const previews = [];
+    const checkedTargets = new Set();
+    for (const square of board.querySelectorAll(":scope > square.move-dest, :scope > square.premove-dest")) {
+      const target = getScreenSquare(square, board);
+      if (!target) continue;
+      const targetKey = `${target.row},${target.col}`;
+      if (checkedTargets.has(targetKey)) continue;
+      checkedTargets.add(targetKey);
+
+      const nextPosition = position.map(row => row.slice());
+      nextPosition[source.row][source.col] = null;
+      nextPosition[target.row][target.col] = piece;
+      const outline = getOverloadedPieces(nextPosition, blackOrientation)
+        .find(candidate => candidate.target.row === target.row && candidate.target.col === target.col);
+      if (!outline) continue;
+
+      const outlineValue = `${outline.color}:${piece.color}:${piece.type}`;
+      square.setAttribute("data-lfs-move-outline", outlineValue);
+      previews.push({
+        ...outline,
+        piece: { ...piece, element: pieceElement },
+        moveOutlinePreview: true
+      });
+    }
+    return previews;
+  }
+
   function getFreeFieldMoves(position, source, piece, blackOrientation) {
     const moves = [];
     const pawnDirection = (piece.color === "w") !== blackOrientation ? -1 : 1;
@@ -323,14 +391,8 @@
       return moves;
     }
 
-    const directions = {
-      bishop: [[-1, -1], [-1, 1], [1, -1], [1, 1]],
-      rook: [[-1, 0], [1, 0], [0, -1], [0, 1]],
-      queen: [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]],
-      knight: [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]],
-      king: [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]
-    }[piece.type];
-    const sliding = ["bishop", "rook", "queen"].includes(piece.type);
+    const directions = pieceDirections[piece.type];
+    const sliding = Boolean(slidingDirections[piece.type]);
 
     for (const [dr, dc] of directions) {
       let row = source.row + dr;
@@ -415,6 +477,24 @@
       ? targetClass(candidate.bestValue) === highestClass
       : candidate.bestValue >= (options.wedgePotentialCutoffValue ?? 1))
       .flatMap(candidate => candidate.targets.map(target => ({ source: candidate.source, target })));
+  }
+
+  function getUnselectedPotentialWedges(position, blackOrientation, options) {
+    const wedgesByColor = { w: [], b: [] };
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const piece = position[row][col];
+        if (!piece || wedgesByColor[piece.color].length >= maxUnselectedPotentialWedgesPerColor) continue;
+        const source = { row, col };
+        const destinations = getFreeFieldMoves(position, source, piece, blackOrientation);
+        const potential = getPotentialWedges(position, source, destinations, blackOrientation, options);
+        for (const wedge of potential) {
+          if (wedgesByColor[piece.color].length >= maxUnselectedPotentialWedgesPerColor) break;
+          wedgesByColor[piece.color].push({ ...wedge, color: piece.color });
+        }
+      }
+    }
+    return [...wedgesByColor.w, ...wedgesByColor.b];
   }
 
   function createWedgeGeometry(source, target, baseWidth, tipWidth) {
@@ -1294,7 +1374,21 @@
     }
   }
 
+  // The drag preview has no DOM elements; the rotation of an outlined figure comes from its own element.
+  function findPieceElement(board, square, dragPreview) {
+    const draggedSquare = dragPreview && logicalToScreen(dragPreview.legal ? dragPreview.target : dragPreview.source, dragPreview.blackOrientation);
+    if (draggedSquare?.row === square.row && draggedSquare?.col === square.col) return getDraggingPiece(board);
+    return [...board.querySelectorAll(":scope > piece")].find(element => {
+      if (element.classList.contains("ghost") || element.classList.contains("fading") || element.classList.contains("dragging")) return false;
+      const screen = getScreenSquare(element, board);
+      return screen?.row === square.row && screen?.col === square.col;
+    }) ?? null;
+  }
+
   function renderBoard(board, entry) {
+    if (board.querySelector(":scope > piece.anim")) return;
+    clearMoveOutlineMarkers(board);
+
     const dragPreview = globalThis.LichessThreatCoding?.getInteractionPreview(board);
     const parsed = dragPreview ? readDragPreview(dragPreview) : readPosition(board);
     const selectedPiece = parsed?.selected && parsed.position[parsed.selected.row]?.[parsed.selected.col];
@@ -1334,8 +1428,15 @@
       : settings.selectedPieceWedgeOnlySelected
         ? wedgeSelectedPiece ? [wedgeParsed.selected] : []
         : wedgeParsed.position.flatMap((row, rowIndex) => row.flatMap((piece, colIndex) => piece ? [{ row: rowIndex, col: colIndex }] : []));
+    const showUnselectedPotentials = settings.selectedPieceWedgeEnabled
+      && !settings.selectedPieceWedgeOnlySelected
+      && !wedgeParsed.selected;
     const wedges = [];
-    const wedgeThreatened = getThreatenedSquares(wedgeParsed.position, wedgeParsed.blackOrientation);
+    // Reuse the threat map from above when it describes the same position.
+    const wedgeThreatened = !sources.length ? null
+      : wedgeParsed === parsed && threatsEnabled ? threatenedSquares
+        : getThreatenedSquares(wedgeParsed.position, wedgeParsed.blackOrientation);
+    let legalDestinations = null;
     for (const source of sources) {
       const piece = wedgeParsed.position[source.row][source.col];
       // No direct wedges from a piece that a lower-valued enemy piece could capture (kings cannot be captured).
@@ -1345,9 +1446,9 @@
         .filter(target => wedgeParsed.position[target.row][target.col].color !== piece.color);
       wedges.push(...directTargets.map(target => ({ source, target, color: piece.color })));
 
-      if (!settings.wedgePotentialEnabled) continue;
+      if (showUnselectedPotentials) continue;
       // Legal destinations from the board; while dragging on a board without them (setup mode), free fields are used.
-      const legalDestinations = [...board.querySelectorAll(":scope > square.move-dest")]
+      legalDestinations ??= [...board.querySelectorAll(":scope > square.move-dest")]
         .map(square => getScreenSquare(square, board)).filter(Boolean);
       const canReuseLegalDestinations = settings.selectedPieceWedgeOnlySelected && (legalDestinations.length || !dragPreview);
       const destinations = canReuseLegalDestinations
@@ -1355,6 +1456,9 @@
         : getFreeFieldMoves(wedgeParsed.position, source, piece, wedgeParsed.blackOrientation);
       wedges.push(...getPotentialWedges(wedgeParsed.position, source, destinations, wedgeParsed.blackOrientation, settings)
         .map(wedge => ({ ...wedge, color: piece.color })));
+    }
+    if (showUnselectedPotentials) {
+      wedges.push(...getUnselectedPotentialWedges(wedgeParsed.position, wedgeParsed.blackOrientation, settings));
     }
     const defenseSegments = settings.defenseCirclesEnabled
       ? getDefenseConnections(parsed.position, parsed.blackOrientation).map(connection => ({
@@ -1366,15 +1470,26 @@
         color: connection.color === "w" ? settings.whitePieceColor : settings.blackPieceColor
       }))
       : [];
-    const centerCircles = settings.threatCenterCircleEnabled
-      ? getOverloadedPieces(parsed.position, parsed.blackOrientation)
+    const centerOutlines = settings.threatCenterOutlineEnabled
+      ? getOverloadedPieces(parsed.position, parsed.blackOrientation).map(outline => {
+        const piece = parsed.position[outline.target.row][outline.target.col];
+        return { ...outline, piece: { ...piece, element: findPieceElement(board, outline.target, dragPreview) } };
+      })
       : [];
+    const moveOutlinePreviews = updateMoveOutlinePreviews(
+      board,
+      wedgeParsed.position,
+      wedgeParsed.selected,
+      wedgeSelectedPiece,
+      wedgeParsed.blackOrientation
+    );
+    const moveOutlineTargets = new Set(moveOutlinePreviews.map(({ target }) => `${target.row},${target.col}`));
     renderThreatArcs(
       board,
       entry,
       threats,
       defenseSegments,
-      centerCircles,
+      [...centerOutlines.filter(({ target }) => !moveOutlineTargets.has(`${target.row},${target.col}`)), ...moveOutlinePreviews],
       settings.threatAttackDisplayMode,
       settings.threatDefenseDisplayMode
     );
@@ -1454,17 +1569,25 @@
     else renderSegmentSet(svg, segments, figureRadii);
   }
 
+  function syncCenterOutlineImages(entry) {
+    if (!entry.centerSvg) return;
+    const transforms = new Map();
+    for (const image of entry.centerSvg.querySelectorAll("image")) {
+      syncCenterOutlineImage(image, transforms);
+    }
+  }
+
   // Attack and defense segments share one top-layer SVG while retaining their selected display modes.
   function renderThreatArcs(
     board,
     entry,
     threats,
     defenseSegments = [],
-    centerCircles = [],
+    centerOutlines = [],
     attackDisplayMode = "segments",
     defenseDisplayMode = "segments"
   ) {
-    if (!threats.length && !defenseSegments.length && !centerCircles.length) {
+    if (!threats.length && !defenseSegments.length && !centerOutlines.length) {
       entry.arcSvg?.remove();
       entry.arcSvg = null;
       entry.centerSvg?.remove();
@@ -1510,32 +1633,74 @@
       }
     }
 
-    if (!centerCircles.length) {
+    if (!centerOutlines.length) {
       entry.centerSvg?.remove();
       entry.centerSvg = null;
       return;
     }
     if (!entry.centerSvg) {
       entry.centerSvg = document.createElementNS(svgNamespace, "svg");
-      entry.centerSvg.classList.add("lfs-threat-center-circles");
+      entry.centerSvg.classList.add("lfs-threat-center-outline");
       entry.centerSvg.setAttribute("viewBox", "0 0 8 8");
       entry.centerSvg.setAttribute("aria-hidden", "true");
     }
     if (entry.centerSvg.parentNode !== board) board.append(entry.centerSvg);
 
-    const circles = [];
-    for (const { target, color } of centerCircles) {
-      const circle = document.createElementNS(svgNamespace, "circle");
-      circle.setAttribute("cx", String(target.col + 0.5));
-      circle.setAttribute("cy", String(target.row + 0.5));
-      circle.setAttribute("r", String(settings.threatCenterCircleDiameterPercent / 200));
-      circle.setAttribute("fill", "none");
-      circle.setAttribute("stroke", color === "w" ? settings.whitePieceColor : settings.blackPieceColor);
-      circle.setAttribute("stroke-width", String(settings.threatCenterCircleThicknessPercent / 100));
-      circle.setAttribute("pointer-events", "none");
-      circles.push(circle);
+    const defs = document.createElementNS(svgNamespace, "defs");
+    const outlines = [];
+    for (const [index, { target, color, piece, moveOutlinePreview }] of centerOutlines.entries()) {
+      const letter = figureAssetLetters[piece.type];
+      const complexPawn = piece.type === "pawn" && settings.complexPawn
+        && ["system_pixel", "system_eckig"].includes(settings.pieceSet);
+      const asset = settings.pieceSet === "cage"
+        ? `cage/cage_${letter}.svg`
+        : `${settings.pieceSet}/${piece.color}${letter}${complexPawn ? "_2" : ""}.svg`;
+      const filterId = `lfs-threat-center-outline-${[...observedBoards.keys()].indexOf(board)}-${index}`;
+      const filter = document.createElementNS(svgNamespace, "filter");
+      filter.id = filterId;
+      filter.setAttribute("x", "-0.2");
+      filter.setAttribute("y", "-0.2");
+      filter.setAttribute("width", "1.4");
+      filter.setAttribute("height", "1.4");
+      filter.setAttribute("filterUnits", "objectBoundingBox");
+      filter.setAttribute("primitiveUnits", "objectBoundingBox");
+      const expand = document.createElementNS(svgNamespace, "feMorphology");
+      expand.setAttribute("in", "SourceAlpha");
+      expand.setAttribute("operator", "dilate");
+      expand.setAttribute("radius", String(settings.threatCenterOutlineWidthPercent / 200));
+      expand.setAttribute("result", "expanded");
+      const outside = document.createElementNS(svgNamespace, "feComposite");
+      outside.setAttribute("in", "expanded");
+      outside.setAttribute("in2", "SourceAlpha");
+      outside.setAttribute("operator", "out");
+      outside.setAttribute("result", "outline");
+      const flood = document.createElementNS(svgNamespace, "feFlood");
+      flood.setAttribute("flood-color", color === "w" ? settings.whitePieceColor : settings.blackPieceColor);
+      flood.setAttribute("result", "color");
+      const colorOutline = document.createElementNS(svgNamespace, "feComposite");
+      colorOutline.setAttribute("in", "color");
+      colorOutline.setAttribute("in2", "outline");
+      colorOutline.setAttribute("operator", "in");
+      filter.append(expand, outside, flood, colorOutline);
+      defs.append(filter);
+
+      const image = document.createElementNS(svgNamespace, "image");
+      const size = 1;
+      image.setAttribute("x", String(target.col + (1 - size) / 2));
+      image.setAttribute("y", String(target.row + (1 - size) / 2));
+      image.setAttribute("width", String(size));
+      image.setAttribute("height", String(size));
+      image.setAttribute("preserveAspectRatio", "xMidYMid meet");
+      image.setAttribute("href", chrome.runtime.getURL(asset));
+      image.setAttribute("filter", `url(#${filterId})`);
+      image.setAttribute("opacity", String(settings.threatCenterOutlineOpacity / 100));
+      image.setAttribute("pointer-events", "none");
+      if (moveOutlinePreview) image.setAttribute("data-lfs-move-outline-preview", `${target.row},${target.col}`);
+      image._lfsPieceElement = piece.element;
+      outlines.push(image);
     }
-    entry.centerSvg.replaceChildren(...circles);
+    entry.centerSvg.replaceChildren(defs, ...outlines);
+    syncCenterOutlineImages(entry);
   }
 
   function observeBoard(board) {
@@ -1550,13 +1715,17 @@
       && ![...mutation.addedNodes, ...mutation.removedNodes].some(node => node.nodeType === Node.ELEMENT_NODE && node.matches("piece, square"))
       && !mutation.target.matches?.("piece, square");
     const boardObserver = new MutationObserver(mutations => {
-      if (mutations.some(mutation => !isOverlayOnlyChange(mutation) && (mutation.target === board || mutation.target.matches?.("piece, square")))) {
-        scheduleRender(board);
-      }
+      // Chessground updates moving-piece transforms every frame; recalculating overlays on those writes is expensive and unnecessary.
+      const relevantChange = mutations.some(mutation => !isOverlayOnlyChange(mutation)
+        && !(mutation.type === "attributes" && mutation.attributeName === "style" && mutation.target.matches?.("piece.anim"))
+        && (mutation.target === board || mutation.target.matches?.("piece, square")));
+      if (!relevantChange) return;
+      if (board.querySelector(":scope > piece.anim")) return;
+      scheduleRender(board);
     });
     boardObserver.observe(board, {
       attributes: true,
-      attributeFilter: ["class", "data-key", "style"],
+      attributeFilter: ["class", "data-key", "data-lfs-bounce-running", "style"],
       childList: true,
       subtree: true
     });

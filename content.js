@@ -21,6 +21,8 @@
     globalThis.LichessLastMoveLine?.update(settings);
     globalThis.LichessThreatCoding?.update(settings);
     globalThis.LichessPieceBounce?.update(settings);
+    globalThis.LichessMoveAnimation?.update(settings);
+
     globalThis.LichessSelectedPieceWedge?.update(settings);
 
     const variables = {
@@ -81,6 +83,7 @@
       }
     }
 
+    const numberFormat = new Intl.NumberFormat(document.documentElement.lang || "de-DE");
     for (const element of timeElements) {
       const originalText = element.dataset.lfsOriginalTimeText ?? element.textContent;
       const colon = originalText.indexOf(":");
@@ -111,7 +114,7 @@
       const totalHours = titleHours
         ? numericValue(titleHours)
         : numericValue(days) * 24 + numericValue(visibleHours);
-      const formattedHours = new Intl.NumberFormat(document.documentElement.lang || "de-DE").format(totalHours);
+      const formattedHours = numberFormat.format(totalHours);
       const formattedText = `${prefix}${prefix ? " " : ""}${formattedHours} Std.`;
 
       if (element.textContent !== formattedText) {
@@ -195,19 +198,17 @@
     queuePlayTimeUpdate();
   });
 
-  new MutationObserver(queuePlayTimeUpdate).observe(document, {
-    childList: true,
-    subtree: true,
-    characterData: true
-  });
-
+  // One observer for both jobs; play time is only re-formatted while a profile page is present.
   new MutationObserver(records => {
-    for (const node of records.flatMap(record => [...record.addedNodes])) {
-      if (node.nodeType !== Node.ELEMENT_NODE) continue;
-      if (node.id === "promotion-choice" || node.querySelector("#promotion-choice")) {
-        applyPromotionSquareTheme();
-        return;
+    if (document.querySelector("#us_profile, .perf-stat")) queuePlayTimeUpdate();
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+        if (node.id === "promotion-choice" || node.querySelector("#promotion-choice")) {
+          applyPromotionSquareTheme();
+          return;
+        }
       }
     }
-  }).observe(document, { childList: true, subtree: true });
+  }).observe(document, { childList: true, subtree: true, characterData: true });
 })();

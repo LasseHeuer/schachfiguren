@@ -14,6 +14,7 @@
     currentSettings = settings;
     setCurveTab(activeCurveKey);
     updateLoopControls(settings.pieceBounceLoop);
+    updateMoveSpeedControls(settings.moveAnimationLichessSpeed);
     for (const control of controls) {
       const value = settings[control.dataset.setting];
       if (control.type === "checkbox") control.checked = value;
@@ -39,6 +40,10 @@
       output.value = `${Math.round(Number(control.value) * 100)}%`;
       return;
     }
+    if (control.dataset.setting === "moveAnimationDuration") {
+      output.value = `${control.value} ms`;
+      return;
+    }
     if (["pieceBounceTiming", "pieceBounceDuration", "pieceBounceWiggleDuration"].includes(control.dataset.setting)) {
       output.value = `${control.value} ms`;
       return;
@@ -58,6 +63,7 @@
     const value = control.type === "checkbox" ? control.checked
       : control.type === "range" ? Number(control.value)
         : control.value;
+    currentSettings[control.dataset.setting] = value;
     chrome.storage.local.set({ [control.dataset.setting]: value }, () => {
       status.textContent = "Einstellungen gespeichert";
     });
@@ -71,6 +77,13 @@
     });
   }
 
+  // Duration of the active curve's animation, used by the curve preview.
+  function previewDuration() {
+    const durationKeys = { pieceBounceCurve: "pieceBounceDuration", pieceBounceWiggleCurve: "pieceBounceWiggleDuration", moveAnimationCurve: "moveAnimationDuration" };
+    if (activeCurveKey === "moveAnimationCurve" && currentSettings.moveAnimationLichessSpeed) return 250;
+    return currentSettings[durationKeys[activeCurveKey]];
+  }
+
   function setCurveTab(key) {
     if (!Array.isArray(defaults[key])) return;
     activeCurveKey = key;
@@ -80,6 +93,10 @@
 
   function updateLoopControls(enabled) {
     for (const control of document.querySelectorAll("[data-loop-pause]")) control.hidden = !enabled;
+  }
+
+  function updateMoveSpeedControls(lichessSpeed) {
+    for (const control of document.querySelectorAll("[data-own-speed]")) control.hidden = lichessSpeed;
   }
 
   function updateThreatDisplayControls() {
@@ -101,7 +118,8 @@
   bounceCurveEditor = globalThis.LichessBezierEditor.mount(
     document.querySelector('[data-bezier-editor="pieceBounceCurve"]'),
     defaults.pieceBounceCurve,
-    saveBounceCurve
+    saveBounceCurve,
+    previewDuration
   );
   for (const tab of curveTabs) tab.addEventListener("click", () => setCurveTab(tab.dataset.curveTab));
 
@@ -111,11 +129,24 @@
       updateOutput(control);
       saveControl(control);
       if (control.dataset.setting === "pieceBounceLoop") updateLoopControls(control.checked);
+      if (control.dataset.setting === "moveAnimationLichessSpeed") updateMoveSpeedControls(control.checked);
       if (["threatAttackDisplayMode", "threatDefenseDisplayMode"].includes(control.dataset.setting)) updateThreatDisplayControls();
       if (control.dataset.setting === "enabled") {
         document.body.classList.toggle("extension-disabled", !control.checked);
       }
     });
+    if (control.type === "range") {
+      control.addEventListener("change", () => {
+        const curveForDuration = {
+          pieceBounceDuration: "pieceBounceCurve",
+          pieceBounceWiggleDuration: "pieceBounceWiggleCurve",
+          moveAnimationDuration: "moveAnimationCurve"
+        }[control.dataset.setting];
+        if (!curveForDuration) return;
+        setCurveTab(curveForDuration);
+        bounceCurveEditor?.preview();
+      });
+    }
   }
 
   document.getElementById("reset-settings").addEventListener("click", () => {

@@ -52,15 +52,18 @@
           <div class="control-grid bounce-controls">
             <label class="field"><span>Animationsstil</span><select data-setting="pieceBounceStyle"><option value="rotate-wiggle">90°-Drehung + Bauern-Wippen</option><option value="wiggle-only">Nur Wippen für alle Figuren</option></select></label>
             <label class="field"><span>Winkel fürs Wippen</span><input type="range" min="1" max="30" step="1" data-setting="pieceBounceWiggleAngle"><output data-value-for="pieceBounceWiggleAngle"></output></label>
-            <label class="field" data-loop-pause><span>Timing (Pause)</span><input type="range" min="0" max="5000" step="50" data-setting="pieceBounceTiming"><output data-value-for="pieceBounceTiming"></output></label>
-            <label class="field"><span>Drehdauer</span><input type="range" min="200" max="1500" step="50" data-setting="pieceBounceDuration"><output data-value-for="pieceBounceDuration"></output></label>
-            <label class="field"><span>Wippdauer</span><input type="range" min="200" max="1500" step="50" data-setting="pieceBounceWiggleDuration"><output data-value-for="pieceBounceWiggleDuration"></output></label>
+            <label class="field" data-loop-pause><span>Timing (Pause)</span><input type="range" min="0" max="5000" step="10" data-setting="pieceBounceTiming"><output data-value-for="pieceBounceTiming"></output></label>
+            <label class="field"><span>Drehdauer</span><input type="range" min="200" max="1500" step="10" data-setting="pieceBounceDuration"><output data-value-for="pieceBounceDuration"></output></label>
+            <label class="field"><span>Wippdauer</span><input type="range" min="200" max="1500" step="10" data-setting="pieceBounceWiggleDuration"><output data-value-for="pieceBounceWiggleDuration"></output></label>
+            <label class="switch-field"><span><strong>Lichess-Geschwindigkeit</strong><small>Nutzt die Zuggeschwindigkeit von Lichess.</small></span><input type="checkbox" data-setting="moveAnimationLichessSpeed" role="switch"></label>
+            <label class="field" data-own-speed><span>Zugdauer</span><input type="range" min="0" max="500" step="10" data-setting="moveAnimationDuration"><output data-value-for="moveAnimationDuration"></output></label>
           </div>
           <div class="bounce-curve-panel">
             <div class="bounce-curve-heading"><span><strong>Animationskurve</strong><small>Griffe ziehen oder mit Pfeiltasten bewegen.</small></span><button type="button" data-bezier-reset>Zuruecksetzen</button></div>
             <div class="bounce-curve-tabs" role="group" aria-label="Animationskurve auswählen">
               <button type="button" class="bounce-curve-tab" data-curve-tab="pieceBounceCurve" aria-pressed="true">Drehung</button>
               <button type="button" class="bounce-curve-tab" data-curve-tab="pieceBounceWiggleCurve" aria-pressed="false">Wiggle</button>
+              <button type="button" class="bounce-curve-tab" data-curve-tab="moveAnimationCurve" aria-pressed="false">Zug</button>
             </div>
             <div class="bezier-editor" id="piece-bounce-curve-editor" role="tabpanel" data-bezier-editor="pieceBounceCurve"></div>
           </div>
@@ -125,9 +128,8 @@
             <label class="field"><span>Verlauf</span><input type="range" min="0" max="100" step="1" data-setting="threatGradientPercent"><output data-value-for="threatGradientPercent"></output></label>
           </div>
           <div class="control-grid compact-grid">
-            <label class="switch-field"><span><strong>Keildarstellung aktivieren</strong><small>Angriffe und Potenzial-Züge mit Keilen darstellen.</small></span><input type="checkbox" data-setting="selectedPieceWedgeEnabled" role="switch"></label>
-            <label class="switch-field"><span><strong>Nur ausgewählte Figur</strong><small>Wenn aus, Keile für alle Figuren anzeigen.</small></span><input type="checkbox" data-setting="selectedPieceWedgeOnlySelected" role="switch"></label>
-            <label class="switch-field"><span><strong>Potenzial-Züge</strong><small>Angriffe von möglichen Zugfeldern aus anzeigen.</small></span><input type="checkbox" data-setting="wedgePotentialEnabled" role="switch"></label>
+            <label class="switch-field"><span><strong>Keildarstellung aktivieren</strong><small>Angriffs- und Potenzial-Keile gemeinsam anzeigen.</small></span><input type="checkbox" data-setting="selectedPieceWedgeEnabled" role="switch"></label>
+            <label class="switch-field"><span><strong>Nur ausgewählte Figur</strong><small>Wenn aus, Keile aller Figuren; ohne Auswahl höchstens 3 Potenzial-Keile je Spieler.</small></span><input type="checkbox" data-setting="selectedPieceWedgeOnlySelected" role="switch"></label>
           </div>
           <div class="control-grid">
             <label class="field"><span>Keil-Basisbreite</span><input type="range" min="1" max="20" step="0.1" data-setting="wedgeBaseWidthPx"><output data-value-for="wedgeBaseWidthPx"></output></label>
@@ -177,13 +179,13 @@
             <label class="field"><span>Abstand zur Figur (Kollisionsrand)</span><input type="range" min="0" max="0.2" step="0.01" data-setting="threatSquareFigureMargin"><output data-value-for="threatSquareFigureMargin"></output></label>
             <label class="field"><span>Abrundung der Ecken</span><input type="range" min="0" max="50" step="1" data-setting="threatSquareCornerRadiusPercent"><output data-value-for="threatSquareCornerRadiusPercent"></output></label>
           </div>
-          <p class="control-group-label">Kreis im Zentrum</p>
+          <p class="control-group-label">Figurenkontur im Zentrum</p>
           <div class="control-grid compact-grid">
-            <label class="switch-field"><span><strong>Kreis im Zentrum aktivieren</strong><small>Zeigt einen Kreis in der Figur, wenn sie mehr angegriffen als verteidigt wird. Die Farbe ist die des Angreifers.</small></span><input type="checkbox" data-setting="threatCenterCircleEnabled" role="switch"></label>
+            <label class="switch-field"><span><strong>Figurenkontur im Zentrum aktivieren</strong><small>Umrandet die Figur, wenn sie mehr angegriffen als verteidigt wird. Die Farbe ist die des Angreifers.</small></span><input type="checkbox" data-setting="threatCenterOutlineEnabled" role="switch"></label>
           </div>
           <div class="control-grid">
-            <label class="field"><span>Durchmesser in Prozent</span><input type="range" min="0" max="100" step="1" data-setting="threatCenterCircleDiameterPercent"><output data-value-for="threatCenterCircleDiameterPercent"></output></label>
-            <label class="field"><span>Dicke der Kreislinie in Prozent</span><input type="range" min="0" max="100" step="1" data-setting="threatCenterCircleThicknessPercent"><output data-value-for="threatCenterCircleThicknessPercent"></output></label>
+            <label class="field"><span>Breite der Outline in Prozent</span><input type="range" min="0" max="20" step="0.5" data-setting="threatCenterOutlineWidthPercent"><output data-value-for="threatCenterOutlineWidthPercent"></output></label>
+            <label class="field"><span>Deckkraft</span><input type="range" min="0" max="100" step="1" data-setting="threatCenterOutlineOpacity"><output data-value-for="threatCenterOutlineOpacity"></output></label>
           </div>
         </section>
 

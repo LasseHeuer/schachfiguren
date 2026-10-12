@@ -48,7 +48,7 @@
     return element;
   }
 
-  function mount(container, initialValue, onChange) {
+  function mount(container, initialValue, onChange, getDuration = () => 300) {
     if (!container) return { setValue() {} };
 
     let curve = normalizeCurve(initialValue);
@@ -94,6 +94,17 @@
     });
     svg.append(outLine, inLine, curvePath, startPoint, endPoint, outHandle, inHandle);
     container.replaceChildren(svg);
+
+    const preview = document.createElement("div");
+    preview.className = "bezier-preview";
+    preview.title = "Klicken für Vorschau";
+    const dot = document.createElement("span");
+    dot.className = "bezier-preview-dot";
+    preview.append(dot);
+    const timeLabel = document.createElement("small");
+    timeLabel.className = "bezier-preview-time";
+    container.append(preview, timeLabel);
+    preview.addEventListener("click", () => playPreview());
 
     function toPoint(time, curveValue) {
       const progress = progressFromCurveValue(curveValue);
@@ -161,10 +172,24 @@
       render();
     }
 
+    function playPreview() {
+      const duration = getDuration();
+      const [time1, curveValue1, time2, curveValue2] = curve;
+      const distance = Math.max(0, preview.clientWidth - dot.offsetWidth - 8);
+      for (const animation of dot.getAnimations()) animation.cancel();
+      dot.animate([{ transform: "translateX(0px)" }, { transform: `translateX(${distance}px)` }], {
+        duration,
+        easing: `cubic-bezier(${time1}, ${curveValue1 / -90}, ${time2}, ${curveValue2 / -90})`,
+        fill: "forwards"
+      });
+      timeLabel.textContent = `${duration} ms`;
+    }
+
     function commit() {
       visibleProgress = progressRange(curve);
       render();
       onChange?.([...curve]);
+      playPreview();
     }
 
     svg.addEventListener("pointerdown", event => {
@@ -221,6 +246,7 @@
     });
     render();
     return {
+      preview: playPreview,
       setValue(value, newResetCurve = resetCurve) {
         curve = normalizeCurve(value);
         resetCurve = normalizeCurve(newResetCurve);

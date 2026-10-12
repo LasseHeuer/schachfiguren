@@ -60,6 +60,7 @@
     }
     if (control.dataset.setting.endsWith("Px")) return `${control.value} px`;
     if (control.dataset.setting === "wedgeOpacity") return `${Math.round(Number(control.value) * 100)}%`;
+    if (control.dataset.setting === "moveAnimationDuration") return `${control.value} ms`;
     if (["pieceBounceTiming", "pieceBounceDuration", "pieceBounceWiggleDuration"].includes(control.dataset.setting)) {
       return `${control.value} ms`;
     }
@@ -203,6 +204,13 @@
     });
   }
 
+  // Duration of the active curve's animation, used by the curve preview.
+  function previewDuration() {
+    const durationKeys = { pieceBounceCurve: "pieceBounceDuration", pieceBounceWiggleCurve: "pieceBounceWiggleDuration", moveAnimationCurve: "moveAnimationDuration" };
+    if (activeCurveKey === "moveAnimationCurve" && currentSettings.moveAnimationLichessSpeed) return 250;
+    return currentSettings[durationKeys[activeCurveKey]];
+  }
+
   function setCurveTab(key) {
     if (!Array.isArray(globalThis.LichessSettings.defaults[key])) return;
     activeCurveKey = key;
@@ -212,6 +220,7 @@
 
   // data-depends-on lists conditions separated by spaces: "name" needs a checked checkbox, "name=value" needs that select value.
   function isConditionMet(condition) {
+    if (condition.startsWith("!")) return !isConditionMet(condition.slice(1));
     const [name, value] = condition.split("=");
     const control = document.querySelector(`[data-setting="${name}"]`);
     return value === undefined ? control.checked : control.value === value;
@@ -330,7 +339,8 @@
   bounceCurveEditor = globalThis.LichessBezierEditor.mount(
     document.querySelector('[data-bezier-editor="pieceBounceCurve"]'),
     currentSettings.pieceBounceCurve,
-    saveBounceCurve
+    saveBounceCurve,
+    previewDuration
   );
   for (const tab of curveTabs) tab.addEventListener("click", () => setCurveTab(tab.dataset.curveTab));
 
@@ -346,6 +356,14 @@
       control.addEventListener("change", () => {
         clearTimeout(rangeTimers.get(control));
         saveControl(control);
+        const curveForDuration = {
+          pieceBounceDuration: "pieceBounceCurve",
+          pieceBounceWiggleDuration: "pieceBounceWiggleCurve",
+          moveAnimationDuration: "moveAnimationCurve"
+        }[control.dataset.setting];
+        if (!curveForDuration) return;
+        setCurveTab(curveForDuration);
+        bounceCurveEditor?.preview();
       });
     } else if (control.type === "color") {
       control.addEventListener("input", () => saveControl(control));

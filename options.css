@@ -70,7 +70,7 @@ output { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 10
 .compact-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 11px; align-items: center; }
 .bounce-controls { margin-top: 12px; }
 .bounce-curve-panel { margin-top: 14px; padding: 12px; border-radius: 8px; background: #f4f6f2; }
-.bounce-controls [data-loop-pause][hidden] { display: none !important; }
+.bounce-controls [data-loop-pause][hidden], .bounce-controls [data-own-speed][hidden] { display: none !important; }
 .bounce-curve-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #475147; font-size: 11px; }
 .bounce-curve-heading strong, .bounce-curve-heading small { display: block; }
 .bounce-curve-heading small { margin-top: 4px; color: var(--muted); font-size: 10px; font-weight: 400; }
@@ -79,6 +79,9 @@ output { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 10
 .bounce-curve-tab { padding: 6px 10px; border: 0; border-radius: 5px; background: #e4ebe4; color: #536257; cursor: pointer; font-size: 10px; }
 .bounce-curve-tab[aria-pressed="true"] { background: #405b49; color: #fff; }
 .bezier-editor { width: 100%; max-width: 680px; margin: 8px auto 0; }
+.bezier-preview { position: relative; height: 24px; border-radius: 6px; background: #18221d; cursor: pointer; }
+.bezier-preview-dot { position: absolute; left: 4px; top: 50%; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%; background: #68adff; }
+.bezier-preview-time { display: block; margin-top: 4px; text-align: right; color: #818980; font-size: 10px; }
 .bezier-editor svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: none; user-select: none; }
 .bezier-background { fill: #18221d; }
 .bezier-curve { fill: none; stroke: #68adff; stroke-width: 2.6; stroke-linecap: round; pointer-events: none; }

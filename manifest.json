@@ -14,12 +14,12 @@
     {
       "matches": ["https://lichess.org/*"],
       "css": ["extension.css"],
-      "js": ["settings.js", "last-move-line.js", "threat-coding.js", "piece-bounce.js", "selected-piece-wedge.js", "content.js"],
+      "js": ["settings.js", "last-move-line.js", "threat-coding.js", "piece-bounce.js", "move-animation.js", "selected-piece-wedge.js", "content.js"],
       "run_at": "document_start"
     },
     {
       "matches": ["https://lichess.org/*"],
-      "js": ["graph.js"],
+      "js": ["graph.js", "move-animation-main.js"],
       "run_at": "document_start",
       "world": "MAIN"
     }

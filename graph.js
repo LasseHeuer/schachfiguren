@@ -16,15 +16,13 @@
       .split(/\s+/)
       .slice(0, 3)
       .map(Number);
-    const rootStyle = getComputedStyle(document.documentElement);
+    const isWhite = red === 255 && green === 255 && blue === 255;
+    const isBlack = red === 0 && green === 0 && blue === 0;
+    if (!isWhite && !isBlack) return null;
 
-    if (red === 255 && green === 255 && blue === 255) {
-      return rootStyle.getPropertyValue("--lfs-white-piece-color").trim() || "#d1521d";
-    }
-    if (red === 0 && green === 0 && blue === 0) {
-      return rootStyle.getPropertyValue("--lfs-black-piece-color").trim() || "#2ba4d1";
-    }
-    return null;
+    const rootStyle = getComputedStyle(document.documentElement);
+    if (isWhite) return rootStyle.getPropertyValue("--lfs-white-piece-color").trim() || "#d1521d";
+    return rootStyle.getPropertyValue("--lfs-black-piece-color").trim() || "#2ba4d1";
   };
 
   Object.defineProperty(CanvasRenderingContext2D.prototype, "fillStyle", {
