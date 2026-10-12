@@ -3,7 +3,8 @@
   const svgNamespace = "http://www.w3.org/2000/svg";
   const pieceTypes = ["pawn", "knight", "bishop", "rook", "queen", "king"];
   const pieceValues = { pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 100 };
-  const maxUnselectedPotentialWedgesPerColor = 3;
+  const maxUnselectedPotentialMovesPerColor = 3;
+  const pawnWedgeBaseOffset = 0.12;
   const slidingDirections = {
     bishop: [[-1, -1], [-1, 1], [1, -1], [1, 1]],
     rook: [[-1, 0], [1, 0], [0, -1], [0, 1]],
@@ -176,6 +177,10 @@
     return blackOrientation
       ? { row: 7 - square.row, col: 7 - square.col }
       : square;
+  }
+
+  function isPieceRotated(color, blackOrientation) {
+    return (color === "b") !== blackOrientation;
   }
 
   // Sliding pieces also attack through own pieces on their line, if those pieces can recapture on the target in turn.
@@ -381,7 +386,7 @@
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
         const attacker = position[row][col];
-        if (!attacker || attacker.color === victim.color || pieceValues[attacker.type] > victimValue) continue;
+        if (!attacker || attacker.color === victim.color) continue;
         const source = { row, col };
         if (!canExchangeCapture(position, source, target, blackOrientation)) continue;
 
@@ -588,6 +593,12 @@
   function getPotentialWedges(position, selected, destinations, blackOrientation, options = {}) {
     const piece = position[selected.row][selected.col];
     const attackerValue = pieceValues[piece.type];
+    const currentTargets = new Set(getAttackedPieces(position, selected, blackOrientation)
+      .filter(target => {
+        const targetPiece = position[target.row][target.col];
+        return targetPiece && targetPiece.color !== piece.color && pieceValues[targetPiece.type] > attackerValue;
+      })
+      .map(target => `${target.row},${target.col}`));
     const candidates = [];
 
     for (const destination of destinations) {
@@ -598,11 +609,13 @@
       const attacks = getAttackedPieces(simulated, destination, blackOrientation)
         .filter(target => {
           const targetPiece = simulated[target.row][target.col];
-          return targetPiece.color !== piece.color && pieceValues[targetPiece.type] > attackerValue;
+          if (!targetPiece || targetPiece.color === piece.color) return false;
+          return pieceValues[targetPiece.type] > attackerValue;
         });
       if (!attacks.length) continue;
       const officers = attacks.filter(target => pieceValues[simulated[target.row][target.col].type] >= 3);
       const fork = officers.length >= 2;
+      if (!fork && attacks.some(target => currentTargets.has(`${target.row},${target.col}`))) continue;
       const targets = fork ? officers : attacks;
       let attackers = 0;
       let defenders = 0;
@@ -616,7 +629,7 @@
           const otherAttacks = getAttackedPieces(simulated, { row, col }, blackOrientation);
           if (other.color !== piece.color && otherAttacks.some(target => {
             const occupant = simulated[target.row][target.col];
-            return occupant.color === piece.color && occupant.type === "king";
+            return occupant?.color === piece.color && occupant.type === "king";
           })) kingInCheck = true;
           if (!otherAttacks.some(target => target.row === destination.row && target.col === destination.col)) continue;
           if (other.color === piece.color) defenders++;
@@ -627,6 +640,8 @@
         }
       }
       if (kingInCheck || (attackers > 0 && attackerValue >= minAttackerValue) || attackers > defenders) continue;
+      if (piece.type !== "king"
+        && getBestExchangeGain(simulated, destination, piece.color === "w" ? "b" : "w", blackOrientation) > 0) continue;
       candidates.push({
         source: destination,
         targets,
@@ -639,17 +654,8 @@
     // Prefer forks, then valuable targets and shorter moves, as in the visualization.
     candidates.sort((a, b) => Number(b.fork) - Number(a.fork) || b.bestValue - a.bestValue || a.distance - b.distance);
     const picked = [];
-    const usedDirections = new Set();
     for (const candidate of candidates) {
       if (picked.length >= (options.wedgePotentialPerPieceCount ?? 1)) break;
-      const directions = candidate.targets.map(target => {
-        const dr = target.row - candidate.source.row;
-        const dc = target.col - candidate.source.col;
-        return ["bishop", "rook", "queen", "pawn"].includes(piece.type)
-          ? `${Math.sign(dr)},${Math.sign(dc)}` : `${dr},${dc}`;
-      });
-      if (directions.some(direction => usedDirections.has(direction))) continue;
-      directions.forEach(direction => usedDirections.add(direction));
       picked.push(candidate);
     }
     const targetClass = value => value >= 100 ? 4 : value >= 9 ? 3 : value >= 5 ? 2 : 1;
@@ -657,25 +663,46 @@
     return picked.filter(candidate => options.wedgePotentialStrategy === "waterfall"
       ? targetClass(candidate.bestValue) === highestClass
       : candidate.bestValue >= (options.wedgePotentialCutoffValue ?? 1))
-      .flatMap(candidate => candidate.targets.map(target => ({ source: candidate.source, target })));
+      .flatMap(candidate => candidate.targets.map(target => ({ source: candidate.source, target, type: piece.type })));
   }
 
   function getUnselectedPotentialWedges(position, blackOrientation, options) {
     const wedgesByColor = { w: [], b: [] };
+    const potentialMovesByColor = { w: new Set(), b: new Set() };
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
         const piece = position[row][col];
-        if (!piece || wedgesByColor[piece.color].length >= maxUnselectedPotentialWedgesPerColor) continue;
+        if (!piece || potentialMovesByColor[piece.color].size >= maxUnselectedPotentialMovesPerColor) continue;
         const source = { row, col };
         const destinations = getFreeFieldMoves(position, source, piece, blackOrientation);
         const potential = getPotentialWedges(position, source, destinations, blackOrientation, options);
         for (const wedge of potential) {
-          if (wedgesByColor[piece.color].length >= maxUnselectedPotentialWedgesPerColor) break;
+          const moveKey = `${row},${col}:${wedge.source.row},${wedge.source.col}`;
+          if (!potentialMovesByColor[piece.color].has(moveKey)) {
+            if (potentialMovesByColor[piece.color].size >= maxUnselectedPotentialMovesPerColor) break;
+            potentialMovesByColor[piece.color].add(moveKey);
+          }
           wedgesByColor[piece.color].push({ ...wedge, color: piece.color });
         }
       }
     }
     return [...wedgesByColor.w, ...wedgesByColor.b];
+  }
+
+  // Shifts both wedge ends along the wedge direction, measured as a percentage of the field width.
+  function getWedgeEnds(sourceCenter, targetCenter, sourceVerticalOffset = 0) {
+    const baseCenter = { ...sourceCenter, y: sourceCenter.y + sourceVerticalOffset };
+    const dx = targetCenter.x - baseCenter.x;
+    const dy = targetCenter.y - baseCenter.y;
+    const length = Math.max(0.0001, Math.hypot(dx, dy));
+    const unitX = dx / length;
+    const unitY = dy / length;
+    const startOffset = settings.wedgeStartOffsetPercent / 100;
+    const endOffset = settings.wedgeEndOffsetPercent / 100;
+    return {
+      source: { x: baseCenter.x + unitX * startOffset, y: baseCenter.y + unitY * startOffset },
+      target: { x: targetCenter.x - unitX * endOffset, y: targetCenter.y - unitY * endOffset }
+    };
   }
 
   function createWedgeGeometry(source, target, baseWidth, tipWidth) {
@@ -697,6 +724,55 @@
       `L ${target.x - normalX * halfTip} ${target.y - normalY * halfTip}`,
       `L ${source.x - normalX * halfBase} ${source.y - normalY * halfBase}`,
       `Q ${roundedBaseX} ${roundedBaseY} ${source.x + normalX * halfBase} ${source.y + normalY * halfBase}`,
+      "Z"
+    ].join(" ");
+  }
+
+  // Keeps the long leg of a knight move straight before bending toward its short leg.
+  function createKnightWedgeGeometry(source, target, baseWidth, tipWidth) {
+    const dx = target.x - source.x;
+    const dy = target.y - source.y;
+    const horizontalLongLeg = Math.abs(dx) > Math.abs(dy);
+    const longControlDistance = Math.max(Math.abs(dx), Math.abs(dy)) / 2;
+    const shortControlDistance = Math.min(Math.abs(dx), Math.abs(dy)) / 2;
+    const firstControl = horizontalLongLeg
+      ? { x: source.x + Math.sign(dx) * longControlDistance, y: source.y }
+      : { x: source.x, y: source.y + Math.sign(dy) * longControlDistance };
+    const secondControl = horizontalLongLeg
+      ? { x: target.x, y: target.y - Math.sign(dy) * shortControlDistance }
+      : { x: target.x - Math.sign(dx) * shortControlDistance, y: target.y };
+    const curve = [source, firstControl, secondControl, target];
+    const left = [];
+    const right = [];
+    const samples = 16;
+    for (let index = 0; index <= samples; index++) {
+      const t = index / samples;
+      const point = getCubicPoint(curve, t);
+      const inverse = 1 - t;
+      const tangentX = 3 * inverse * inverse * (firstControl.x - source.x)
+        + 6 * inverse * t * (secondControl.x - firstControl.x)
+        + 3 * t * t * (target.x - secondControl.x);
+      const tangentY = 3 * inverse * inverse * (firstControl.y - source.y)
+        + 6 * inverse * t * (secondControl.y - firstControl.y)
+        + 3 * t * t * (target.y - secondControl.y);
+      const tangentLength = Math.max(0.0001, Math.hypot(tangentX, tangentY));
+      const halfWidth = (baseWidth * (1 - t) + tipWidth * t) / 2;
+      const normalX = -tangentY / tangentLength;
+      const normalY = tangentX / tangentLength;
+      left.push({ x: point.x + normalX * halfWidth, y: point.y + normalY * halfWidth });
+      right.push({ x: point.x - normalX * halfWidth, y: point.y - normalY * halfWidth });
+    }
+
+    const startTangentLength = Math.max(0.0001, Math.hypot(firstControl.x - source.x, firstControl.y - source.y));
+    const roundedBase = {
+      x: source.x - (firstControl.x - source.x) / startTangentLength * baseWidth / 2 * Math.SQRT2,
+      y: source.y - (firstControl.y - source.y) / startTangentLength * baseWidth / 2 * Math.SQRT2
+    };
+    return [
+      `M ${left[0].x} ${left[0].y}`,
+      ...left.slice(1).map(point => `L ${point.x} ${point.y}`),
+      ...right.reverse().map(point => `L ${point.x} ${point.y}`),
+      `Q ${roundedBase.x} ${roundedBase.y} ${left[0].x} ${left[0].y}`,
       "Z"
     ].join(" ");
   }
@@ -1138,11 +1214,37 @@
     return null;
   }
 
+  function getKnightCurveControlPoint(start, end, center, outline, angle, radius) {
+    const chord = { x: end.x - start.x, y: end.y - start.y };
+    const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+    const peakAngle = getNearestOutlinePeakAngle(outline, angle);
+    const peak = peakAngle === null ? null : {
+      x: center.x + Math.cos(peakAngle) * radius,
+      y: center.y + Math.sin(peakAngle) * radius
+    };
+    const side = peak ? Math.sign(-chord.y * (peak.x - middle.x) + chord.x * (peak.y - middle.y)) || 1 : 1;
+    const bend = -2 * settings.threatLineCurvature * side;
+    return {
+      x: middle.x - chord.y * bend,
+      y: middle.y + chord.x * bend
+    };
+  }
+
   function getQuadraticPoint([start, control, end], t) {
     const inverse = 1 - t;
     return {
       x: inverse * inverse * start.x + 2 * inverse * t * control.x + t * t * end.x,
       y: inverse * inverse * start.y + 2 * inverse * t * control.y + t * t * end.y
+    };
+  }
+
+  function getCubicPoint([start, firstControl, secondControl, end], t) {
+    const inverse = 1 - t;
+    return {
+      x: inverse ** 3 * start.x + 3 * inverse ** 2 * t * firstControl.x
+        + 3 * inverse * t ** 2 * secondControl.x + t ** 3 * end.x,
+      y: inverse ** 3 * start.y + 3 * inverse ** 2 * t * firstControl.y
+        + 3 * inverse * t ** 2 * secondControl.y + t ** 3 * end.y
     };
   }
 
@@ -1216,18 +1318,7 @@
     const { center, direction, normal, offset } = line;
     const start = { x: center.x + direction.x * outerRadius + normal.x * offset, y: center.y + direction.y * outerRadius + normal.y * offset };
     const end = { x: center.x + direction.x * innerRadius + normal.x * offset, y: center.y + direction.y * innerRadius + normal.y * offset };
-    const chord = { x: end.x - start.x, y: end.y - start.y };
-    const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
-    // The curve bulges toward the nearest outline peak of the target figure; without a peak it keeps the configured side.
-    const peakAngle = getNearestOutlinePeakAngle(line.outline, line.angle);
-    const peak = peakAngle === null ? null : { x: center.x + Math.cos(peakAngle) * innerRadius, y: center.y + Math.sin(peakAngle) * innerRadius };
-    const side = peak ? Math.sign(-chord.y * (peak.x - middle.x) + chord.x * (peak.y - middle.y)) || 1 : 1;
-    // The control point lies beside the chord; with a quadratic curve, the bulge at its peak is half this offset.
-    const bend = -2 * settings.threatLineCurvature * side;
-    const control = {
-      x: middle.x - chord.y * bend,
-      y: middle.y + chord.x * bend
-    };
+    const control = getKnightCurveControlPoint(start, end, center, line.outline, line.angle, innerRadius);
     const path = document.createElementNS(svgNamespace, "path");
     const [curveStart, curveControl, curveEnd] = pushCurveFromFigure([start, control, end], center, line.outline, settings.threatLineFigureMargin + settings.threatLineThickness / 2);
     path.setAttribute("d", `M ${curveStart.x} ${curveStart.y} Q ${curveControl.x} ${curveControl.y} ${curveEnd.x} ${curveEnd.y}`);
@@ -1625,9 +1716,9 @@
       const directTargets = capturedByLower ? [] : getAttackedPieces(wedgeParsed.position, source, wedgeParsed.blackOrientation)
         .filter(target => {
           const targetPiece = wedgeParsed.position[target.row][target.col];
-          return targetPiece.color !== piece.color && pieceValues[targetPiece.type] > pieceValues[piece.type];
+          return targetPiece && targetPiece.color !== piece.color && pieceValues[targetPiece.type] > pieceValues[piece.type];
         });
-      wedges.push(...directTargets.map(target => ({ source, target, color: piece.color })));
+      wedges.push(...directTargets.map(target => ({ source, target, color: piece.color, type: piece.type })));
 
       if (showUnselectedPotentials) continue;
       // Legal destinations from the board; while dragging on a board without them (setup mode), free fields are used.
@@ -1688,10 +1779,9 @@
     const firstPiece = board.querySelector(":scope > piece");
     if (entry.svg.parentNode !== board || entry.svg.nextSibling !== firstPiece) board.insertBefore(entry.svg, firstPiece);
 
-    const widthScale = 8 / boardRect.width;
-    const baseWidth = settings.wedgeBaseWidthPx * widthScale;
-    const tipWidth = settings.wedgeTipWidthPx * widthScale;
-    const glowWidth = settings.wedgeGlowWidthPx * widthScale;
+    const baseWidth = settings.wedgeBaseWidthPercent / 100;
+    const tipWidth = settings.wedgeTipWidthPercent / 100;
+    const glowWidth = settings.wedgeGlowWidthPercent / 100;
     const filterId = `lfs-selected-wedge-glow-${[...observedBoards.keys()].indexOf(board)}`;
     const defs = document.createElementNS(svgNamespace, "defs");
     const filter = document.createElementNS(svgNamespace, "filter");
@@ -1702,14 +1792,23 @@
     filter.setAttribute("width", "16");
     filter.setAttribute("height", "16");
     const blur = document.createElementNS(svgNamespace, "feGaussianBlur");
-    blur.setAttribute("stdDeviation", String(settings.wedgeGlowBlurPx * widthScale));
+    blur.setAttribute("stdDeviation", String(settings.wedgeGlowBlurPercent / 100));
     filter.append(blur);
     defs.append(filter);
     entry.svg.replaceChildren(defs);
 
     for (const [index, connection] of wedges.entries()) {
-      const source = { x: connection.source.col + 0.5, y: connection.source.row + 0.5 };
-      const target = { x: connection.target.col + 0.5, y: connection.target.row + 0.5 };
+      const sourceVerticalOffset = connection.type === "pawn"
+        ? (isPieceRotated(connection.color, parsed.blackOrientation) ? -pawnWedgeBaseOffset : pawnWedgeBaseOffset)
+        : 0;
+      const { source, target } = getWedgeEnds(
+        { x: connection.source.col + 0.5, y: connection.source.row + 0.5 },
+        { x: connection.target.col + 0.5, y: connection.target.row + 0.5 },
+        sourceVerticalOffset
+      );
+      const getWedgePath = (base, tip) => connection.type === "knight"
+        ? createKnightWedgeGeometry(source, target, base, tip)
+        : createWedgeGeometry(source, target, base, tip);
       const color = connection.color === "w" ? settings.whitePieceColor : settings.blackPieceColor;
       const glowColor = mixWithWhite(color, 0.3);
       const gradientId = `${filterId}-gradient-${index}`;
@@ -1730,17 +1829,52 @@
       defs.append(gradient);
 
       const glow = document.createElementNS(svgNamespace, "path");
-      glow.setAttribute("d", createWedgeGeometry(source, target, baseWidth + glowWidth, tipWidth + glowWidth));
+      glow.setAttribute("d", getWedgePath(baseWidth + glowWidth, tipWidth + glowWidth));
       glow.setAttribute("fill", glowColor);
       glow.setAttribute("filter", `url(#${filterId})`);
-      glow.setAttribute("opacity", String(settings.wedgeGlowWidthPx > 0 ? settings.wedgeOpacity * 0.58 : 0));
+      glow.setAttribute("opacity", String(settings.wedgeGlowWidthPercent > 0 ? settings.wedgeOpacity * 0.58 : 0));
       entry.svg.append(glow);
 
       const wedge = document.createElementNS(svgNamespace, "path");
-      wedge.setAttribute("d", createWedgeGeometry(source, target, baseWidth, tipWidth));
+      wedge.setAttribute("d", getWedgePath(baseWidth, tipWidth));
       wedge.setAttribute("fill", `url(#${gradientId})`);
-      wedge.setAttribute("opacity", String(settings.wedgeOpacity));
-      entry.svg.append(wedge);
+      if (settings.wedgeBasePiecePreviewEnabled) {
+        const maskId = `${filterId}-piece-mask-${index}`;
+        const mask = document.createElementNS(svgNamespace, "mask");
+        mask.id = maskId;
+        mask.setAttribute("maskUnits", "userSpaceOnUse");
+        mask.setAttribute("maskContentUnits", "userSpaceOnUse");
+        mask.style.setProperty("mask-type", "alpha");
+        const pieceImage = document.createElementNS(svgNamespace, "image");
+        pieceImage.setAttribute("x", String(connection.source.col));
+        pieceImage.setAttribute("y", String(connection.source.row));
+        pieceImage.setAttribute("width", "1");
+        pieceImage.setAttribute("height", "1");
+        pieceImage.setAttribute("preserveAspectRatio", "xMidYMid meet");
+        pieceImage.setAttribute("href", getPieceAssetUrl(connection.color, connection.type));
+        if (isPieceRotated(connection.color, parsed.blackOrientation)) {
+          pieceImage.setAttribute("transform", `rotate(180 ${connection.source.col + 0.5} ${connection.source.row + 0.5})`);
+        }
+        mask.append(pieceImage);
+        defs.append(mask);
+
+        const silhouette = document.createElementNS(svgNamespace, "rect");
+        silhouette.setAttribute("x", String(connection.source.col));
+        silhouette.setAttribute("y", String(connection.source.row));
+        silhouette.setAttribute("width", "1");
+        silhouette.setAttribute("height", "1");
+        silhouette.setAttribute("fill", color);
+        silhouette.setAttribute("mask", `url(#${maskId})`);
+        silhouette.setAttribute("pointer-events", "none");
+        // Keil und Figur bilden eine Gruppe, damit sich ihre Deckkraft nicht doppelt überlagert.
+        const group = document.createElementNS(svgNamespace, "g");
+        group.setAttribute("opacity", String(settings.wedgeOpacity));
+        group.append(wedge, silhouette);
+        entry.svg.append(group);
+      } else {
+        wedge.setAttribute("opacity", String(settings.wedgeOpacity));
+        entry.svg.append(wedge);
+      }
     }
 
   }
@@ -1750,6 +1884,36 @@
     if (displayMode === "lines") renderLineSet(svg, segments, figureRadii);
     else if (displayMode === "square") renderSquareSegmentSet(svg, segments, figureRadii);
     else renderSegmentSet(svg, segments, figureRadii);
+  }
+
+  function createHatchPattern(defs, patternId, color, scrollDistance) {
+    const spacing = settings.threatCenterHatchSpacingPercent / 100;
+    const thickness = settings.threatCenterHatchThicknessPercent / 100;
+    const angle = settings.threatCenterHatchAngleDeg;
+    const pattern = document.createElementNS(svgNamespace, "pattern");
+    pattern.id = patternId;
+    pattern.setAttribute("patternUnits", "userSpaceOnUse");
+    pattern.setAttribute("width", String(spacing));
+    pattern.setAttribute("height", String(spacing));
+    pattern.setAttribute("patternTransform", hatchPatternTransform(angle, spacing, scrollDistance));
+    const line = document.createElementNS(svgNamespace, "path");
+    line.setAttribute("d", `M 0 0 H ${spacing}`);
+    line.setAttribute("fill", "none");
+    line.setAttribute("stroke", color);
+    line.setAttribute("stroke-width", String(thickness));
+    pattern.append(line);
+    defs.append(pattern);
+    return { pattern, spacing, angle };
+  }
+
+  function getPieceAssetUrl(color, type) {
+    const letter = figureAssetLetters[type];
+    const complexPawn = type === "pawn" && settings.complexPawn
+      && ["system_pixel", "system_eckig"].includes(settings.pieceSet);
+    const asset = settings.pieceSet === "cage"
+      ? `cage/cage_${letter}.svg`
+      : `${settings.pieceSet}/${color}${letter}${complexPawn ? "_2" : ""}.svg`;
+    return chrome.runtime.getURL(asset);
   }
 
   function syncCenterOutlineImages(entry) {
@@ -1839,13 +2003,7 @@
     const hatchPatterns = [];
     const scrollDistance = advanceHatchScroll();
     for (const [index, { target, color, piece, moveOutlinePreview }] of centerOutlines.entries()) {
-      const letter = figureAssetLetters[piece.type];
-      const complexPawn = piece.type === "pawn" && settings.complexPawn
-        && ["system_pixel", "system_eckig"].includes(settings.pieceSet);
-      const asset = settings.pieceSet === "cage"
-        ? `cage/cage_${letter}.svg`
-        : `${settings.pieceSet}/${piece.color}${letter}${complexPawn ? "_2" : ""}.svg`;
-      const pieceUrl = chrome.runtime.getURL(asset);
+      const pieceUrl = getPieceAssetUrl(piece.color, piece.type);
       const pieceColor = color === "w" ? settings.whitePieceColor : settings.blackPieceColor;
       const image = document.createElementNS(svgNamespace, "image");
       image.setAttribute("x", String(target.col));
@@ -1860,9 +2018,6 @@
       image._lfsPieceElement = piece.element;
 
       if (settings.threatCenterOutlineStyle === "hatching") {
-        const spacing = settings.threatCenterHatchSpacingPercent / 100;
-        const thickness = settings.threatCenterHatchThicknessPercent / 100;
-        const angle = settings.threatCenterHatchAngleDeg;
         const boardIndex = [...observedBoards.keys()].indexOf(board);
         const maskId = `lfs-threat-center-hatch-mask-${boardIndex}-${index}`;
         const mask = document.createElementNS(svgNamespace, "mask");
@@ -1881,20 +2036,7 @@
         defs.append(mask);
 
         const patternId = `lfs-threat-center-hatch-${boardIndex}-${index}`;
-        const pattern = document.createElementNS(svgNamespace, "pattern");
-        pattern.id = patternId;
-        pattern.setAttribute("patternUnits", "userSpaceOnUse");
-        pattern.setAttribute("width", String(spacing));
-        pattern.setAttribute("height", String(spacing));
-        pattern.setAttribute("patternTransform", hatchPatternTransform(angle, spacing, scrollDistance));
-        const line = document.createElementNS(svgNamespace, "path");
-        line.setAttribute("d", `M 0 0 H ${spacing}`);
-        line.setAttribute("fill", "none");
-        line.setAttribute("stroke", pieceColor);
-        line.setAttribute("stroke-width", String(thickness));
-        pattern.append(line);
-        hatchPatterns.push({ pattern, spacing, angle });
-        defs.append(pattern);
+        hatchPatterns.push(createHatchPattern(defs, patternId, pieceColor, scrollDistance));
 
         const hatch = document.createElementNS(svgNamespace, "rect");
         hatch.setAttribute("x", String(target.col));

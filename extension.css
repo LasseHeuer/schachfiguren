@@ -113,6 +113,9 @@ html:not([data-lfs-disabled]) body .cg-wrap {
 
 html:not([data-lfs-disabled]) body .cg-wrap cg-board,
 html:not([data-lfs-disabled]) body .cg-wrap > piece,
+html:not([data-lfs-disabled]) body .cg-wrap .cg-custom-svgs,
+html:not([data-lfs-disabled]) body .cg-wrap .cg-shapes,
+html:not([data-lfs-disabled]) body .cg-wrap .cg-shapes-below,
 html:not([data-lfs-disabled]) body piece:not(cg-board piece) {
   z-index: 2147483647 !important;
 }
@@ -123,6 +126,9 @@ html:not([data-lfs-disabled]) #top:hover {
 
 html:not([data-lfs-disabled]) body:has(#top:hover) .cg-wrap cg-board,
 html:not([data-lfs-disabled]) body:has(#top:hover) .cg-wrap > piece,
+html:not([data-lfs-disabled]) body:has(#top:hover) .cg-wrap .cg-custom-svgs,
+html:not([data-lfs-disabled]) body:has(#top:hover) .cg-wrap .cg-shapes,
+html:not([data-lfs-disabled]) body:has(#top:hover) .cg-wrap .cg-shapes-below,
 html:not([data-lfs-disabled]) body:has(#top:hover) piece:not(cg-board piece) {
   z-index: 0 !important;
 }
@@ -374,11 +380,6 @@ html:not([data-lfs-disabled]) .cg-wrap .cg-shapes-below marker[id^="arrowhead-pr
   fill: var(--lfs-engine-arrow-color) !important;
 }
 
-/* Keep engine arrows behind pieces without changing drag or move-animation stacking. */
-html:not([data-lfs-disabled]) .is2d .cg-wrap:has(.cg-shapes line[marker-end^="url(#arrowhead-p"]) cg-board > piece:not(.anim):not(.dragging) {
-  z-index: 3;
-}
-
 html:not([data-lfs-disabled]) .material mpiece.pawn { -webkit-mask: var(--lfs-captured-pawn) center / contain no-repeat !important; mask: var(--lfs-captured-pawn) center / contain no-repeat !important; }
 html:not([data-lfs-disabled]) .material mpiece.bishop { -webkit-mask: var(--lfs-captured-bishop) center / contain no-repeat !important; mask: var(--lfs-captured-bishop) center / contain no-repeat !important; }
 html:not([data-lfs-disabled]) .material mpiece.knight { -webkit-mask: var(--lfs-captured-knight) center / contain no-repeat !important; mask: var(--lfs-captured-knight) center / contain no-repeat !important; }
@@ -592,4 +593,106 @@ html:not([data-lfs-disabled])[data-lfs-rund-comic] .pocket piece.black[data-lfs-
   background: var(--lfs-comic-piece) center / contain no-repeat !important;
   -webkit-mask: none !important;
   mask: none !important;
+}
+
+#lfs-analysis-toolbar {
+  all: initial;
+  position: fixed !important;
+  top: auto !important;
+  right: 8px !important;
+  bottom: 8px !important;
+  z-index: 2147483647 !important;
+  display: flex !important;
+  flex-direction: column-reverse !important;
+  box-sizing: border-box !important;
+  width: 190px !important;
+  padding: 0 !important;
+  transform: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--c-bg-page, #fff) !important;
+  color: var(--c-font, #222) !important;
+  box-shadow: none !important;
+  font: 12px/1.3 system-ui, sans-serif !important;
+  pointer-events: auto !important;
+}
+
+#lfs-analysis-toolbar * {
+  box-sizing: border-box !important;
+  color: inherit !important;
+  font: inherit !important;
+  outline: 0 !important;
+}
+
+#lfs-analysis-toolbar .lfs-analysis-toolbar-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  min-height: 32px !important;
+  padding: 4px 8px !important;
+  background: var(--c-bg-high, #eee) !important;
+}
+
+#lfs-analysis-toolbar .lfs-analysis-toolbar-header strong {
+  font-weight: 700 !important;
+}
+
+#lfs-analysis-toolbar .lfs-analysis-toolbar-master {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  cursor: pointer !important;
+}
+
+#lfs-analysis-toolbar button {
+  min-width: 24px !important;
+  min-height: 24px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  cursor: pointer !important;
+}
+
+#lfs-analysis-toolbar button:hover,
+#lfs-analysis-toolbar .lfs-analysis-toolbar-feature:hover {
+  background: var(--c-bg-high, #eee) !important;
+}
+
+#lfs-analysis-toolbar .lfs-analysis-toolbar-features {
+  display: grid !important;
+  gap: 0 !important;
+  padding: 4px !important;
+}
+
+#lfs-analysis-toolbar .lfs-analysis-toolbar-features[hidden] {
+  display: none !important;
+}
+
+#lfs-analysis-toolbar .lfs-analysis-toolbar-feature {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-height: 28px !important;
+  padding: 3px 4px !important;
+  cursor: pointer !important;
+}
+
+#lfs-analysis-toolbar .lfs-analysis-toolbar-child {
+  margin-left: 12px !important;
+  padding-left: 10px !important;
+  border-left: 2px solid var(--c-border, #ccc) !important;
+}
+
+#lfs-analysis-toolbar .lfs-analysis-toolbar-feature[hidden] {
+  display: none !important;
+}
+
+#lfs-analysis-toolbar input[type="checkbox"] {
+  flex: 0 0 auto !important;
+  width: 14px !important;
+  height: 14px !important;
+  margin: 0 !important;
+  accent-color: var(--c-primary, #629924) !important;
 }

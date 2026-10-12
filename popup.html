@@ -91,7 +91,7 @@
           </fieldset>
         </div>
         <div class="range-grid single-range">
-          <label class="range-setting"><span>Groesse Bewegungsdots</span><output data-value-for="moveDotSize"></output><input type="range" min="5" max="50" step="5" data-setting="moveDotSize"></label>
+          <label class="range-setting"><span>Groesse Bewegungsdots</span><output data-value-for="moveDotSize"></output><input type="range" min="5" max="50" step="1" data-setting="moveDotSize"></label>
           <label class="range-setting" data-depends-on="markLastMove"><span>Breite der Letztzug-Linie</span><output data-value-for="lastMoveLineWidth"></output><input type="range" min="1" max="100" step="1" data-setting="lastMoveLineWidth"></label>
         </div>
         <div class="switch-list">
@@ -116,12 +116,15 @@
           <summary>Keile</summary>
           <label class="switch-setting"><span><strong>Keildarstellung aktivieren</strong><small>Angriffs- und Potenzial-Keile gemeinsam anzeigen.</small></span><input type="checkbox" data-setting="selectedPieceWedgeEnabled" role="switch"></label>
         <label class="switch-setting"><span><strong>Nur ausgewählte Figur</strong><small>Wenn aus, Keile aller Figuren; ohne Auswahl höchstens 3 Potenzial-Keile je Spieler.</small></span><input type="checkbox" data-setting="selectedPieceWedgeOnlySelected" role="switch"></label>
+          <label class="switch-setting" data-depends-on="selectedPieceWedgeEnabled"><span><strong>Figur an Keilbasis</strong><small>Zeigt die Figur am Keilursprung in der Farbe ihrer Spielerseite.</small></span><input type="checkbox" data-setting="wedgeBasePiecePreviewEnabled" role="switch"></label>
           <div class="range-grid">
-            <label class="range-setting" data-depends-on="selectedPieceWedgeEnabled"><span>Basisbreite</span><output data-value-for="wedgeBaseWidthPx"></output><input type="range" min="1" max="20" step="0.1" data-setting="wedgeBaseWidthPx"></label>
-            <label class="range-setting" data-depends-on="selectedPieceWedgeEnabled"><span>Spitzenbreite</span><output data-value-for="wedgeTipWidthPx"></output><input type="range" min="0.5" max="10" step="0.1" data-setting="wedgeTipWidthPx"></label>
-            <label class="range-setting" data-depends-on="selectedPieceWedgeEnabled"><span>Leuchtbreite</span><output data-value-for="wedgeGlowWidthPx"></output><input type="range" min="0" max="20" step="0.1" data-setting="wedgeGlowWidthPx"></label>
-            <label class="range-setting" data-depends-on="selectedPieceWedgeEnabled"><span>Leuchtunschärfe</span><output data-value-for="wedgeGlowBlurPx"></output><input type="range" min="0" max="18" step="0.1" data-setting="wedgeGlowBlurPx"></label>
+            <label class="range-setting" data-depends-on="selectedPieceWedgeEnabled"><span>Basisbreite (% der Feldbreite)</span><output data-value-for="wedgeBaseWidthPercent"></output><input type="range" min="1" max="50" step="0.1" data-setting="wedgeBaseWidthPercent"></label>
+            <label class="range-setting" data-depends-on="selectedPieceWedgeEnabled"><span>Spitzenbreite (% der Feldbreite)</span><output data-value-for="wedgeTipWidthPercent"></output><input type="range" min="0.5" max="25" step="0.1" data-setting="wedgeTipWidthPercent"></label>
+            <label class="range-setting" data-depends-on="selectedPieceWedgeEnabled"><span>Leuchtbreite (% der Feldbreite)</span><output data-value-for="wedgeGlowWidthPercent"></output><input type="range" min="0" max="50" step="0.1" data-setting="wedgeGlowWidthPercent"></label>
+            <label class="range-setting" data-depends-on="selectedPieceWedgeEnabled"><span>Leuchtunschärfe (% der Feldbreite)</span><output data-value-for="wedgeGlowBlurPercent"></output><input type="range" min="0" max="50" step="0.1" data-setting="wedgeGlowBlurPercent"></label>
             <label class="range-setting range-wide" data-depends-on="selectedPieceWedgeEnabled"><span>Deckkraft</span><output data-value-for="wedgeOpacity"></output><input type="range" min="0" max="1" step="0.01" data-setting="wedgeOpacity"></label>
+            <label class="range-setting range-wide" data-depends-on="selectedPieceWedgeEnabled"><span>Abstand Startpunkt (% der Feldbreite)</span><output data-value-for="wedgeStartOffsetPercent"></output><input type="range" min="0" max="50" step="1" data-setting="wedgeStartOffsetPercent"></label>
+            <label class="range-setting range-wide" data-depends-on="selectedPieceWedgeEnabled"><span>Abstand Endpunkt (% der Feldbreite)</span><output data-value-for="wedgeEndOffsetPercent"></output><input type="range" min="0" max="50" step="1" data-setting="wedgeEndOffsetPercent"></label>
           </div>
           <label class="select-setting" data-depends-on="selectedPieceWedgeEnabled"><span>Strategie</span><select data-setting="wedgePotentialStrategy"><option value="all">Alle Züge</option><option value="waterfall">Wasserfall</option></select></label>
           <div class="range-grid">

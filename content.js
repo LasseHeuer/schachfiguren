@@ -1,7 +1,96 @@
 (() => {
   const { defaults, normalize } = globalThis.LichessSettings;
   const pieceNames = ["wk", "wq", "wr", "wb", "wn", "wp", "bk", "bq", "br", "bb", "bn", "bp"];
+  const analysisFeatures = [
+    ["threatColoringEnabled", "Bedrohungsfarben"],
+    ["selectedPieceWedgeEnabled", "Keile"],
+    ["selectedPieceWedgeOnlySelected", "Keile nur für Auswahl", "selectedPieceWedgeEnabled"],
+    ["wedgeBasePiecePreviewEnabled", "Figur an Keilbasis", "selectedPieceWedgeEnabled"],
+    ["threatenedPieceOutlineEnabled", "Angriffsanzeigen"],
+    ["defenseCirclesEnabled", "Verteidigungen"],
+    ["threatCenterOutlineEnabled", "Figurenkontur"],
+    ["threatCenterHatchExchangeFilterEnabled", "Nur haltbare Schraffur", "threatCenterOutlineEnabled"]
+  ];
   let settings = { ...defaults };
+  let analysisToolbar;
+  let analysisEnabledInput;
+  const analysisInputs = new Map();
+  const analysisRows = new Map();
+
+  function syncAnalysisToolbar() {
+    if (!analysisToolbar) {
+      analysisToolbar = document.createElement("aside");
+      analysisToolbar.id = "lfs-analysis-toolbar";
+      analysisToolbar.setAttribute("aria-label", "Analyse-Schnellzugriff");
+
+      const header = document.createElement("div");
+      header.className = "lfs-analysis-toolbar-header";
+      const title = document.createElement("strong");
+      title.textContent = "Analyse";
+      const masterLabel = document.createElement("label");
+      masterLabel.className = "lfs-analysis-toolbar-master";
+      analysisEnabledInput = document.createElement("input");
+      analysisEnabledInput.type = "checkbox";
+      analysisEnabledInput.setAttribute("aria-label", "Alle Analysefunktionen aktivieren oder deaktivieren");
+      analysisEnabledInput.addEventListener("click", event => {
+        if (event.detail) setTimeout(() => analysisEnabledInput.blur(), 0);
+      });
+      analysisEnabledInput.addEventListener("change", () => {
+        const value = analysisEnabledInput.checked;
+        settings = normalize({ ...settings, analysisEnabled: value });
+        apply(document.documentElement);
+        chrome.storage.local.set({ analysisEnabled: value });
+      });
+      const masterText = document.createElement("span");
+      masterText.textContent = "Alle";
+      masterLabel.append(analysisEnabledInput, masterText);
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.textContent = "-";
+      toggle.setAttribute("aria-label", "Analyseleiste einklappen");
+      toggle.setAttribute("aria-expanded", "true");
+      const featureList = document.createElement("div");
+      featureList.className = "lfs-analysis-toolbar-features";
+      toggle.addEventListener("click", event => {
+        featureList.hidden = !featureList.hidden;
+        toggle.textContent = featureList.hidden ? "+" : "-";
+        toggle.setAttribute("aria-expanded", String(!featureList.hidden));
+        toggle.setAttribute("aria-label", featureList.hidden ? "Analyseleiste ausklappen" : "Analyseleiste einklappen");
+        if (event.detail) toggle.blur();
+      });
+      header.append(title, masterLabel, toggle);
+      analysisToolbar.append(header, featureList);
+
+      for (const [key, labelText, parentKey] of analysisFeatures) {
+        const label = document.createElement("label");
+        label.className = parentKey ? "lfs-analysis-toolbar-feature lfs-analysis-toolbar-child" : "lfs-analysis-toolbar-feature";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.addEventListener("click", event => {
+          if (event.detail) setTimeout(() => input.blur(), 0);
+        });
+        input.addEventListener("change", () => {
+          const value = input.checked;
+          settings = normalize({ ...settings, [key]: value });
+          apply(document.documentElement);
+          syncAnalysisToolbar();
+          chrome.storage.local.set({ [key]: value });
+        });
+        const text = document.createElement("span");
+        text.textContent = labelText;
+        label.append(input, text);
+        featureList.append(label);
+        analysisInputs.set(key, input);
+        analysisRows.set(key, { label, parentKey });
+      }
+
+      document.documentElement.append(analysisToolbar);
+    }
+
+    analysisEnabledInput.checked = settings.analysisEnabled;
+    for (const [key, input] of analysisInputs) input.checked = settings[key];
+    for (const [key, { label, parentKey }] of analysisRows) label.hidden = Boolean(parentKey) && !settings[parentKey];
+  }
 
   function apply(root) {
     if (!root) return;
@@ -18,12 +107,20 @@
     root.toggleAttribute("data-lfs-monochrome-board", settings.monochromeBoard);
     root.toggleAttribute("data-lfs-square-outline", settings.squareOutline);
     root.toggleAttribute("data-lfs-rund-comic", settings.pieceSet === "rund_comic");
+    const analysisSettings = settings.analysisEnabled ? settings : {
+      ...settings,
+      threatColoringEnabled: false,
+      selectedPieceWedgeEnabled: false,
+      threatenedPieceOutlineEnabled: false,
+      defenseCirclesEnabled: false,
+      threatCenterOutlineEnabled: false
+    };
     globalThis.LichessLastMoveLine?.update(settings);
-    globalThis.LichessThreatCoding?.update(settings);
+    globalThis.LichessThreatCoding?.update(analysisSettings);
     globalThis.LichessPieceBounce?.update(settings);
     globalThis.LichessMoveAnimation?.update(settings);
 
-    globalThis.LichessSelectedPieceWedge?.update(settings);
+    globalThis.LichessSelectedPieceWedge?.update(analysisSettings);
 
     const variables = {
       "--lfs-idle-mix-percent": `${settings.idleMixPercent}%`,
@@ -62,6 +159,7 @@
     }
 
     root.toggleAttribute("data-lfs-ready", true);
+    syncAnalysisToolbar();
     queuePlayTimeUpdate();
   }
 
