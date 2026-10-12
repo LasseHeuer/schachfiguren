@@ -169,6 +169,19 @@
     }).observe(document, { childList: true });
   }
 
+  function isBoardTarget(target) {
+    return target instanceof Element && target.closest("cg-board");
+  }
+
+  document.addEventListener("pointerover", event => {
+    if (isBoardTarget(event.target)) document.documentElement?.setAttribute("data-lfs-board-hover", "");
+  });
+
+  document.addEventListener("pointerout", event => {
+    if (!isBoardTarget(event.target) || isBoardTarget(event.relatedTarget)) return;
+    document.documentElement?.removeAttribute("data-lfs-board-hover");
+  });
+
   chrome.storage.local.get(null, stored => {
     settings = normalize(stored);
     applyWhenReady();

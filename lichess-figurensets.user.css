@@ -96,7 +96,7 @@ html::after {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: 1;
+  z-index: 2147483646;
   background-color: color-mix(in srgb, transparent, var(--hover-mix-color) var(--mix-percent));
   backdrop-filter: none;
   transition: background-color 150ms ease, backdrop-filter 150ms ease;
@@ -140,7 +140,7 @@ html:has(cg-board) .is2d .cg-wrap:has(.cg-shapes line[marker-end^="url(#arrowhea
 
 html:has(cg-board) .material {
   position: relative !important;
-  z-index: 3 !important;
+  z-index: 2147483647 !important;
 }
 
 html:has(cg-board) .material mpiece {
@@ -220,10 +220,16 @@ html:has(cg-board) .material mpiece.rook { -webkit-mask: var(--captured-rook) ce
 html:has(cg-board) .material mpiece.queen { -webkit-mask: var(--captured-queen) center / contain no-repeat !important; mask: var(--captured-queen) center / contain no-repeat !important; }
 html:has(cg-board) .material mpiece.king { -webkit-mask: var(--captured-king) center / contain no-repeat !important; mask: var(--captured-king) center / contain no-repeat !important; }
 
-/* Brett und Figuren bleiben sichtbar; Menues koennen darueberliegen. */
+/* Die Mischebene liegt ueber der Oberflaeche, nicht aber ueber Brett und Figuren. */
 html:has(cg-board) .cg-wrap {
   position: relative;
-  z-index: 2;
+  z-index: auto !important;
+}
+
+html:has(cg-board) .cg-wrap cg-board,
+html:has(cg-board) .cg-wrap > piece,
+html:has(cg-board) piece:not(cg-board piece) {
+  z-index: 2147483647 !important;
 }
 
 /* Lichess-Seitenhintergrund. Die Vollbild-Ebene darueber mischt ihn mit. */

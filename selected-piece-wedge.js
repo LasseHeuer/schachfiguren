@@ -863,19 +863,113 @@
     }
   }
 
+  // Finds the outline peak (arm or bar) of the target figure that lies nearest to the given angle.
+  function getNearestOutlinePeakAngle(radii, angle) {
+    if (!radii) return null;
+    const count = radii.length;
+    const start = Math.round((((angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2) * count);
+    for (let step = 0; step <= count / 2; step++) {
+      for (const direction of [1, -1]) {
+        const index = (start + direction * step + count) % count;
+        if (radii[index] >= radii[(index - 1 + count) % count] && radii[index] >= radii[(index + 1) % count]) return index / count * Math.PI * 2;
+      }
+    }
+    return null;
+  }
+
+  function getQuadraticPoint([start, control, end], t) {
+    const inverse = 1 - t;
+    return {
+      x: inverse * inverse * start.x + 2 * inverse * t * control.x + t * t * end.x,
+      y: inverse * inverse * start.y + 2 * inverse * t * control.y + t * t * end.y
+    };
+  }
+
+  const outlinePolygonCache = new WeakMap();
+
+  // Outline of a figure as points relative to its center, sampled every two degrees.
+  function getOutlinePolygon(radii) {
+    if (!outlinePolygonCache.has(radii)) {
+      const count = 360;
+      const polygon = [];
+      for (let index = 0; index < count; index++) {
+        const angle = index / count * Math.PI * 2;
+        const radius = getSquareRadiusFactorAt(radii, angle);
+        polygon.push({ x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
+      }
+      outlinePolygonCache.set(radii, polygon);
+    }
+    return outlinePolygonCache.get(radii);
+  }
+
+  // Closest outline point to a point (both relative to the figure center); the distance is negative inside the outline.
+  function getClosestOutlinePoint(polygon, radii, point) {
+    let closest = null;
+    let nearest = Infinity;
+    for (let index = 0; index < polygon.length; index++) {
+      const a = polygon[index];
+      const b = polygon[(index + 1) % polygon.length];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const t = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / (dx * dx + dy * dy)));
+      const candidate = { x: a.x + dx * t, y: a.y + dy * t };
+      const distance = Math.hypot(point.x - candidate.x, point.y - candidate.y);
+      if (distance < nearest) {
+        nearest = distance;
+        closest = candidate;
+      }
+    }
+    const inside = Math.hypot(point.x, point.y) < getSquareRadiusFactorAt(radii, Math.atan2(point.y, point.x));
+    return { point: closest, distance: inside ? -nearest : nearest };
+  }
+
+  // Moves the curve away from the target figure outline until its samples keep the clearance.
+  function pushCurveFromFigure(points, center, radii, clearance) {
+    if (!radii) return points;
+    const polygon = getOutlinePolygon(radii);
+    let current = points;
+    for (let iteration = 0; iteration < 10; iteration++) {
+      let worst = null;
+      for (let step = 0; step <= 40; step++) {
+        const point = getQuadraticPoint(current, step / 40);
+        const relative = { x: point.x - center.x, y: point.y - center.y };
+        const closest = getClosestOutlinePoint(polygon, radii, relative);
+        const deficit = clearance - closest.distance;
+        if (deficit <= 0 || (worst && deficit <= worst.deficit)) continue;
+        const sign = closest.distance < 0 ? -1 : 1;
+        const length = Math.abs(closest.distance) || 1;
+        worst = {
+          deficit,
+          x: sign * (relative.x - closest.point.x) / length,
+          y: sign * (relative.y - closest.point.y) / length
+        };
+      }
+      if (!worst) return current;
+      current = current.map(point => ({ x: point.x + worst.x * worst.deficit, y: point.y + worst.y * worst.deficit }));
+    }
+    return current;
+  }
+
   // Knight lines keep the straight line's end points and only bend between them.
   function createKnightCurvePath(line, innerRadius, outerRadius) {
     const { center, direction, normal, offset } = line;
     const start = { x: center.x + direction.x * outerRadius + normal.x * offset, y: center.y + direction.y * outerRadius + normal.y * offset };
     const end = { x: center.x + direction.x * innerRadius + normal.x * offset, y: center.y + direction.y * innerRadius + normal.y * offset };
     const chord = { x: end.x - start.x, y: end.y - start.y };
+    const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+    // The curve bulges toward the nearest outline peak of the target figure; without a peak it keeps the configured side.
+    const peakAngle = getNearestOutlinePeakAngle(line.outline, line.angle);
+    const peak = peakAngle === null ? null : { x: center.x + Math.cos(peakAngle) * innerRadius, y: center.y + Math.sin(peakAngle) * innerRadius };
+    const side = peak ? Math.sign(-chord.y * (peak.x - middle.x) + chord.x * (peak.y - middle.y)) || 1 : 1;
     // The control point lies beside the chord; with a quadratic curve, the bulge at its peak is half this offset.
+    const bend = -2 * settings.threatLineCurvature * side;
     const control = {
-      x: (start.x + end.x) / 2 - chord.y * 2 * settings.threatLineCurvature,
-      y: (start.y + end.y) / 2 + chord.x * 2 * settings.threatLineCurvature
+      x: middle.x - chord.y * bend,
+      y: middle.y + chord.x * bend
     };
     const path = document.createElementNS(svgNamespace, "path");
-    path.setAttribute("d", `M ${start.x} ${start.y} Q ${control.x} ${control.y} ${end.x} ${end.y}`);
+    const [curveStart, curveControl, curveEnd] = pushCurveFromFigure([start, control, end], center, line.outline, settings.threatLineFigureMargin + settings.threatLineThickness / 2);
+    path.setAttribute("d", `M ${curveStart.x} ${curveStart.y} Q ${curveControl.x} ${curveControl.y} ${curveEnd.x} ${curveEnd.y}`);
     path.setAttribute("fill", "none");
     path.setAttribute("stroke", line.color);
     path.setAttribute("stroke-width", String(settings.threatLineThickness));
@@ -895,7 +989,7 @@
     }
     const lines = [];
 
-    for (const group of linesByDirection.values()) {
+    for (const [lineGroupKey, group] of linesByDirection) {
       const first = group[0];
       const direction = { x: Math.cos(first.angle), y: Math.sin(first.angle) };
       const normal = { x: -direction.y, y: direction.x };
@@ -908,43 +1002,241 @@
       for (const [lane, segment] of group.entries()) {
         const center = { x: segment.target.col + 0.5, y: segment.target.row + 0.5 };
         const offset = offsets[lane] - groupCenter;
-        const usesBoundingSquare = segment.type === "knight" || segment.type === "queen";
-        if (usesBoundingSquare && !boundingSquareHalfSizes.has(segment.type)) {
-          boundingSquareHalfSizes.set(segment.type, getFigureBoundingSquareHalfSize(figureRadii.get(segment.type)));
-        }
-        const collisionRadius = getLineFigureClearance(
-          figureRadii.get(segment.type),
-          segment.angle,
-          offset,
-          settings.threatLineFigureMargin,
-          settings.threatLineThickness,
-          usesBoundingSquare ? boundingSquareHalfSizes.get(segment.type) : undefined
-        );
-        const configuredRadius = Math.sqrt(Math.max(0, settings.threatLineRadius ** 2 - offset ** 2));
-        const innerRadius = Math.max(configuredRadius, collisionRadius);
-        const outerRadius = innerRadius + settings.threatLineLength;
         lines.push({
           center,
+          lineGroupKey,
           targetKey: `${segment.target.row},${segment.target.col}`,
+          sourceKey: segment.source ? `${segment.source.row},${segment.source.col}` : null,
+          category: segment.category ?? "defense",
+          type: segment.type,
+          outline: figureRadii.get(segment.type),
           color: segment.color,
           direction,
           normal,
           offset,
-          innerRadius,
-          outerRadius,
+          angle: segment.angle,
           curved: segment.sourceType === "knight"
         });
       }
     }
 
-    // Lines of different targets on one axis are shortened so that the gap remains between them.
     const gap = settings.threatLineLength * settings.threatLineGapPercent / 100;
+    const laneSpacing = settings.threatLineThickness + settings.threatLineGap;
+    const axialStagger = settings.threatLineGap / 2;
+    const proximityThreshold = Math.max(laneSpacing, gap + settings.threatLineThickness);
+    const lateralTolerance = laneSpacing + 0.000001;
+
+    function updateLineRadii(line) {
+      const usesBoundingSquare = line.type === "knight" || line.type === "queen";
+      if (usesBoundingSquare && !boundingSquareHalfSizes.has(line.type)) {
+        boundingSquareHalfSizes.set(line.type, getFigureBoundingSquareHalfSize(line.outline));
+      }
+      const collisionRadius = getLineFigureClearance(
+        line.outline,
+        line.angle,
+        line.offset,
+        settings.threatLineFigureMargin,
+        settings.threatLineThickness,
+        usesBoundingSquare ? boundingSquareHalfSizes.get(line.type) : undefined
+      );
+      const configuredRadius = Math.sqrt(Math.max(0, settings.threatLineRadius ** 2 - line.offset ** 2));
+      line.innerRadius = Math.max(configuredRadius, collisionRadius);
+      line.outerRadius = line.innerRadius + settings.threatLineLength;
+    }
+
+    // Proximity is measured from the natural, unshifted line spans.
+    for (const line of lines) updateLineRadii(line);
+
+    // Only nearby parallel spans share a bundle and its spacing/length constraints.
+    const unitRecords = lines.map(line => {
+      const orientation = line.direction.x > 1e-6 || (Math.abs(line.direction.x) <= 1e-6 && line.direction.y > 0) ? 1 : -1;
+      const axis = { x: line.direction.x * orientation, y: line.direction.y * orientation };
+      const normal = { x: -axis.y, y: axis.x };
+      const along = line.center.x * axis.x + line.center.y * axis.y;
+      const start = orientation > 0 ? along + line.innerRadius : along - line.outerRadius;
+      const end = orientation > 0 ? along + line.outerRadius : along - line.innerRadius;
+      return {
+        line,
+        normal,
+        orientation,
+        lateral: line.center.x * normal.x + line.center.y * normal.y + line.offset * (line.normal.x * normal.x + line.normal.y * normal.y),
+        start,
+        end
+      };
+    });
+    const unitRecordByLine = new Map(unitRecords.map(record => [record.line, record]));
+    function getSegmentDistance(a, b) {
+      if (a.normal.x * b.normal.x + a.normal.y * b.normal.y < 0.99) return Infinity;
+      const axialGap = Math.max(0, Math.max(a.start, b.start) - Math.min(a.end, b.end));
+      const lateralGap = Math.abs(a.lateral - b.lateral);
+      if (lateralGap > lateralTolerance) return Infinity;
+      return Math.hypot(axialGap, lateralGap);
+    }
+    const unitParent = unitRecords.map((_, index) => index);
+    const findUnit = index => (unitParent[index] === index ? index : (unitParent[index] = findUnit(unitParent[index])));
+    for (let i = 0; i < unitRecords.length; i++) {
+      for (let j = i + 1; j < unitRecords.length; j++) {
+        const a = unitRecords[i];
+        const b = unitRecords[j];
+        if (getSegmentDistance(a, b) > proximityThreshold) continue;
+        unitParent[findUnit(i)] = findUnit(j);
+      }
+    }
+    const units = new Map();
+    unitRecords.forEach((record, index) => {
+      const key = findUnit(index);
+      if (!units.has(key)) units.set(key, []);
+      units.get(key).push(record);
+      record.line.unitKey = key;
+      record.line.orientation = record.orientation;
+      record.line.laneLateral = record.lateral;
+    });
+    for (const members of units.values()) {
+      if (members.length < 2) continue;
+      const forwardCount = members.filter(member => member.orientation === 1).length;
+      const primaryOrientation = forwardCount >= members.length - forwardCount ? 1 : -1;
+      const primary = members.filter(member => member.orientation === primaryOrientation).sort((a, b) => a.lateral - b.lateral);
+      const secondary = members.filter(member => member.orientation !== primaryOrientation).sort((a, b) => a.lateral - b.lateral);
+      const laneNormal = members[0].normal;
+      const laneIncreasesRightOrDown = Math.abs(laneNormal.x) > 1e-6 ? laneNormal.x > 0 : laneNormal.y > 0;
+      // Keep the larger direction block together on the left/top, as in the mockup.
+      const orderedMembers = laneIncreasesRightOrDown ? [...primary, ...secondary] : [...secondary, ...primary];
+      const meanLateral = members.reduce((sum, member) => sum + member.lateral, 0) / members.length;
+      orderedMembers.forEach((member, index) => {
+        const { line, normal } = member;
+        const targetLateral = meanLateral + (index - (members.length - 1) / 2) * laneSpacing;
+        line.offset = (targetLateral - (line.center.x * normal.x + line.center.y * normal.y)) / (line.normal.x * normal.x + line.normal.y * normal.y);
+        line.laneLateral = targetLateral;
+        line.primaryOrientation = primaryOrientation;
+      });
+    }
+
+    // Recheck figure clearance after moving a nearby lane bundle as a unit.
+    for (const line of lines) updateLineRadii(line);
+    for (const record of unitRecords) {
+      const { line, normal, orientation } = record;
+      const along = line.center.x * line.direction.x * orientation + line.center.y * line.direction.y * orientation;
+      record.lateral = line.center.x * normal.x + line.center.y * normal.y
+        + line.offset * (line.normal.x * normal.x + line.normal.y * normal.y);
+      record.start = orientation > 0 ? along + line.innerRadius : along - line.outerRadius;
+      record.end = orientation > 0 ? along + line.outerRadius : along - line.innerRadius;
+    }
+
+    // Pair only the exact reciprocal source-target connection, once per line.
+    const linesByConnection = new Map();
     for (const line of lines) {
-      let innerRadius = line.innerRadius;
-      let outerRadius = line.outerRadius;
-      let facingOuterLimit = Infinity;
-      for (const other of lines) {
-        if (other.targetKey === line.targetKey) continue;
+      if (!line.sourceKey) continue;
+      const key = `${line.category}|${line.sourceKey}>${line.targetKey}`;
+      if (!linesByConnection.has(key)) linesByConnection.set(key, []);
+      linesByConnection.get(key).push(line);
+    }
+    const pairedLines = new Set();
+    for (const line of lines) {
+      if (!line.sourceKey || pairedLines.has(line)) continue;
+      const reverseKey = `${line.category}|${line.targetKey}>${line.sourceKey}`;
+      const candidates = (linesByConnection.get(reverseKey) ?? [])
+        .filter(other => !pairedLines.has(other) && other !== line
+          && other.direction.x * line.direction.x + other.direction.y * line.direction.y < -0.99
+          && getSegmentDistance(unitRecordByLine.get(line), unitRecordByLine.get(other)) <= proximityThreshold)
+        .sort((a, b) => Math.abs(a.laneLateral - line.laneLateral) - Math.abs(b.laneLateral - line.laneLateral));
+      const partner = candidates[0];
+      if (!partner) continue;
+      line.partner = partner;
+      partner.partner = line;
+      pairedLines.add(line);
+      pairedLines.add(partner);
+    }
+
+    // Keep each direction block aligned; stagger only the block beside a nearby partner.
+    for (const members of units.values()) {
+      if (!members.some(member => member.line.partner)) continue;
+      for (const { line } of members) {
+        if (line.orientation === line.primaryOrientation) continue;
+        line.axialShift = axialStagger;
+        line.innerRadius += axialStagger;
+        line.outerRadius += axialStagger;
+      }
+    }
+
+    // Align lines from the same target and direction at their most conservative safe start.
+    const directionGroups = new Map();
+    for (const line of lines) {
+      const key = line.lineGroupKey;
+      if (!directionGroups.has(key)) directionGroups.set(key, []);
+      directionGroups.get(key).push(line);
+    }
+    for (const members of directionGroups.values()) {
+      if (members.length < 2) continue;
+      const sharedInner = Math.max(...members.map(line => line.innerRadius));
+      for (const line of members) {
+        const lineLength = line.outerRadius - line.innerRadius;
+        line.innerRadius = sharedInner;
+        line.outerRadius = sharedInner + lineLength;
+      }
+    }
+
+    // Reciprocal lines solve their final endpoints together at the partner midpoint.
+    for (const line of lines) {
+      const partner = line.partner;
+      if (!partner || line.partnerSolved) continue;
+      const distanceX = partner.center.x - line.center.x;
+      const distanceY = partner.center.y - line.center.y;
+      const distance = distanceX * line.direction.x + distanceY * line.direction.y;
+      const lineLimit = (2 * distance + line.innerRadius - 2 * partner.innerRadius) / 3;
+      const partnerLimit = (2 * distance + partner.innerRadius - 2 * line.innerRadius) / 3;
+      if (lineLimit < line.innerRadius + settings.threatLineThickness || partnerLimit < partner.innerRadius + settings.threatLineThickness) {
+        line.suppressed = true;
+        partner.suppressed = true;
+      } else {
+        line.facingLimit = lineLimit;
+        partner.facingLimit = partnerLimit;
+      }
+      line.partnerSolved = true;
+      partner.partnerSolved = true;
+    }
+
+    // A unit uses the shortened partner-line length as its shared length, when present.
+    const linesByUnit = new Map();
+    for (const line of lines) {
+      if (!linesByUnit.has(line.unitKey)) linesByUnit.set(line.unitKey, []);
+      linesByUnit.get(line.unitKey).push(line);
+    }
+    for (const members of linesByUnit.values()) {
+      const active = members.filter(line => !line.suppressed);
+      if (!active.length) continue;
+      const partnerLengths = active.filter(line => line.partner)
+        .map(line => Math.max(0, line.facingLimit - line.innerRadius));
+      const candidateLength = partnerLengths.length
+        ? Math.min(...partnerLengths)
+        : Math.min(...active.map(line => line.outerRadius - line.innerRadius));
+      const commonLength = Math.min(settings.threatLineLength, candidateLength);
+      if (commonLength < settings.threatLineThickness) {
+        for (const line of active) {
+          line.suppressed = true;
+          if (line.partner) line.partner.suppressed = true;
+        }
+        continue;
+      }
+      for (const line of active) {
+        line.finalInner = line.innerRadius;
+        line.finalOuter = Math.min(line.innerRadius + commonLength, line.facingLimit ?? Infinity);
+      }
+    }
+
+    // Apply any remaining collinear collision gaps from a stable snapshot of final endpoints.
+    const lineRanges = lines.filter(line => !line.suppressed).map(line => ({
+      line,
+      inner: line.finalInner,
+      outer: line.finalOuter
+    }));
+    for (const range of lineRanges) {
+      const { line } = range;
+      if (line.partner) continue;
+      let inner = range.inner;
+      let outer = range.outer;
+      for (const otherRange of lineRanges) {
+        const other = otherRange.line;
+        if (other === line || other.targetKey === line.targetKey || other.unitKey === line.unitKey) continue;
         const dot = other.direction.x * line.direction.x + other.direction.y * line.direction.y;
         if (Math.abs(dot) < 0.99) continue;
         const otherX = other.center.x + other.normal.x * other.offset - line.center.x;
@@ -952,25 +1244,39 @@
         const lateral = otherX * line.normal.x + otherY * line.normal.y - line.offset;
         if (Math.abs(lateral) >= settings.threatLineThickness) continue;
         const base = otherX * line.direction.x + otherY * line.direction.y;
-        // Lines pointing at each other split at the midpoint between their targets, so both keep the gap,
-        // also when they only come close without touching.
-        if (dot < 0 && base > 0) {
-          const otherStart = base - other.outerRadius;
-          const otherEnd = base - other.innerRadius;
-          if (otherEnd <= innerRadius || otherStart >= line.outerRadius + settings.threatLineLength) continue;
-          facingOuterLimit = Math.min(facingOuterLimit, base / 2 - gap / 2);
-          continue;
-        }
-        const otherStart = dot > 0 ? base + other.innerRadius : base - other.outerRadius;
-        const otherEnd = dot > 0 ? base + other.outerRadius : base - other.innerRadius;
-        if (otherEnd <= innerRadius || otherStart >= outerRadius) continue;
-        if (otherStart >= innerRadius) outerRadius = Math.min(outerRadius, otherStart - gap / 2);
-        else innerRadius = Math.max(innerRadius, otherEnd + gap / 2);
+        const otherStart = dot > 0 ? base + otherRange.inner : base - otherRange.outer;
+        const otherEnd = dot > 0 ? base + otherRange.outer : base - otherRange.inner;
+        if (otherEnd <= inner || otherStart >= outer) continue;
+        if (otherStart >= inner) outer = Math.min(outer, otherStart - gap / 2);
+        else inner = Math.max(inner, otherEnd + gap / 2);
       }
-      if (Number.isFinite(facingOuterLimit)) outerRadius = facingOuterLimit;
-      // Neighbouring lines may leave little room; a line keeps at least one thickness so it never disappears.
-      outerRadius = Math.max(outerRadius, innerRadius + settings.threatLineThickness);
+      line.finalInner = inner;
+      line.finalOuter = outer;
+    }
+
+    // A constrained line is omitted rather than expanded past its safe endpoint.
+    for (const members of linesByUnit.values()) {
+      const active = members.filter(line => !line.suppressed);
+      if (!active.length) continue;
+      const commonLength = Math.min(
+        settings.threatLineLength,
+        ...active.map(line => line.finalOuter - line.finalInner)
+      );
+      if (commonLength < settings.threatLineThickness) {
+        for (const line of active) {
+          line.suppressed = true;
+          if (line.partner) line.partner.suppressed = true;
+        }
+        continue;
+      }
+      for (const line of active) line.finalOuter = line.finalInner + commonLength;
+    }
+
+    for (const line of lines) {
+      if (line.suppressed) continue;
       const { center, direction, normal, offset } = line;
+      const innerRadius = line.finalInner;
+      const outerRadius = Math.min(line.finalOuter, innerRadius + settings.threatLineLength);
       if (line.curved) {
         svg.append(createKnightCurvePath(line, innerRadius, outerRadius));
         continue;
@@ -1053,6 +1359,7 @@
     const defenseSegments = settings.defenseCirclesEnabled
       ? getDefenseConnections(parsed.position, parsed.blackOrientation).map(connection => ({
         target: connection.target,
+        source: connection.source,
         angle: Math.atan2(connection.source.row - connection.target.row, connection.source.col - connection.target.col),
         type: parsed.position[connection.target.row][connection.target.col].type,
         sourceType: parsed.position[connection.source.row][connection.source.col].type,
@@ -1170,6 +1477,7 @@
       for (const attacker of threat.attackers) {
         attackSegments.push({
           target: threat.square,
+          source: { row: attacker.row, col: attacker.col },
           angle: Math.atan2(attacker.row - threat.square.row, attacker.col - threat.square.col),
           type: threat.type,
           sourceType: attacker.type,
