@@ -29,13 +29,21 @@
       const row = Math.floor(((rect.top + rect.height / 2 - boardRect.top) / boardRect.height) * 8);
       const col = Math.floor(((rect.left + rect.width / 2 - boardRect.left) / boardRect.width) * 8);
       if (row !== targetRow || col !== targetCol) continue;
-      return { transform: square.style.transform || style.transform, left: rect.left, top: rect.top };
+      return {
+        transform: square.style.transform || style.transform,
+        left: rect.left,
+        top: rect.top,
+        squareWidth: rect.width,
+        squareHeight: rect.height
+      };
     }
 
     return {
       transform: `translate(${targetCol * 100}%, ${targetRow * 100}%)`,
       left: boardRect.left + targetCol * boardRect.width / 8,
-      top: boardRect.top + targetRow * boardRect.height / 8
+      top: boardRect.top + targetRow * boardRect.height / 8,
+      squareWidth: boardRect.width / 8,
+      squareHeight: boardRect.height / 8
     };
   }
 
@@ -59,7 +67,15 @@
       && Math.abs(pieceRect.top - destination.top) < 0.5;
     if (settings?.enabled && !settings.disableAnimations && typeof piece.animate === "function"
       && !alreadyAtDestination) {
-      const duration = settings.moveAnimationLichessSpeed ? lichessDuration : settings.moveAnimationDuration;
+      const distance = settings.moveAnimationTimeDistance
+        ? Math.hypot(
+          (destination.left - pieceRect.left) / destination.squareWidth,
+          (destination.top - pieceRect.top) / destination.squareHeight
+        )
+        : 1;
+      const baseDuration = settings.moveAnimationLichessSpeed ? lichessDuration : settings.moveAnimationDuration;
+      const distanceFactor = settings.moveAnimationTimeDistance ? settings.moveAnimationDistanceFactor : 0;
+      const duration = baseDuration + distance * distanceFactor * baseDuration;
       if (duration > 0) {
         const animation = piece.animate([{ transform: origin }, { transform: destination.transform }], {
           duration,

@@ -47,6 +47,10 @@ input[type="range"] { width: 100%; height: 13px; margin: 1px 0 0; accent-color: 
 .bezier-editor { width: 100%; margin-top: 5px; }
 .bezier-preview { position: relative; height: 20px; border-radius: 5px; background: #18221d; cursor: pointer; }
 .bezier-preview-dot { position: absolute; left: 4px; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%; background: #68adff; }
+.bezier-preview-multi { height: 54px; background: repeating-linear-gradient(to bottom, #18221d 0 17px, #29372f 17px 18px); }
+.bezier-preview-distance { position: absolute; left: 5px; color: #aab8ad; font-size: 8px; line-height: 14px; }
+.bezier-preview-piece { display: block; width: 14px; height: 16px; margin: 0; border-radius: 0; background: transparent; }
+.bezier-preview-rook { display: block; width: 14px; height: 16px; fill: #e4eee5; }
 .bezier-preview-time { display: block; margin-top: 3px; text-align: right; color: #818980; font-size: 8px; }
 .bezier-editor svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: none; user-select: none; }
 .bezier-background { fill: #18221d; }

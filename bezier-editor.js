@@ -48,7 +48,7 @@
     return element;
   }
 
-  function mount(container, initialValue, onChange, getDuration = () => 300) {
+  function mount(container, initialValue, onChange, getDuration = () => 300, previewDistances = [1], getPieceAssetUrl = null) {
     if (!container) return { setValue() {} };
 
     let curve = normalizeCurve(initialValue);
@@ -96,15 +96,45 @@
     container.replaceChildren(svg);
 
     const preview = document.createElement("div");
-    preview.className = "bezier-preview";
-    preview.title = "Klicken für Vorschau";
-    const dot = document.createElement("span");
-    dot.className = "bezier-preview-dot";
-    preview.append(dot);
+    const multiDistancePreview = previewDistances.length > 1;
+    preview.className = `bezier-preview${multiDistancePreview ? " bezier-preview-multi" : ""}`;
+    preview.title = multiDistancePreview ? "Klicken für Vorschau aller Distanzen" : "Klicken für Vorschau";
+    const previewPieces = previewDistances.map((distance, index) => {
+      const piece = document.createElement("span");
+      piece.className = `bezier-preview-dot${multiDistancePreview ? " bezier-preview-piece" : ""}`;
+      if (multiDistancePreview) {
+        const laneTop = `${index * 18 + 2}px`;
+        const label = document.createElement("span");
+        label.className = "bezier-preview-distance";
+        label.style.top = laneTop;
+        label.textContent = String(distance);
+        piece.style.left = "24px";
+        piece.style.top = laneTop;
+        if (!getPieceAssetUrl) {
+          const rook = svgElement("svg", { class: "bezier-preview-rook", viewBox: "0 0 16 18", "aria-hidden": "true" });
+          rook.append(svgElement("path", { d: "M2 1h3v4h2V1h4v4h2V1h3v5l-2 2 1 7H3l1-7-2-2zM2 16h12v2H2z" }));
+          piece.append(rook);
+        }
+        preview.append(label);
+      }
+      preview.append(piece);
+      return piece;
+    });
     const timeLabel = document.createElement("small");
     timeLabel.className = "bezier-preview-time";
     container.append(preview, timeLabel);
+    updatePreviewPieces();
     preview.addEventListener("click", () => playPreview());
+
+    function updatePreviewPieces() {
+      const assetUrl = getPieceAssetUrl?.();
+      if (!assetUrl) return;
+      for (const piece of previewPieces) {
+        piece.style.backgroundColor = "#e4eee5";
+        piece.style.webkitMask = `url("${assetUrl}") center / contain no-repeat`;
+        piece.style.mask = `url("${assetUrl}") center / contain no-repeat`;
+      }
+    }
 
     function toPoint(time, curveValue) {
       const progress = progressFromCurveValue(curveValue);
@@ -173,16 +203,22 @@
     }
 
     function playPreview() {
-      const duration = getDuration();
       const [time1, curveValue1, time2, curveValue2] = curve;
-      const distance = Math.max(0, preview.clientWidth - dot.offsetWidth - 8);
-      for (const animation of dot.getAnimations()) animation.cancel();
-      dot.animate([{ transform: "translateX(0px)" }, { transform: `translateX(${distance}px)` }], {
-        duration,
-        easing: `cubic-bezier(${time1}, ${curveValue1 / -90}, ${time2}, ${curveValue2 / -90})`,
-        fill: "forwards"
-      });
-      timeLabel.textContent = `${duration} ms`;
+      const maxFieldDistance = Math.max(...previewDistances);
+      const maxTravel = Math.max(0, preview.clientWidth - previewPieces[0].offsetWidth - (multiDistancePreview ? 32 : 8));
+      const durations = previewDistances.map(distance => getDuration(distance));
+      for (const [index, piece] of previewPieces.entries()) {
+        for (const animation of piece.getAnimations()) animation.cancel();
+        const travel = maxFieldDistance ? maxTravel * previewDistances[index] / maxFieldDistance : 0;
+        piece.animate([{ transform: "translateX(0px)" }, { transform: `translateX(${travel}px)` }], {
+          duration: durations[index],
+          easing: `cubic-bezier(${time1}, ${curveValue1 / -90}, ${time2}, ${curveValue2 / -90})`,
+          fill: "forwards"
+        });
+      }
+      timeLabel.textContent = multiDistancePreview
+        ? `${previewDistances.join(" / ")} Felder · ${durations.map(duration => Math.round(duration)).join(" / ")} ms`
+        : `${durations[0]} ms`;
     }
 
     function commit() {
@@ -247,6 +283,7 @@
     render();
     return {
       preview: playPreview,
+      updatePreviewPieces,
       setValue(value, newResetCurve = resetCurve) {
         curve = normalizeCurve(value);
         resetCurve = normalizeCurve(newResetCurve);

@@ -57,6 +57,8 @@
             <label class="field"><span>Wippdauer</span><input type="range" min="200" max="1500" step="10" data-setting="pieceBounceWiggleDuration"><output data-value-for="pieceBounceWiggleDuration"></output></label>
             <label class="switch-field"><span><strong>Lichess-Geschwindigkeit</strong><small>Nutzt die Zuggeschwindigkeit von Lichess.</small></span><input type="checkbox" data-setting="moveAnimationLichessSpeed" role="switch"></label>
             <label class="field" data-own-speed><span>Zugdauer</span><input type="range" min="0" max="500" step="10" data-setting="moveAnimationDuration"><output data-value-for="moveAnimationDuration"></output></label>
+            <label class="switch-field"><span><strong>Zeit/Distanz</strong><small>Erhöht die Grundzeit pro Feld um den eingestellten Anteil.</small></span><input type="checkbox" data-setting="moveAnimationTimeDistance" role="switch"></label>
+            <label class="field" data-distance-factor hidden><span>Faktor Zeit/Distanz</span><input type="range" min="0" max="1" step="0.05" data-setting="moveAnimationDistanceFactor"><output data-value-for="moveAnimationDistanceFactor"></output></label>
           </div>
           <div class="bounce-curve-panel">
             <div class="bounce-curve-heading"><span><strong>Animationskurve</strong><small>Griffe ziehen oder mit Pfeiltasten bewegen.</small></span><button type="button" data-bezier-reset>Zuruecksetzen</button></div>
@@ -181,11 +183,17 @@
           </div>
           <p class="control-group-label">Figurenkontur im Zentrum</p>
           <div class="control-grid compact-grid">
-            <label class="switch-field"><span><strong>Figurenkontur im Zentrum aktivieren</strong><small>Umrandet die Figur, wenn sie mehr angegriffen als verteidigt wird. Die Farbe ist die des Angreifers.</small></span><input type="checkbox" data-setting="threatCenterOutlineEnabled" role="switch"></label>
+            <label class="switch-field"><span><strong>Figurenkontur im Zentrum aktivieren</strong><small>Markiert Figuren, wenn sie mehr angegriffen als verteidigt werden. Die Farbe ist die des Angreifers.</small></span><input type="checkbox" data-setting="threatCenterOutlineEnabled" role="switch"></label>
           </div>
           <div class="control-grid">
-            <label class="field"><span>Breite der Outline in Prozent</span><input type="range" min="0" max="20" step="0.5" data-setting="threatCenterOutlineWidthPercent"><output data-value-for="threatCenterOutlineWidthPercent"></output></label>
-            <label class="field"><span>Deckkraft</span><input type="range" min="0" max="100" step="1" data-setting="threatCenterOutlineOpacity"><output data-value-for="threatCenterOutlineOpacity"></output></label>
+            <label class="field"><span>Ansicht</span><select data-setting="threatCenterOutlineStyle"><option value="outline">Figurenoutline</option><option value="hatching">Schraffur (eine Richtung)</option></select></label>
+            <label class="switch-field" data-center-outline-mode="hatching"><span><strong>Schraffur nur bei haltbarem Schlag</strong><small>Bewertet Rückschläge auf dem Zielfeld und gewinnbringende Gegenschläge auf andere Felder.</small></span><input type="checkbox" data-setting="threatCenterHatchExchangeFilterEnabled" role="switch"></label>
+            <label class="field" data-center-outline-mode="outline"><span>Breite der Outline in Prozent</span><input type="range" min="0" max="20" step="0.5" data-setting="threatCenterOutlineWidthPercent"><output data-value-for="threatCenterOutlineWidthPercent"></output></label>
+            <label class="field" data-center-outline-mode="hatching"><span>Linienabstand in Prozent der Feldbreite</span><input type="range" min="0.5" max="40" step="0.5" data-setting="threatCenterHatchSpacingPercent"><output data-value-for="threatCenterHatchSpacingPercent"></output></label>
+            <label class="field" data-center-outline-mode="hatching"><span>Liniendicke in Prozent der Feldbreite</span><input type="range" min="0.25" max="20" step="0.25" data-setting="threatCenterHatchThicknessPercent"><output data-value-for="threatCenterHatchThicknessPercent"></output></label>
+            <label class="field" data-center-outline-mode="hatching"><span>Linienwinkel</span><input type="range" min="0" max="180" step="1" data-setting="threatCenterHatchAngleDeg"><output data-value-for="threatCenterHatchAngleDeg"></output></label>
+            <label class="field" data-center-outline-mode="hatching"><span>Schraffurtempo (0 stoppt, bis 1 Feld/s)</span><input type="range" min="0" max="1" step="0.01" data-setting="threatCenterHatchSpeed"><output data-value-for="threatCenterHatchSpeed"></output></label>
+            <label class="field" data-center-outline-mode="outline"><span>Deckkraft</span><input type="range" min="0" max="100" step="1" data-setting="threatCenterOutlineOpacity"><output data-value-for="threatCenterOutlineOpacity"></output></label>
           </div>
         </section>
 

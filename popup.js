@@ -61,10 +61,12 @@
     if (control.dataset.setting.endsWith("Px")) return `${control.value} px`;
     if (control.dataset.setting === "wedgeOpacity") return `${Math.round(Number(control.value) * 100)}%`;
     if (control.dataset.setting === "moveAnimationDuration") return `${control.value} ms`;
+    if (control.dataset.setting === "moveAnimationDistanceFactor") return `${Number(control.value).toFixed(2)}x`;
+    if (control.dataset.setting === "threatCenterHatchSpeed") return `${Number(control.value).toFixed(2)} Felder/s`;
     if (["pieceBounceTiming", "pieceBounceDuration", "pieceBounceWiggleDuration"].includes(control.dataset.setting)) {
       return `${control.value} ms`;
     }
-    if (["pieceBounceWiggleAngle", "threatArcAngleDeg", "threatSquareAngleDeg"].includes(control.dataset.setting)) {
+    if (["pieceBounceWiggleAngle", "threatArcAngleDeg", "threatSquareAngleDeg", "threatCenterHatchAngleDeg"].includes(control.dataset.setting)) {
       return `${control.value}°`;
     }
     if (["threatOwnSeeThrough", "threatOpponentSeeThrough", "threatDepthFactor", "threatArcRadius", "threatArcThickness", "segmentFigureMargin", "threatSquareRadius", "threatSquareThickness", "threatSquareFigureMargin", "threatLineRadius", "threatLineLength", "threatLineThickness", "threatLineGap", "threatLineFigureMargin", "threatLineCurvature"].includes(control.dataset.setting)) {
@@ -183,6 +185,7 @@
     }
     updateThreatDisplayControls();
     updateDependentControls();
+    bounceCurveEditor?.updatePreviewPieces();
   }
 
   function saveControl(control) {
@@ -205,10 +208,18 @@
   }
 
   // Duration of the active curve's animation, used by the curve preview.
-  function previewDuration() {
+  function previewDuration(distance = 1) {
     const durationKeys = { pieceBounceCurve: "pieceBounceDuration", pieceBounceWiggleCurve: "pieceBounceWiggleDuration", moveAnimationCurve: "moveAnimationDuration" };
-    if (activeCurveKey === "moveAnimationCurve" && currentSettings.moveAnimationLichessSpeed) return 250;
-    return currentSettings[durationKeys[activeCurveKey]];
+    const baseDuration = activeCurveKey === "moveAnimationCurve" && currentSettings.moveAnimationLichessSpeed
+      ? 250
+      : currentSettings[durationKeys[activeCurveKey]];
+    if (activeCurveKey !== "moveAnimationCurve" || !currentSettings.moveAnimationTimeDistance) return baseDuration;
+    return baseDuration + distance * currentSettings.moveAnimationDistanceFactor * baseDuration;
+  }
+
+  function previewPieceUrl() {
+    const asset = currentSettings.pieceSet === "cage" ? "cage/cage_r.svg" : `${currentSettings.pieceSet}/wr.svg`;
+    return chrome.runtime.getURL(asset);
   }
 
   function setCurveTab(key) {
@@ -340,7 +351,9 @@
     document.querySelector('[data-bezier-editor="pieceBounceCurve"]'),
     currentSettings.pieceBounceCurve,
     saveBounceCurve,
-    previewDuration
+    previewDuration,
+    [1, 3, 7],
+    previewPieceUrl
   );
   for (const tab of curveTabs) tab.addEventListener("click", () => setCurveTab(tab.dataset.curveTab));
 
@@ -361,7 +374,10 @@
           pieceBounceWiggleDuration: "pieceBounceWiggleCurve",
           moveAnimationDuration: "moveAnimationCurve"
         }[control.dataset.setting];
-        if (!curveForDuration) return;
+        if (!curveForDuration) {
+          if (control.dataset.setting === "moveAnimationDistanceFactor") bounceCurveEditor?.preview();
+          return;
+        }
         setCurveTab(curveForDuration);
         bounceCurveEditor?.preview();
       });
@@ -372,6 +388,8 @@
           saveControl(control);
           if (["threatAttackDisplayMode", "threatDefenseDisplayMode"].includes(control.dataset.setting)) updateThreatDisplayControls();
           updateDependentControls();
+          if (control.dataset.setting === "pieceSet") bounceCurveEditor?.updatePreviewPieces();
+          if (["moveAnimationLichessSpeed", "moveAnimationTimeDistance"].includes(control.dataset.setting)) bounceCurveEditor?.preview();
         });
       }
   }

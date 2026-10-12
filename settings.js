@@ -56,6 +56,8 @@
     pieceBounceWiggleCurve: [0.1681075096130371, -8.821559392769496, 0.634965942019508, -93.04401927854734],
     moveAnimationLichessSpeed: true,
     moveAnimationDuration: 250,
+    moveAnimationTimeDistance: false,
+    moveAnimationDistanceFactor: 1,
     moveAnimationCurve: [0.42, 0, 0.58, -90],
     selectedPieceWedgeEnabled: true,
     selectedPieceWedgeOnlySelected: true,
@@ -112,8 +114,14 @@
     threatLineCurvature: 0.3,
     threatSquareCornerRadiusPercent: 10,
     threatCenterOutlineEnabled: false,
+    threatCenterOutlineStyle: "outline",
+    threatCenterHatchExchangeFilterEnabled: true,
     threatCenterOutlineWidthPercent: 4,
     threatCenterOutlineOpacity: 85,
+    threatCenterHatchSpacingPercent: 5,
+    threatCenterHatchThicknessPercent: 2,
+    threatCenterHatchAngleDeg: 45,
+    threatCenterHatchSpeed: 0.15,
     removeOutlines: true,
     removeGlows: true,
     removeGradients: true,
@@ -159,6 +167,10 @@
 
     threatCenterOutlineWidthPercent: [0, 20],
     threatCenterOutlineOpacity: [0, 100],
+    threatCenterHatchSpacingPercent: [0.5, 40],
+    threatCenterHatchThicknessPercent: [0.25, 20],
+    threatCenterHatchAngleDeg: [0, 180],
+    threatCenterHatchSpeed: [0, 1],
     threatOwnSeeThrough: [0, 1],
     threatOpponentSeeThrough: [0, 1],
     threatMoveDepth: [1, 5],
@@ -169,7 +181,8 @@
     pieceBounceTiming: [0, 5000],
     pieceBounceDuration: [200, 1500],
     pieceBounceWiggleDuration: [200, 1500],
-    moveAnimationDuration: [0, 500]
+    moveAnimationDuration: [0, 500],
+    moveAnimationDistanceFactor: [0, 1]
   };
   const colors = Object.keys(defaults).filter(key => /Color|Light|Dark/.test(key) && typeof defaults[key] === "string");
 
@@ -215,6 +228,10 @@
     if (!["all", "waterfall"].includes(result.wedgePotentialStrategy)) {
       result.wedgePotentialStrategy = defaults.wedgePotentialStrategy;
     }
+    if (result.threatCenterOutlineStyle === "crosshatch") result.threatCenterOutlineStyle = "hatching";
+    if (!["outline", "hatching"].includes(result.threatCenterOutlineStyle)) {
+      result.threatCenterOutlineStyle = defaults.threatCenterOutlineStyle;
+    }
     const displayModes = ["segments", "lines", "square"];
     const legacyDisplayMode = displayModes.includes(values.threatDisplayMode) ? values.threatDisplayMode : defaults.threatAttackDisplayMode;
     for (const key of ["threatAttackDisplayMode", "threatDefenseDisplayMode"]) {
@@ -233,6 +250,8 @@
     result.threatMaxMixPercent = Math.round(result.threatMaxMixPercent);
     result.threatGradientPercent = Math.round(result.threatGradientPercent);
     result.pieceBounceWiggleAngle = Math.round(result.pieceBounceWiggleAngle);
+    result.threatCenterHatchAngleDeg = Math.round(result.threatCenterHatchAngleDeg);
+    result.threatCenterHatchSpeed = Number(result.threatCenterHatchSpeed.toFixed(2));
     result.threatCenterOutlineWidthPercent = Number(result.threatCenterOutlineWidthPercent.toFixed(1));
     result.lastMoveLineWidth = Math.round(result.lastMoveLineWidth);
 
@@ -248,6 +267,7 @@
     result.pieceBounceDuration = Math.round(result.pieceBounceDuration / 10) * 10;
     result.pieceBounceWiggleDuration = Math.round(result.pieceBounceWiggleDuration / 10) * 10;
     result.moveAnimationDuration = Math.round(result.moveAnimationDuration / 10) * 10;
+    result.moveAnimationDistanceFactor = Number((Math.round(result.moveAnimationDistanceFactor / 0.05) * 0.05).toFixed(2));
     for (const key of ["pieceBounceCurve", "pieceBounceWiggleCurve", "moveAnimationCurve"]) {
       const curve = Array.isArray(result[key]) ? result[key].map(Number) : null;
       if (!curve || curve.length !== 4 || !curve.every(Number.isFinite)) {
@@ -291,7 +311,9 @@
       "moveDotsPlayerColor",
       "threatenedPieceOutlineEnabled",
       "threatCenterOutlineEnabled",
+      "threatCenterHatchExchangeFilterEnabled",
       "moveAnimationLichessSpeed",
+      "moveAnimationTimeDistance",
       "complexPawn"
     ]) {
       result[key] = Boolean(result[key]);

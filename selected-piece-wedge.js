@@ -18,6 +18,9 @@
   const observedBoards = new Map();
   let settings = null;
   let documentObserver = null;
+  let hatchAnimationFrame = 0;
+  let hatchScrollLastTime = null;
+  let hatchScrollDistance = 0;
 
   function scheduleRender(board) {
     const entry = observedBoards.get(board);
@@ -26,6 +29,50 @@
       entry.frame = 0;
       renderBoard(board, entry);
     });
+  }
+
+  // A single shared clock keeps every hatch in phase when board overlays are rebuilt.
+  function advanceHatchScroll(timestamp = performance.now()) {
+    if (hatchScrollLastTime !== null && settings) {
+      hatchScrollDistance += Math.max(0, timestamp - hatchScrollLastTime) * settings.threatCenterHatchSpeed / 1000;
+    }
+    hatchScrollLastTime = timestamp;
+    return hatchScrollDistance;
+  }
+
+  function hatchPatternTransform(angle, spacing, distance = hatchScrollDistance) {
+    const offset = ((distance % spacing) + spacing) % spacing;
+    return `rotate(${angle}) translate(0 ${offset.toFixed(4)})`;
+  }
+
+  function animateHatchPatterns(timestamp) {
+    hatchAnimationFrame = 0;
+    advanceHatchScroll(timestamp);
+    let hasPatterns = false;
+    for (const entry of observedBoards.values()) {
+      for (const { pattern, spacing, angle } of entry.hatchPatterns) {
+        const transform = hatchPatternTransform(angle, spacing);
+        if (pattern.getAttribute("patternTransform") !== transform) pattern.setAttribute("patternTransform", transform);
+        hasPatterns = true;
+      }
+    }
+    if (hasPatterns && settings?.threatCenterHatchSpeed > 0) {
+      hatchAnimationFrame = requestAnimationFrame(animateHatchPatterns);
+    }
+  }
+
+  function syncHatchAnimation() {
+    const hasPatterns = [...observedBoards.values()].some(entry => entry.hatchPatterns.length);
+    if (settings?.threatCenterHatchSpeed > 0 && hasPatterns) {
+      if (!hatchAnimationFrame) {
+        advanceHatchScroll();
+        hatchAnimationFrame = requestAnimationFrame(animateHatchPatterns);
+      }
+    } else if (hatchAnimationFrame) {
+      cancelAnimationFrame(hatchAnimationFrame);
+      hatchAnimationFrame = 0;
+      advanceHatchScroll();
+    }
   }
 
   document.addEventListener("pointermove", () => {
@@ -54,6 +101,15 @@
     return { color, type, element };
   }
 
+  function getPieceScreenSquare(element, board, blackOrientation) {
+    const moveKey = element.classList.contains("anim") ? element.getAttribute("data-lfs-move-key")?.toLowerCase() : null;
+    const match = /^([a-h])([1-8])$/.exec(moveKey ?? "");
+    if (match) {
+      return logicalToScreen({ row: 8 - Number(match[2]), col: match[1].charCodeAt(0) - 97 }, blackOrientation);
+    }
+    return getScreenSquare(element, board);
+  }
+
   function readPosition(board) {
     const blackOrientation = board.closest(".cg-wrap")?.classList.contains("orientation-black") ?? false;
     const position = Array.from({ length: 8 }, () => Array(8).fill(null));
@@ -61,7 +117,7 @@
     for (const element of board.querySelectorAll(":scope > piece")) {
       if (element.classList.contains("ghost") || element.classList.contains("fading")) continue;
       const piece = getPiece(element);
-      const square = getScreenSquare(element, board);
+      const square = getPieceScreenSquare(element, board, blackOrientation);
       if (!piece || !square || position[square.row][square.col]) return null;
       position[square.row][square.col] = piece;
     }
@@ -234,8 +290,125 @@
     return connections;
   }
 
+  function applyExchangeCapture(position, source, target, blackOrientation) {
+    const piece = position[source.row][source.col];
+    const nextPosition = position.map(row => row.slice());
+    nextPosition[source.row][source.col] = null;
+    nextPosition[target.row][target.col] = piece;
+
+    const promotionRow = (piece.color === "w") !== blackOrientation ? 0 : 7;
+    const promotes = piece.type === "pawn" && target.row === promotionRow;
+    if (promotes) nextPosition[target.row][target.col] = { ...piece, type: "queen" };
+    return { position: nextPosition, promotionGain: promotes ? pieceValues.queen - pieceValues.pawn : 0 };
+  }
+
+  function isSquareAttacked(position, target, color, blackOrientation) {
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        if (position[row][col]?.color === color
+          && canReach(position, { row, col }, target, blackOrientation)) return true;
+      }
+    }
+    return false;
+  }
+
+  function canExchangeCapture(position, source, target, blackOrientation) {
+    const piece = position[source.row][source.col];
+    const victim = position[target.row][target.col];
+    if (!piece || !victim || piece.color === victim.color || victim.type === "king"
+      || !canReach(position, source, target, blackOrientation)) return false;
+
+    const nextPosition = applyExchangeCapture(position, source, target, blackOrientation).position;
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const occupant = nextPosition[row][col];
+        if (occupant?.color === piece.color && occupant.type === "king") {
+          return !isSquareAttacked(nextPosition, { row, col }, victim.color, blackOrientation);
+        }
+      }
+    }
+    return true;
+  }
+
+  function getLeastValuableAttacker(position, target, color, blackOrientation) {
+    let leastValuable = null;
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const piece = position[row][col];
+        if (!piece || piece.color !== color) continue;
+        if (pieceValues[piece.type] >= (leastValuable?.value ?? Infinity)) continue;
+        const source = { row, col };
+        if (!canExchangeCapture(position, source, target, blackOrientation)) continue;
+        leastValuable = { source, value: pieceValues[piece.type] };
+      }
+    }
+    return leastValuable;
+  }
+
+  // Evaluate captures on one square, allowing either side to stop the exchange.
+  function getBestExchangeGain(position, target, color, blackOrientation) {
+    const victim = position[target.row][target.col];
+    if (!victim || victim.color === color) return 0;
+    const attacker = getLeastValuableAttacker(position, target, color, blackOrientation);
+    if (!attacker) return 0;
+
+    const capture = applyExchangeCapture(position, attacker.source, target, blackOrientation);
+    return Math.max(0, pieceValues[victim.type] + capture.promotionGain
+      - getBestExchangeGain(capture.position, target, victim.color, blackOrientation));
+  }
+
+  function getBestCaptureGainOutsideSquare(position, color, excludedTarget, threshold, blackOrientation) {
+    let bestGain = 0;
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        if (row === excludedTarget.row && col === excludedTarget.col) continue;
+        const victim = position[row][col];
+        if (!victim || victim.color === color || victim.type === "king"
+          || pieceValues[victim.type] + pieceValues.queen - pieceValues.pawn <= bestGain) continue;
+        const gain = getBestExchangeGain(position, { row, col }, color, blackOrientation);
+        if (gain > bestGain) bestGain = gain;
+        if (bestGain > threshold) return bestGain;
+      }
+    }
+    return bestGain;
+  }
+
+  function getExchangeWinningAttacker(position, target, blackOrientation) {
+    const victim = position[target.row][target.col];
+    if (!victim || victim.type === "king") return null;
+    const victimValue = pieceValues[victim.type];
+
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const attacker = position[row][col];
+        if (!attacker || attacker.color === victim.color || pieceValues[attacker.type] > victimValue) continue;
+        const source = { row, col };
+        if (!canExchangeCapture(position, source, target, blackOrientation)) continue;
+
+        const capture = applyExchangeCapture(position, source, target, blackOrientation);
+        const gain = victimValue + capture.promotionGain
+          - getBestExchangeGain(capture.position, target, victim.color, blackOrientation);
+        if (gain < 0) continue;
+        const counterCaptureGain = getBestCaptureGainOutsideSquare(
+          capture.position,
+          victim.color,
+          target,
+          gain,
+          blackOrientation
+        );
+        if (counterCaptureGain <= gain) return attacker.color;
+      }
+    }
+    return null;
+  }
+
+  function shouldFilterHatchedThreats() {
+    return settings?.threatCenterOutlineStyle === "hatching"
+      && settings?.threatCenterHatchExchangeFilterEnabled;
+  }
+
   // Include attacks from cheaper pieces even when the target has defenders.
-  function getOverloadedPieces(position, blackOrientation) {
+  function getOverloadedPieces(position, blackOrientation, filterByWinningExchange = false) {
     const counts = new Map();
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
@@ -261,7 +434,11 @@
       if (cheaperAttacker) overloaded.push({ target, color: cheaperAttacker.color });
       else if (attackers.length > defenders) overloaded.push({ target, color: attackers[0].color });
     }
-    return overloaded;
+    if (!filterByWinningExchange) return overloaded;
+    return overloaded.flatMap(({ target }) => {
+      const color = getExchangeWinningAttacker(position, target, blackOrientation);
+      return color ? [{ target, color }] : [];
+    });
   }
 
   function clearThreatenedPieceOutline(element) {
@@ -327,10 +504,7 @@
 
     let transform = transforms.get(piece);
     if (!transform) {
-      const orientation = piece.closest(".cg-wrap")?.classList;
-      const rotated = (orientation?.contains("orientation-white") && piece.classList.contains("black"))
-        || (orientation?.contains("orientation-black") && piece.classList.contains("white"));
-      transform = rotated ? "rotate(180deg)" : "none";
+      transform = getComputedStyle(piece, "::before").transform;
       transforms.set(piece, transform);
     }
     if (image.style.transform !== transform) image.style.transform = transform;
@@ -346,7 +520,11 @@
 
   function updateMoveOutlinePreviews(board, position, source, piece, blackOrientation) {
     clearMoveOutlineMarkers(board);
-    if (!settings?.threatCenterOutlineEnabled || !settings.threatCenterOutlineWidthPercent || !settings.threatCenterOutlineOpacity || !source || !piece) return [];
+    const markWidth = settings?.threatCenterOutlineStyle === "hatching"
+      ? settings.threatCenterHatchThicknessPercent
+      : settings?.threatCenterOutlineWidthPercent;
+    const invisibleOutline = settings?.threatCenterOutlineStyle !== "hatching" && !settings?.threatCenterOutlineOpacity;
+    if (!settings?.threatCenterOutlineEnabled || !markWidth || invisibleOutline || !source || !piece) return [];
 
     const pieceElement = piece.element ?? getDraggingPiece(board);
     const previews = [];
@@ -361,7 +539,7 @@
       const nextPosition = position.map(row => row.slice());
       nextPosition[source.row][source.col] = null;
       nextPosition[target.row][target.col] = piece;
-      const outline = getOverloadedPieces(nextPosition, blackOrientation)
+      const outline = getOverloadedPieces(nextPosition, blackOrientation, shouldFilterHatchedThreats())
         .find(candidate => candidate.target.row === target.row && candidate.target.col === target.col);
       if (!outline) continue;
 
@@ -418,11 +596,14 @@
       simulated[selected.row][selected.col] = null;
       simulated[destination.row][destination.col] = piece;
       const attacks = getAttackedPieces(simulated, destination, blackOrientation)
-        .filter(target => simulated[target.row][target.col].color !== piece.color);
-      if (!attacks.some(target => pieceValues[simulated[target.row][target.col].type] > attackerValue)) continue;
+        .filter(target => {
+          const targetPiece = simulated[target.row][target.col];
+          return targetPiece.color !== piece.color && pieceValues[targetPiece.type] > attackerValue;
+        });
+      if (!attacks.length) continue;
       const officers = attacks.filter(target => pieceValues[simulated[target.row][target.col].type] >= 3);
       const fork = officers.length >= 2;
-      const targets = fork ? officers : attacks.filter(target => pieceValues[simulated[target.row][target.col].type] > attackerValue);
+      const targets = fork ? officers : attacks;
       let attackers = 0;
       let defenders = 0;
       let minAttackerValue = Infinity;
@@ -1375,18 +1556,17 @@
   }
 
   // The drag preview has no DOM elements; the rotation of an outlined figure comes from its own element.
-  function findPieceElement(board, square, dragPreview) {
+  function findPieceElement(board, square, dragPreview, blackOrientation) {
     const draggedSquare = dragPreview && logicalToScreen(dragPreview.legal ? dragPreview.target : dragPreview.source, dragPreview.blackOrientation);
     if (draggedSquare?.row === square.row && draggedSquare?.col === square.col) return getDraggingPiece(board);
     return [...board.querySelectorAll(":scope > piece")].find(element => {
       if (element.classList.contains("ghost") || element.classList.contains("fading") || element.classList.contains("dragging")) return false;
-      const screen = getScreenSquare(element, board);
+      const screen = getPieceScreenSquare(element, board, blackOrientation);
       return screen?.row === square.row && screen?.col === square.col;
     }) ?? null;
   }
 
   function renderBoard(board, entry) {
-    if (board.querySelector(":scope > piece.anim")) return;
     clearMoveOutlineMarkers(board);
 
     const dragPreview = globalThis.LichessThreatCoding?.getInteractionPreview(board);
@@ -1443,7 +1623,10 @@
       const capturedByLower = piece.type !== "king" && (wedgeThreatened[piece.color].get(`${source.row},${source.col}`) ?? [])
         .some(attacker => pieceValues[wedgeParsed.position[attacker.row][attacker.col].type] < pieceValues[piece.type]);
       const directTargets = capturedByLower ? [] : getAttackedPieces(wedgeParsed.position, source, wedgeParsed.blackOrientation)
-        .filter(target => wedgeParsed.position[target.row][target.col].color !== piece.color);
+        .filter(target => {
+          const targetPiece = wedgeParsed.position[target.row][target.col];
+          return targetPiece.color !== piece.color && pieceValues[targetPiece.type] > pieceValues[piece.type];
+        });
       wedges.push(...directTargets.map(target => ({ source, target, color: piece.color })));
 
       if (showUnselectedPotentials) continue;
@@ -1470,10 +1653,10 @@
         color: connection.color === "w" ? settings.whitePieceColor : settings.blackPieceColor
       }))
       : [];
-    const centerOutlines = settings.threatCenterOutlineEnabled
-      ? getOverloadedPieces(parsed.position, parsed.blackOrientation).map(outline => {
+      const centerOutlines = settings.threatCenterOutlineEnabled
+         ? getOverloadedPieces(parsed.position, parsed.blackOrientation, shouldFilterHatchedThreats()).map(outline => {
         const piece = parsed.position[outline.target.row][outline.target.col];
-        return { ...outline, piece: { ...piece, element: findPieceElement(board, outline.target, dragPreview) } };
+        return { ...outline, piece: { ...piece, element: findPieceElement(board, outline.target, dragPreview, parsed.blackOrientation) } };
       })
       : [];
     const moveOutlinePreviews = updateMoveOutlinePreviews(
@@ -1592,6 +1775,8 @@
       entry.arcSvg = null;
       entry.centerSvg?.remove();
       entry.centerSvg = null;
+      entry.hatchPatterns = [];
+      syncHatchAnimation();
       return;
     }
     const attackSegments = [];
@@ -1636,6 +1821,8 @@
     if (!centerOutlines.length) {
       entry.centerSvg?.remove();
       entry.centerSvg = null;
+      entry.hatchPatterns = [];
+      syncHatchAnimation();
       return;
     }
     if (!entry.centerSvg) {
@@ -1645,9 +1832,12 @@
       entry.centerSvg.setAttribute("aria-hidden", "true");
     }
     if (entry.centerSvg.parentNode !== board) board.append(entry.centerSvg);
+    entry.centerSvg.toggleAttribute("data-lfs-hatching", settings.threatCenterOutlineStyle === "hatching");
 
     const defs = document.createElementNS(svgNamespace, "defs");
     const outlines = [];
+    const hatchPatterns = [];
+    const scrollDistance = advanceHatchScroll();
     for (const [index, { target, color, piece, moveOutlinePreview }] of centerOutlines.entries()) {
       const letter = figureAssetLetters[piece.type];
       const complexPawn = piece.type === "pawn" && settings.complexPawn
@@ -1655,6 +1845,71 @@
       const asset = settings.pieceSet === "cage"
         ? `cage/cage_${letter}.svg`
         : `${settings.pieceSet}/${piece.color}${letter}${complexPawn ? "_2" : ""}.svg`;
+      const pieceUrl = chrome.runtime.getURL(asset);
+      const pieceColor = color === "w" ? settings.whitePieceColor : settings.blackPieceColor;
+      const image = document.createElementNS(svgNamespace, "image");
+      image.setAttribute("x", String(target.col));
+      image.setAttribute("y", String(target.row));
+      image.setAttribute("width", "1");
+      image.setAttribute("height", "1");
+      image.setAttribute("preserveAspectRatio", "xMidYMid meet");
+      image.setAttribute("href", pieceUrl);
+      image.setAttribute("opacity", String(settings.threatCenterOutlineOpacity / 100));
+      image.setAttribute("pointer-events", "none");
+      if (moveOutlinePreview) image.setAttribute("data-lfs-move-outline-preview", `${target.row},${target.col}`);
+      image._lfsPieceElement = piece.element;
+
+      if (settings.threatCenterOutlineStyle === "hatching") {
+        const spacing = settings.threatCenterHatchSpacingPercent / 100;
+        const thickness = settings.threatCenterHatchThicknessPercent / 100;
+        const angle = settings.threatCenterHatchAngleDeg;
+        const boardIndex = [...observedBoards.keys()].indexOf(board);
+        const maskId = `lfs-threat-center-hatch-mask-${boardIndex}-${index}`;
+        const mask = document.createElementNS(svgNamespace, "mask");
+        mask.id = maskId;
+        mask.setAttribute("maskUnits", "userSpaceOnUse");
+        mask.setAttribute("maskContentUnits", "userSpaceOnUse");
+        mask.setAttribute("x", String(target.col));
+        mask.setAttribute("y", String(target.row));
+        mask.setAttribute("width", "1");
+        mask.setAttribute("height", "1");
+        mask.style.setProperty("mask-type", "alpha");
+        const maskImage = image.cloneNode();
+        maskImage.setAttribute("opacity", "1");
+        maskImage._lfsPieceElement = piece.element;
+        mask.append(maskImage);
+        defs.append(mask);
+
+        const patternId = `lfs-threat-center-hatch-${boardIndex}-${index}`;
+        const pattern = document.createElementNS(svgNamespace, "pattern");
+        pattern.id = patternId;
+        pattern.setAttribute("patternUnits", "userSpaceOnUse");
+        pattern.setAttribute("width", String(spacing));
+        pattern.setAttribute("height", String(spacing));
+        pattern.setAttribute("patternTransform", hatchPatternTransform(angle, spacing, scrollDistance));
+        const line = document.createElementNS(svgNamespace, "path");
+        line.setAttribute("d", `M 0 0 H ${spacing}`);
+        line.setAttribute("fill", "none");
+        line.setAttribute("stroke", pieceColor);
+        line.setAttribute("stroke-width", String(thickness));
+        pattern.append(line);
+        hatchPatterns.push({ pattern, spacing, angle });
+        defs.append(pattern);
+
+        const hatch = document.createElementNS(svgNamespace, "rect");
+        hatch.setAttribute("x", String(target.col));
+        hatch.setAttribute("y", String(target.row));
+        hatch.setAttribute("width", "1");
+        hatch.setAttribute("height", "1");
+        hatch.setAttribute("fill", `url(#${patternId})`);
+        hatch.setAttribute("mask", `url(#${maskId})`);
+        hatch.setAttribute("opacity", "1");
+        hatch.setAttribute("pointer-events", "none");
+        if (moveOutlinePreview) hatch.setAttribute("data-lfs-move-outline-preview", `${target.row},${target.col}`);
+        outlines.push(hatch);
+        continue;
+      }
+
       const filterId = `lfs-threat-center-outline-${[...observedBoards.keys()].indexOf(board)}-${index}`;
       const filter = document.createElementNS(svgNamespace, "filter");
       filter.id = filterId;
@@ -1675,7 +1930,7 @@
       outside.setAttribute("operator", "out");
       outside.setAttribute("result", "outline");
       const flood = document.createElementNS(svgNamespace, "feFlood");
-      flood.setAttribute("flood-color", color === "w" ? settings.whitePieceColor : settings.blackPieceColor);
+      flood.setAttribute("flood-color", pieceColor);
       flood.setAttribute("result", "color");
       const colorOutline = document.createElementNS(svgNamespace, "feComposite");
       colorOutline.setAttribute("in", "color");
@@ -1684,29 +1939,19 @@
       filter.append(expand, outside, flood, colorOutline);
       defs.append(filter);
 
-      const image = document.createElementNS(svgNamespace, "image");
-      const size = 1;
-      image.setAttribute("x", String(target.col + (1 - size) / 2));
-      image.setAttribute("y", String(target.row + (1 - size) / 2));
-      image.setAttribute("width", String(size));
-      image.setAttribute("height", String(size));
-      image.setAttribute("preserveAspectRatio", "xMidYMid meet");
-      image.setAttribute("href", chrome.runtime.getURL(asset));
       image.setAttribute("filter", `url(#${filterId})`);
-      image.setAttribute("opacity", String(settings.threatCenterOutlineOpacity / 100));
-      image.setAttribute("pointer-events", "none");
-      if (moveOutlinePreview) image.setAttribute("data-lfs-move-outline-preview", `${target.row},${target.col}`);
-      image._lfsPieceElement = piece.element;
       outlines.push(image);
     }
     entry.centerSvg.replaceChildren(defs, ...outlines);
+    entry.hatchPatterns = hatchPatterns;
     syncCenterOutlineImages(entry);
+    syncHatchAnimation();
   }
 
   function observeBoard(board) {
     if (observedBoards.has(board)) return;
     const entry = {
-      svg: null, arcSvg: null, centerSvg: null, frame: 0
+      svg: null, arcSvg: null, centerSvg: null, frame: 0, hatchPatterns: []
     };
     observedBoards.set(board, entry);
 
@@ -1720,12 +1965,11 @@
         && !(mutation.type === "attributes" && mutation.attributeName === "style" && mutation.target.matches?.("piece.anim"))
         && (mutation.target === board || mutation.target.matches?.("piece, square")));
       if (!relevantChange) return;
-      if (board.querySelector(":scope > piece.anim")) return;
       scheduleRender(board);
     });
     boardObserver.observe(board, {
       attributes: true,
-      attributeFilter: ["class", "data-key", "data-lfs-bounce-running", "style"],
+      attributeFilter: ["class", "data-key", "data-lfs-move-key", "data-lfs-bounce-running", "style"],
       childList: true,
       subtree: true
     });
@@ -1765,6 +2009,7 @@
       entry.centerSvg?.remove();
       observedBoards.delete(board);
     }
+    syncHatchAnimation();
   }
 
   documentObserver = new MutationObserver(mutations => {
@@ -1777,9 +2022,11 @@
 
   globalThis.LichessSelectedPieceWedge = {
     update(nextSettings) {
+      advanceHatchScroll();
       settings = nextSettings;
       scanBoards();
       for (const board of observedBoards.keys()) scheduleRender(board);
+      syncHatchAnimation();
     }
   };
 })();

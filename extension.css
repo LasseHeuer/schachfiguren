@@ -221,6 +221,12 @@ html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-center-outline {
   z-index: 6 !important;
 }
 
+html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-center-outline[data-lfs-hatching],
+html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-center-outline[data-lfs-hatching] * {
+  filter: none !important;
+  box-shadow: none !important;
+}
+
 html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board > svg.lfs-last-move-line polygon {
   fill: var(--lfs-last-move-color);
 }

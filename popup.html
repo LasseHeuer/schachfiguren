@@ -44,6 +44,8 @@
         </div>
         <div class="range-grid">
           <label class="range-setting" data-depends-on="!moveAnimationLichessSpeed"><span>Zugdauer</span><output data-value-for="moveAnimationDuration"></output><input type="range" min="0" max="500" step="10" data-setting="moveAnimationDuration"></label>
+          <label class="switch-setting"><span><strong>Zeit/Distanz</strong><small>Erhöht die Grundzeit pro Feld um den eingestellten Anteil.</small></span><input type="checkbox" data-setting="moveAnimationTimeDistance" role="switch"></label>
+          <label class="range-setting" data-depends-on="moveAnimationTimeDistance"><span>Faktor Zeit/Distanz</span><output data-value-for="moveAnimationDistanceFactor"></output><input type="range" min="0" max="1" step="0.05" data-setting="moveAnimationDistanceFactor"></label>
         </div>
         <div class="bounce-curve-panel">
           <div class="bounce-curve-heading"><span><strong>Animationskurve</strong><small>Griffe ziehen oder mit Pfeiltasten bewegen.</small></span><button type="button" data-bezier-reset>Zuruecksetzen</button></div>
@@ -198,10 +200,16 @@
         </details>
         <details class="analysis-subsection">
           <summary>Figurenkontur im Zentrum</summary>
-          <label class="switch-setting"><span><strong>Figurenkontur im Zentrum</strong><small>Umrandet Figuren, die mehr angegriffen als verteidigt werden.</small></span><input type="checkbox" data-setting="threatCenterOutlineEnabled" role="switch"></label>
+          <label class="switch-setting"><span><strong>Figurenkontur im Zentrum</strong><small>Markiert Figuren, die mehr angegriffen als verteidigt werden.</small></span><input type="checkbox" data-setting="threatCenterOutlineEnabled" role="switch"></label>
+          <label class="select-setting" data-depends-on="threatCenterOutlineEnabled"><span>Ansicht</span><select data-setting="threatCenterOutlineStyle"><option value="outline">Figurenoutline</option><option value="hatching">Schraffur (eine Richtung)</option></select></label>
+          <label class="switch-setting" data-depends-on="threatCenterOutlineEnabled threatCenterOutlineStyle=hatching"><span><strong>Schraffur nur bei haltbarem Schlag</strong><small>Berücksichtigt Rückschläge auf dem Zielfeld und gewinnbringende Gegenschläge auf andere Felder.</small></span><input type="checkbox" data-setting="threatCenterHatchExchangeFilterEnabled" role="switch"></label>
           <div class="range-grid" data-depends-on="threatCenterOutlineEnabled">
-            <label class="range-setting" data-depends-on="threatCenterOutlineEnabled"><span>Breite der Outline in Prozent</span><output data-value-for="threatCenterOutlineWidthPercent"></output><input type="range" min="0" max="20" step="0.5" data-setting="threatCenterOutlineWidthPercent"></label>
-            <label class="range-setting" data-depends-on="threatCenterOutlineEnabled"><span>Deckkraft</span><output data-value-for="threatCenterOutlineOpacity"></output><input type="range" min="0" max="100" step="1" data-setting="threatCenterOutlineOpacity"></label>
+            <label class="range-setting" data-depends-on="threatCenterOutlineEnabled threatCenterOutlineStyle=outline"><span>Breite der Outline in Prozent</span><output data-value-for="threatCenterOutlineWidthPercent"></output><input type="range" min="0" max="20" step="0.5" data-setting="threatCenterOutlineWidthPercent"></label>
+            <label class="range-setting" data-depends-on="threatCenterOutlineEnabled threatCenterOutlineStyle=hatching"><span>Linienabstand</span><output data-value-for="threatCenterHatchSpacingPercent"></output><input type="range" min="0.5" max="40" step="0.5" data-setting="threatCenterHatchSpacingPercent"></label>
+            <label class="range-setting" data-depends-on="threatCenterOutlineEnabled threatCenterOutlineStyle=hatching"><span>Liniendicke</span><output data-value-for="threatCenterHatchThicknessPercent"></output><input type="range" min="0.25" max="20" step="0.25" data-setting="threatCenterHatchThicknessPercent"></label>
+            <label class="range-setting" data-depends-on="threatCenterOutlineEnabled threatCenterOutlineStyle=hatching"><span>Linienwinkel</span><output data-value-for="threatCenterHatchAngleDeg"></output><input type="range" min="0" max="180" step="1" data-setting="threatCenterHatchAngleDeg"></label>
+            <label class="range-setting" data-depends-on="threatCenterOutlineEnabled threatCenterOutlineStyle=hatching"><span>Schraffurtempo</span><output data-value-for="threatCenterHatchSpeed"></output><input type="range" min="0" max="1" step="0.01" data-setting="threatCenterHatchSpeed"></label>
+            <label class="range-setting" data-depends-on="threatCenterOutlineEnabled threatCenterOutlineStyle=outline"><span>Deckkraft</span><output data-value-for="threatCenterOutlineOpacity"></output><input type="range" min="0" max="100" step="1" data-setting="threatCenterOutlineOpacity"></label>
           </div>
         </details>
       </section>

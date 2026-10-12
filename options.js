@@ -15,6 +15,7 @@
     setCurveTab(activeCurveKey);
     updateLoopControls(settings.pieceBounceLoop);
     updateMoveSpeedControls(settings.moveAnimationLichessSpeed);
+    updateDistanceFactorControls(settings.moveAnimationTimeDistance);
     for (const control of controls) {
       const value = settings[control.dataset.setting];
       if (control.type === "checkbox") control.checked = value;
@@ -22,6 +23,7 @@
       updateOutput(control);
     }
     updateThreatDisplayControls();
+    updateCenterOutlineControls();
   }
 
   function updateOutput(control) {
@@ -44,11 +46,19 @@
       output.value = `${control.value} ms`;
       return;
     }
+    if (control.dataset.setting === "moveAnimationDistanceFactor") {
+      output.value = `${Number(control.value).toFixed(2)}x`;
+      return;
+    }
+    if (control.dataset.setting === "threatCenterHatchSpeed") {
+      output.value = `${Number(control.value).toFixed(2)} Felder/s`;
+      return;
+    }
     if (["pieceBounceTiming", "pieceBounceDuration", "pieceBounceWiggleDuration"].includes(control.dataset.setting)) {
       output.value = `${control.value} ms`;
       return;
     }
-    if (["pieceBounceWiggleAngle", "threatArcAngleDeg", "threatSquareAngleDeg"].includes(control.dataset.setting)) {
+    if (["pieceBounceWiggleAngle", "threatArcAngleDeg", "threatSquareAngleDeg", "threatCenterHatchAngleDeg"].includes(control.dataset.setting)) {
       output.value = `${control.value}°`;
       return;
     }
@@ -99,6 +109,10 @@
     for (const control of document.querySelectorAll("[data-own-speed]")) control.hidden = lichessSpeed;
   }
 
+  function updateDistanceFactorControls(enabled) {
+    for (const control of document.querySelectorAll("[data-distance-factor]")) control.hidden = !enabled;
+  }
+
   function updateThreatDisplayControls() {
     const attackMode = document.querySelector('[data-setting="threatAttackDisplayMode"]').value;
     const defenseMode = document.querySelector('[data-setting="threatDefenseDisplayMode"]').value;
@@ -112,6 +126,13 @@
       } else {
         group.hidden = attackMode !== mode && defenseMode !== mode;
       }
+    }
+  }
+
+  function updateCenterOutlineControls() {
+    const style = document.querySelector('[data-setting="threatCenterOutlineStyle"]').value;
+    for (const field of document.querySelectorAll("[data-center-outline-mode]")) {
+      field.hidden = field.dataset.centerOutlineMode !== style;
     }
   }
 
@@ -130,7 +151,9 @@
       saveControl(control);
       if (control.dataset.setting === "pieceBounceLoop") updateLoopControls(control.checked);
       if (control.dataset.setting === "moveAnimationLichessSpeed") updateMoveSpeedControls(control.checked);
+      if (control.dataset.setting === "moveAnimationTimeDistance") updateDistanceFactorControls(control.checked);
       if (["threatAttackDisplayMode", "threatDefenseDisplayMode"].includes(control.dataset.setting)) updateThreatDisplayControls();
+      if (control.dataset.setting === "threatCenterOutlineStyle") updateCenterOutlineControls();
       if (control.dataset.setting === "enabled") {
         document.body.classList.toggle("extension-disabled", !control.checked);
       }
