@@ -402,7 +402,7 @@
         const capture = applyExchangeCapture(position, source, target, blackOrientation);
         const gain = victimValue + capture.promotionGain
           - getBestExchangeGain(capture.position, target, victim.color, blackOrientation);
-        if (gain < 0) continue;
+        if (gain <= 0) continue;
         const counterCaptureGain = getBestCaptureGainOutsideSquare(
           capture.position,
           victim.color,

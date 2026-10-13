@@ -10,6 +10,7 @@
     ".pocket piece.black:not(.ghost)"
   ].join(", ");
   const activePieces = new Map();
+  const suppressedPieces = new Set();
   let settings = null;
   let hoveredPiece = null;
 
@@ -174,7 +175,7 @@
   }
 
   function start(piece) {
-    if (!isEnabled() || typeof piece.animate !== "function" || piece.matches(".dragging, .anim")) return;
+    if (!isEnabled() || typeof piece.animate !== "function" || piece.matches(".dragging, .anim") || suppressedPieces.has(piece)) return;
     const currentState = activePieces.get(piece);
     if (currentState) {
       currentState.finishAfterCycle = false;
@@ -234,6 +235,9 @@
   function updateHoveredPiece(event) {
     if (event.pointerType !== "mouse") return;
     const nextPiece = findPieceAtPoint(event);
+    for (const piece of suppressedPieces) {
+      if (piece !== nextPiece && !piece.matches(".anim")) suppressedPieces.delete(piece);
+    }
     if (hoveredPiece === nextPiece) return;
     if (hoveredPiece) finishCurrentStep(hoveredPiece);
     hoveredPiece = nextPiece;
@@ -246,11 +250,20 @@
   new MutationObserver(records => {
     for (const record of records) {
       const piece = record.target;
-      if (piece.localName !== "piece" || !piece.matches(".dragging, .anim")) continue;
+      if (piece.localName !== "piece") continue;
+      const wasAnimating = (` ${record.oldValue ?? ""} `).includes(" anim ");
+      const isAnimating = piece.classList.contains("anim");
+      if (!wasAnimating && isAnimating) suppressedPieces.add(piece);
+      if (wasAnimating && !isAnimating) {
+        requestAnimationFrame(() => {
+          if (!piece.matches(":hover")) suppressedPieces.delete(piece);
+        });
+      }
+      if (!piece.matches(".dragging, .anim") && !wasAnimating) continue;
       finishCurrentStep(piece);
       if (hoveredPiece === piece) hoveredPiece = null;
     }
-  }).observe(document.documentElement, { attributes: true, attributeFilter: ["class"], subtree: true });
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ["class"], attributeOldValue: true, subtree: true });
   window.addEventListener("blur", () => {
     if (!hoveredPiece) return;
     finishCurrentStep(hoveredPiece);
@@ -269,9 +282,6 @@
     }
     if (!settings.pieceBounceLoop) {
       for (const state of activePieces.values()) endPause(state);
-    }
-    for (const piece of document.querySelectorAll(pieceSelector)) {
-      if (piece.matches(":hover")) start(piece);
     }
   }
 
