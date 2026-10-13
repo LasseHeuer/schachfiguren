@@ -63,6 +63,7 @@
     selectedPieceWedgeEnabled: true,
     selectedPieceWedgeOnlySelected: false,
     wedgeBasePiecePreviewEnabled: false,
+    kingMovementFieldsEnabled: false,
     defenseCirclesEnabled: true,
     defenseLineAnimationDistancePercent: 4,
     defenseLineAnimationLoopMs: 1200,
@@ -324,6 +325,7 @@
       "selectedPieceWedgeEnabled",
       "selectedPieceWedgeOnlySelected",
       "wedgeBasePiecePreviewEnabled",
+      "kingMovementFieldsEnabled",
 
       "defenseCirclesEnabled",
 

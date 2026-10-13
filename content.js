@@ -7,6 +7,7 @@
     ["selectedPieceWedgeOnlySelected", "Keile nur für Auswahl", "selectedPieceWedgeEnabled"],
     ["wedgeBasePiecePreviewEnabled", "Figur an Keilbasis", "selectedPieceWedgeEnabled"],
     ["threatenedPieceOutlineEnabled", "Angriffe"],
+    ["kingMovementFieldsEnabled", "Königbewegungsfelder"],
     ["defenseCirclesEnabled", "Verteidigungen"],
     ["threatCenterOutlineEnabled", "Figurenkontur"],
     ["threatCenterHatchExchangeFilterEnabled", "Nur haltbare Schraffur", "threatCenterOutlineEnabled"]
@@ -112,11 +113,13 @@
       threatColoringEnabled: false,
       selectedPieceWedgeEnabled: false,
       threatenedPieceOutlineEnabled: false,
+      kingMovementFieldsEnabled: false,
       defenseCirclesEnabled: false,
       threatCenterOutlineEnabled: false
     };
     globalThis.LichessLastMoveLine?.update(settings);
     globalThis.LichessThreatCoding?.update(analysisSettings);
+    globalThis.LichessKingMovementFields?.update(analysisSettings);
     globalThis.LichessPieceBounce?.update(settings);
     globalThis.LichessMoveAnimation?.update(settings);
 

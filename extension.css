@@ -231,6 +231,18 @@ html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-center-outline {
   z-index: 6 !important;
 }
 
+html:not([data-lfs-disabled]) .is2d cg-board piece > svg.lfs-king-movement-fields {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: visible;
+  pointer-events: none;
+  transform-box: view-box;
+  transform-origin: center;
+}
+
 html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-center-outline[data-lfs-hatching],
 html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-center-outline[data-lfs-hatching] * {
   filter: none !important;
@@ -594,6 +606,32 @@ html:not([data-lfs-disabled])[data-lfs-rund-comic] .board-editor .spare piece.wh
 html:not([data-lfs-disabled])[data-lfs-rund-comic] .board-editor .spare piece.black[data-lfs-bounce-running]::before,
 html:not([data-lfs-disabled])[data-lfs-rund-comic] .pocket piece.white[data-lfs-bounce-running]::before,
 html:not([data-lfs-disabled])[data-lfs-rund-comic] .pocket piece.black[data-lfs-bounce-running]::before {
+  background: var(--lfs-comic-piece) center / contain no-repeat !important;
+  -webkit-mask: none !important;
+  mask: none !important;
+}
+
+html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board piece.white.king[data-lfs-king-movement-fields],
+html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board piece.black.king[data-lfs-king-movement-fields] {
+  background: none !important;
+  -webkit-mask: none !important;
+  mask: none !important;
+}
+
+html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board piece.white.king[data-lfs-king-movement-fields]::before,
+html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board piece.black.king[data-lfs-king-movement-fields]::before {
+  position: absolute;
+  inset: 0;
+  background: var(--lfs-bounce-piece-color) !important;
+  -webkit-mask: var(--lfs-bounce-piece-mask) center / contain no-repeat !important;
+  mask: var(--lfs-bounce-piece-mask) center / contain no-repeat !important;
+  content: "";
+  pointer-events: none;
+  transform-origin: center;
+}
+
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap cg-board piece.white.king[data-lfs-king-movement-fields]::before,
+html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap cg-board piece.black.king[data-lfs-king-movement-fields]::before {
   background: var(--lfs-comic-piece) center / contain no-repeat !important;
   -webkit-mask: none !important;
   mask: none !important;

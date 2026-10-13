@@ -32,6 +32,7 @@
     state.stopped = true;
     endPause(state);
     state.animation?.cancel();
+    state.overlayAnimation?.cancel();
     piece.removeAttribute("data-lfs-bounce-running");
     activePieces.delete(piece);
   }
@@ -44,23 +45,43 @@
     ) ? 180 : 0;
   }
 
+  function getMovementOverlay(piece) {
+    return piece.querySelector(":scope > svg.lfs-king-movement-fields");
+  }
+
+  function animateMovementOverlay(overlay, keyframes, options, startTime) {
+    if (!overlay || typeof overlay.animate !== "function") return null;
+    const animation = overlay.animate(keyframes, options);
+    if (Number.isFinite(startTime)) animation.startTime = startTime;
+    return animation;
+  }
+
   async function returnToBase(piece, state) {
     if (!state.angle || !piece.isConnected) return true;
     const angle = Math.round((state.angle % 360) / 360) * 360;
     const currentTransform = getComputedStyle(piece, "::before").transform;
     const targetTransform = `rotate(${getOrientationOffset(piece) + angle}deg)`;
+    const duration = Math.max(80, Math.min(180, settings.pieceBounceDuration * 0.2));
     const animation = piece.animate([
       { transform: currentTransform },
       { transform: targetTransform }
     ], {
-      duration: Math.max(80, Math.min(180, settings.pieceBounceDuration * 0.2)),
+      duration,
       easing: "ease-out",
       fill: "forwards",
       pseudoElement: "::before"
     });
+    const overlay = getMovementOverlay(piece);
+    const overlayAnimation = animateMovementOverlay(overlay, [
+      { transform: overlay ? getComputedStyle(overlay).transform : "none" },
+      { transform: `rotate(${angle}deg)` }
+    ], { duration, easing: "ease-out", fill: "forwards" }, animation.startTime);
     const previousAnimation = state.animation;
+    const previousOverlayAnimation = state.overlayAnimation;
     state.animation = animation;
+    state.overlayAnimation = overlayAnimation;
     previousAnimation?.cancel();
+    previousOverlayAnimation?.cancel();
 
     try {
       await animation.finished;
@@ -72,6 +93,7 @@
     if (activePieces.get(piece) !== state) return false;
     state.angle = 0;
     animation.cancel();
+    overlayAnimation?.cancel();
     return true;
   }
 
@@ -102,25 +124,30 @@
       const easing = `cubic-bezier(${handle1Time}, ${handle1Value / -90}, ${handle2Time}, ${handle2Value / -90})`;
       const centerAngle = orientationOffset + angle;
       const wiggleAngle = settings.pieceBounceWiggleAngle * (isPawn ? 1 : 0.5);
-      const keyframes = isWiggle ? [
-        { transform: `rotate(${centerAngle}deg)`, offset: 0 },
-        { transform: `rotate(${centerAngle - wiggleAngle}deg)`, offset: 1 / 3 },
-        { transform: `rotate(${centerAngle + wiggleAngle}deg)`, offset: 2 / 3 },
-        { transform: `rotate(${centerAngle}deg)`, offset: 1 }
+      const createKeyframes = baseAngle => isWiggle ? [
+        { transform: `rotate(${baseAngle}deg)`, offset: 0 },
+        { transform: `rotate(${baseAngle - wiggleAngle}deg)`, offset: 1 / 3 },
+        { transform: `rotate(${baseAngle + wiggleAngle}deg)`, offset: 2 / 3 },
+        { transform: `rotate(${baseAngle}deg)`, offset: 1 }
       ] : [
-        { transform: `rotate(${centerAngle}deg)`, offset: 0, easing },
-        { transform: `rotate(${centerAngle + rotation}deg)`, offset: 1 }
+        { transform: `rotate(${baseAngle}deg)`, offset: 0, easing },
+        { transform: `rotate(${baseAngle + rotation}deg)`, offset: 1 }
       ];
-      const animation = piece.animate(keyframes, {
-        duration: isWiggle ? settings.pieceBounceWiggleDuration : settings.pieceBounceDuration,
+      const duration = isWiggle ? settings.pieceBounceWiggleDuration : settings.pieceBounceDuration;
+      const animationOptions = {
+        duration,
         fill: "forwards",
-        easing: isWiggle ? easing : "linear",
-        pseudoElement: "::before"
-      });
+        easing: isWiggle ? easing : "linear"
+      };
+      const animation = piece.animate(createKeyframes(centerAngle), { ...animationOptions, pseudoElement: "::before" });
+      const overlayAnimation = animateMovementOverlay(getMovementOverlay(piece), createKeyframes(angle), animationOptions, animation.startTime);
       const previousAnimation = state.animation;
+      const previousOverlayAnimation = state.overlayAnimation;
       state.animation = animation;
+      state.overlayAnimation = overlayAnimation;
       state.angle = (state.angle + rotation) % 360;
       previousAnimation?.cancel();
+      previousOverlayAnimation?.cancel();
 
       try {
         await animation.finished;
@@ -153,7 +180,7 @@
       currentState.finishAfterCycle = false;
       return;
     }
-    const state = { angle: 0, animation: null, pauseTimer: null, resumePause: null, stopped: false, finishAfterCycle: false, steps: 0 };
+    const state = { angle: 0, animation: null, overlayAnimation: null, pauseTimer: null, resumePause: null, stopped: false, finishAfterCycle: false, steps: 0 };
     activePieces.set(piece, state);
     piece.setAttribute("data-lfs-bounce-running", "");
     void animateWhileHovered(piece, state);

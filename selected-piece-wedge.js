@@ -362,6 +362,15 @@
       - getBestExchangeGain(capture.position, target, victim.color, blackOrientation));
   }
 
+  function getCaptureGain(position, source, target, blackOrientation) {
+    const piece = position[source.row][source.col];
+    const victim = position[target.row][target.col];
+    if (!piece || !victim || victim.type === "king" || !canExchangeCapture(position, source, target, blackOrientation)) return null;
+    const capture = applyExchangeCapture(position, source, target, blackOrientation);
+    return pieceValues[victim.type] + capture.promotionGain
+      - getBestExchangeGain(capture.position, target, victim.color, blackOrientation);
+  }
+
   function getBestCaptureGainOutsideSquare(position, color, excludedTarget, threshold, blackOrientation) {
     let bestGain = 0;
     for (let row = 0; row < 8; row++) {
@@ -590,6 +599,15 @@
     return moves;
   }
 
+  function getCandidateMoves(position, source, piece, blackOrientation) {
+    const captures = getAttackedPieces(position, source, blackOrientation).filter(target => {
+      const victim = position[target.row][target.col];
+      return victim && victim.color !== piece.color && victim.type !== "king"
+        && canExchangeCapture(position, source, target, blackOrientation);
+    });
+    return [...getFreeFieldMoves(position, source, piece, blackOrientation), ...captures];
+  }
+
   function getPotentialWedges(position, selected, destinations, blackOrientation, options = {}) {
     const piece = position[selected.row][selected.col];
     const attackerValue = pieceValues[piece.type];
@@ -602,7 +620,8 @@
     const candidates = [];
 
     for (const destination of destinations) {
-      if (position[destination.row][destination.col]) continue;
+      const destinationPiece = position[destination.row][destination.col];
+      if (destinationPiece?.color === piece.color || destinationPiece?.type === "king") continue;
       const simulated = position.map(row => [...row]);
       simulated[selected.row][selected.col] = null;
       simulated[destination.row][destination.col] = piece;
@@ -615,6 +634,8 @@
       if (!attacks.length) continue;
       const officers = attacks.filter(target => pieceValues[simulated[target.row][target.col].type] >= 3);
       const fork = officers.length >= 2;
+      const givesCheckAfterCapture = Boolean(destinationPiece)
+        && attacks.some(target => simulated[target.row][target.col].type === "king");
       if (!fork && attacks.some(target => currentTargets.has(`${target.row},${target.col}`))) continue;
       const targets = fork ? officers : attacks;
       let attackers = 0;
@@ -639,7 +660,9 @@
           }
         }
       }
-      if (kingInCheck || (attackers > 0 && attackerValue >= minAttackerValue) || attackers > defenders) continue;
+      if (kingInCheck) continue;
+      if (!givesCheckAfterCapture
+        && ((attackers > 0 && attackerValue >= minAttackerValue) || attackers > defenders)) continue;
       if (piece.type !== "king"
         && getBestExchangeGain(simulated, destination, piece.color === "w" ? "b" : "w", blackOrientation) > 0) continue;
       candidates.push({
@@ -674,7 +697,7 @@
         const piece = position[row][col];
         if (!piece || potentialMovesByColor[piece.color].size >= maxUnselectedPotentialMovesPerColor) continue;
         const source = { row, col };
-        const destinations = getFreeFieldMoves(position, source, piece, blackOrientation);
+        const destinations = getCandidateMoves(position, source, piece, blackOrientation);
         const potential = getPotentialWedges(position, source, destinations, blackOrientation, options);
         for (const wedge of potential) {
           const moveKey = `${row},${col}:${wedge.source.row},${wedge.source.col}`;
@@ -1703,20 +1726,18 @@
       && !settings.selectedPieceWedgeOnlySelected
       && !wedgeParsed.selected;
     const wedges = [];
-    // Reuse the threat map from above when it describes the same position.
-    const wedgeThreatened = !sources.length ? null
-      : wedgeParsed === parsed && threatsEnabled ? threatenedSquares
-        : getThreatenedSquares(wedgeParsed.position, wedgeParsed.blackOrientation);
     let legalDestinations = null;
     for (const source of sources) {
       const piece = wedgeParsed.position[source.row][source.col];
-      // No direct wedges from a piece that a lower-valued enemy piece could capture (kings cannot be captured).
-      const capturedByLower = piece.type !== "king" && (wedgeThreatened[piece.color].get(`${source.row},${source.col}`) ?? [])
-        .some(attacker => pieceValues[wedgeParsed.position[attacker.row][attacker.col].type] < pieceValues[piece.type]);
-      const directTargets = capturedByLower ? [] : getAttackedPieces(wedgeParsed.position, source, wedgeParsed.blackOrientation)
+      const directTargets = getAttackedPieces(wedgeParsed.position, source, wedgeParsed.blackOrientation)
         .filter(target => {
           const targetPiece = wedgeParsed.position[target.row][target.col];
-          return targetPiece && targetPiece.color !== piece.color && pieceValues[targetPiece.type] > pieceValues[piece.type];
+          if (!targetPiece || targetPiece.color === piece.color) return false;
+          if (targetPiece.type === "king") {
+            return pieceValues[targetPiece.type] > pieceValues[piece.type]
+              && getBestExchangeGain(wedgeParsed.position, source, piece.color === "w" ? "b" : "w", wedgeParsed.blackOrientation) === 0;
+          }
+          return getCaptureGain(wedgeParsed.position, source, target, wedgeParsed.blackOrientation) > 0;
         });
       wedges.push(...directTargets.map(target => ({ source, target, color: piece.color, type: piece.type })));
 
@@ -1727,7 +1748,7 @@
       const canReuseLegalDestinations = settings.selectedPieceWedgeOnlySelected && (legalDestinations.length || !dragPreview);
       const destinations = canReuseLegalDestinations
         ? legalDestinations
-        : getFreeFieldMoves(wedgeParsed.position, source, piece, wedgeParsed.blackOrientation);
+        : getCandidateMoves(wedgeParsed.position, source, piece, wedgeParsed.blackOrientation);
       wedges.push(...getPotentialWedges(wedgeParsed.position, source, destinations, wedgeParsed.blackOrientation, settings)
         .map(wedge => ({ ...wedge, color: piece.color })));
     }
