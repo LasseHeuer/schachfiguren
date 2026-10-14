@@ -634,6 +634,18 @@ html[data-lfs-engine-turn-color="black"] {
   --lfs-engine-arrow-turn-color: var(--lfs-black-piece-color);
 }
 
+html:not([data-lfs-disabled]) .cg-wrap :is(.cg-shapes, .cg-shapes-below) :is(line[marker-end^="url(#arrowhead-pb"], line[marker-end^="url(#arrowhead-pg"], line[marker-end^="url(#arrowhead-pr"], [data-lfs-engine-arrow-path]) {
+  opacity: var(--lfs-engine-arrow-opacity, 1) !important;
+}
+
+html .cg-wrap [data-lfs-engine-arrow-color="white"] {
+  --lfs-engine-arrow-turn-color: var(--lfs-white-piece-color);
+}
+
+html .cg-wrap [data-lfs-engine-arrow-color="black"] {
+  --lfs-engine-arrow-turn-color: var(--lfs-black-piece-color);
+}
+
 html:not([data-lfs-disabled])[data-lfs-engine-arrow-outline] .cg-wrap :is(.cg-shapes, .cg-shapes-below) line[marker-end^="url(#arrowhead-pb"],
 html:not([data-lfs-disabled])[data-lfs-engine-arrow-outline] .cg-wrap :is(.cg-shapes, .cg-shapes-below) line[marker-end^="url(#arrowhead-pg"],
 html:not([data-lfs-disabled])[data-lfs-engine-arrow-outline] .cg-wrap :is(.cg-shapes, .cg-shapes-below) line[marker-end^="url(#arrowhead-pgr"],

@@ -229,10 +229,13 @@
           <div class="section-heading"><span class="section-index">07</span><div><h2>Weitere Einstellungen</h2><p>Profilanzeige und Analysegraph.</p></div></div>
           <label class="switch-field"><span><strong>Gesamtspielzeit nur in Stunden</strong><small>Profilzeit ohne Tagesangabe anzeigen.</small></span><input type="checkbox" data-setting="showPlayTimeInHours" role="switch"></label>
           <label class="switch-field"><span><strong>Analysegraph-Farben angleichen</strong><small>Weiss und Schwarz im Graphen mit den Figurenfarben darstellen.</small></span><input type="checkbox" data-setting="analysisGraphColors" role="switch"></label>
-          <label class="switch-field"><span><strong>Engine-Pfeile als Outline</strong><small>Kontur und Schaft in der Farbe der Seite am Zug.</small></span><input type="checkbox" data-setting="engineArrowOutlineEnabled" role="switch"></label>
-          <details class="engine-arrow-control-section" data-engine-arrow-outline-controls>
+          <label class="switch-field"><span><strong>Engine-Pfeile als Outline</strong><small>Kontur und Schaft in der Farbe des jeweiligen Spielers.</small></span><input type="checkbox" data-setting="engineArrowOutlineEnabled" role="switch"></label>
+          <details class="engine-arrow-control-section">
             <summary>Engine-Pfeile: Regler</summary>
             <div class="control-grid range-grid">
+              <label class="field"><span>Deckkraft</span><input type="range" min="0" max="100" step="1" data-setting="engineArrowOpacity"><output data-value-for="engineArrowOpacity"></output></label>
+            </div>
+            <div class="control-grid range-grid" data-engine-arrow-outline-controls>
               <label class="field"><span>Konturdicke (% der Feldbreite)</span><input type="range" min="1" max="10" step="0.5" data-setting="engineArrowOutlineWidthPercent"><output data-value-for="engineArrowOutlineWidthPercent"></output></label>
               <label class="field"><span>Schaftdicke (% der Feldbreite)</span><input type="range" min="8" max="60" step="1" data-setting="engineArrowShaftWidthPercent"><output data-value-for="engineArrowShaftWidthPercent"></output></label>
               <label class="field"><span>Pfeilkopfgröße</span><input type="range" min="50" max="200" step="5" data-setting="engineArrowHeadSizePercent"><output data-value-for="engineArrowHeadSizePercent"></output></label>

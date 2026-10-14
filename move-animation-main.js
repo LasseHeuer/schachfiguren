@@ -59,6 +59,15 @@
         `${index ? "L" : "M"}${x1 + ux * along - uy * across},${y1 + uy * along + ux * across}`
       ).join(" "));
       path.setAttribute("stroke-width", String(outlineWidth));
+      // Pale green marks the best alternative to the previous move, not the current turn.
+      const previousMove = /^url\(#arrowhead-pg(?!r)/.test(line.getAttribute("marker-end") || "");
+      const arrowColor = previousMove && (turnColor === "white" || turnColor === "black")
+        ? (turnColor === "white" ? "black" : "white") : turnColor;
+      if (arrowColor === "white" || arrowColor === "black") {
+        path.setAttribute("data-lfs-engine-arrow-color", arrowColor);
+      } else {
+        path.removeAttribute("data-lfs-engine-arrow-color");
+      }
       path.setAttribute("opacity", line.getAttribute("opacity") || "1");
       if (path.parentElement !== line.parentElement) line.parentElement.appendChild(path);
     }

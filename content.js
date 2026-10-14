@@ -550,6 +550,7 @@
       "--lfs-selected-light": settings.selectedLight,
       "--lfs-check-light": settings.checkSquareLight,
       "--lfs-engine-arrow-light": settings.engineArrowLight,
+      "--lfs-engine-arrow-opacity": settings.engineArrowOpacity / 100,
       "--lfs-hover-mix-light": settings.hoverMixLight,
       "--lfs-last-move-dark": settings.lastMoveDark,
       "--lfs-selected-dark": settings.selectedDark,
