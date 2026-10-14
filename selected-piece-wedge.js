@@ -1439,7 +1439,6 @@
         end
       };
     });
-    const unitRecordByLine = new Map(unitRecords.map(record => [record.line, record]));
     function getSegmentDistance(a, b) {
       if (a.normal.x * b.normal.x + a.normal.y * b.normal.y < 0.99) return Infinity;
       const axialGap = Math.max(0, Math.max(a.start, b.start) - Math.min(a.end, b.end));
@@ -1497,7 +1496,7 @@
       record.end = orientation > 0 ? along + line.outerRadius : along - line.innerRadius;
     }
 
-    // Pair only the exact reciprocal source-target connection, once per line.
+    // Use the original proximity bundle: lane spacing can move reciprocal lines farther apart.
     const linesByConnection = new Map();
     for (const line of lines) {
       if (!line.sourceKey) continue;
@@ -1512,7 +1511,7 @@
       const candidates = (linesByConnection.get(reverseKey) ?? [])
         .filter(other => !pairedLines.has(other) && other !== line
           && other.direction.x * line.direction.x + other.direction.y * line.direction.y < -0.99
-          && getSegmentDistance(unitRecordByLine.get(line), unitRecordByLine.get(other)) <= proximityThreshold)
+          && other.unitKey === line.unitKey)
         .sort((a, b) => Math.abs(a.laneLateral - line.laneLateral) - Math.abs(b.laneLateral - line.laneLateral));
       const partner = candidates[0];
       if (!partner) continue;
