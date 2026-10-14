@@ -9,6 +9,8 @@
     squareOutline: false,
     boardScalePercent: 83,
     boardVerticalOffset: 0,
+    boardTopGapPercent: 0,
+    zenBoardUpPercent: 0,
     lastMoveLight: "#dae0d7",
     lastMoveLineWidth: 16,
     selectedLight: "#ffffff",
@@ -137,6 +139,8 @@
   });
 
   const ranges = {
+    boardTopGapPercent: [0, 30],
+    zenBoardUpPercent: [0, 30],
     idleMixPercent: [0, 100],
     hoverMixPercent: [0, 100],
     hoverDesaturation: [0, 100],

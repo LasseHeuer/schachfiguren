@@ -15,6 +15,16 @@
   let settings = { ...defaults };
   let analysisToolbar;
   let analysisEnabledInput;
+  let zenToggle;
+  let boardLayout;
+  let zenBoard;
+  let zenCenterFrame;
+  let zenSideElements = [];
+  let normalRoundApp;
+  let normalRoundSide;
+  let normalRoundTable;
+  let normalRoundBoardHeight = 0;
+  let normalRoundFrame;
   const analysisInputs = new Map();
   const analysisRows = new Map();
 
@@ -61,6 +71,26 @@
       header.append(title, masterLabel);
       analysisToolbar.append(header, featureList);
 
+      zenToggle = document.createElement("button");
+      zenToggle.id = "lfs-zen-toggle";
+      zenToggle.type = "button";
+      zenToggle.textContent = "Zen";
+      zenToggle.setAttribute("aria-label", "Zenmodus aktivieren");
+      zenToggle.setAttribute("aria-pressed", "false");
+      zenToggle.addEventListener("click", event => {
+        if (!zenBoard) return;
+        const enabled = !document.documentElement.hasAttribute("data-lfs-zen-mode");
+        document.documentElement.toggleAttribute("data-lfs-zen-mode", enabled);
+        zenToggle.setAttribute("aria-pressed", String(enabled));
+        zenToggle.setAttribute("aria-label", `Zenmodus ${enabled ? "deaktivieren" : "aktivieren"}`);
+        if (enabled) scheduleZenCenter();
+        else {
+          clearZenOffset(zenBoard);
+          syncNormalRoundLayout();
+        }
+        if (event.detail) zenToggle.blur();
+      });
+
       for (const [key, labelText, parentKey] of analysisFeatures) {
         const label = document.createElement("label");
         label.className = parentKey ? "lfs-analysis-toolbar-feature lfs-analysis-toolbar-child" : "lfs-analysis-toolbar-feature";
@@ -85,12 +115,210 @@
         analysisRows.set(key, { label, parentKey });
       }
 
-      document.documentElement.append(analysisToolbar);
+      document.documentElement.append(zenToggle, analysisToolbar);
     }
 
     analysisEnabledInput.checked = settings.analysisEnabled;
     for (const [key, input] of analysisInputs) input.checked = settings[key];
     for (const [key, { label, parentKey }] of analysisRows) label.hidden = Boolean(parentKey) && !settings[parentKey];
+  }
+
+  function syncBoardLayout() {
+    const board = document.querySelector(".puzzle__board cg-board, .analyse__board cg-board, .main-board cg-board, .bot-game cg-board, .study__board cg-board, main cg-board");
+    const layout = board?.closest(".puzzle, .analyse, .round__app, .bot-game, .study__main, main") ?? null;
+    const nextZenBoard = [
+      board?.closest(".round__app__board"),
+      board?.closest(".puzzle__board"),
+      board?.closest(".analyse__board"),
+      board?.closest(".bot-game__board"),
+      board?.closest(".study__board"),
+      board?.closest(".main-board"),
+      board?.closest(".cg-wrap")
+    ].find(candidate => {
+      const rect = candidate?.getBoundingClientRect();
+      return rect?.width > 0 && rect?.height > 0;
+    }) ?? null;
+    const zenBoardChanged = zenBoard !== nextZenBoard;
+    if (boardLayout && boardLayout !== layout) boardLayout.removeAttribute("data-lfs-board-layout");
+    if (zenBoard && zenBoardChanged) {
+      zenBoard.removeAttribute("data-lfs-zen-board");
+      clearZenOffset(zenBoard);
+    }
+    boardLayout = layout;
+    zenBoard = nextZenBoard;
+    boardLayout?.toggleAttribute("data-lfs-board-layout", settings.boardTopGapPercent > 0);
+    zenBoard?.toggleAttribute("data-lfs-zen-board", true);
+    if (zenToggle) {
+      zenToggle.hidden = !zenBoard;
+      zenToggle.disabled = !zenBoard;
+    }
+    if (!zenBoard && document.documentElement.hasAttribute("data-lfs-zen-mode")) {
+      document.documentElement.removeAttribute("data-lfs-zen-mode");
+      zenToggle?.setAttribute("aria-pressed", "false");
+      zenToggle?.setAttribute("aria-label", "Zenmodus aktivieren");
+    }
+    if (zenBoard && document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenCenter();
+  }
+
+  function clearNormalRoundLayout() {
+    cancelAnimationFrame(normalRoundFrame);
+    if (normalRoundApp) {
+      normalRoundApp.removeAttribute("data-lfs-normal-fit");
+      normalRoundApp.style.removeProperty("--lfs-normal-app-height");
+      for (const child of normalRoundApp.querySelectorAll("[data-lfs-normal-moves]")) child.removeAttribute("data-lfs-normal-moves");
+    }
+    if (normalRoundSide) {
+      normalRoundSide.removeAttribute("data-lfs-normal-fit");
+      normalRoundSide.style.removeProperty("--lfs-normal-side-offset");
+    }
+    if (normalRoundTable) {
+      normalRoundTable.removeAttribute("data-lfs-normal-fit");
+    }
+    normalRoundApp = null;
+    normalRoundSide = null;
+    normalRoundTable = null;
+    normalRoundBoardHeight = 0;
+    normalRoundFrame = 0;
+  }
+
+  function syncNormalRoundLayout() {
+    if (document.documentElement.hasAttribute("data-lfs-zen-mode")) return;
+    cancelAnimationFrame(normalRoundFrame);
+    normalRoundFrame = requestAnimationFrame(() => {
+      if (document.documentElement.hasAttribute("data-lfs-zen-mode")) return;
+      const board = document.querySelector(".round .round__app .main-board cg-board");
+      const app = board?.closest(".round__app");
+      const round = app?.closest(".round");
+      const side = round?.querySelector(".round__side");
+      const table = app?.querySelector(".round__app__table");
+      if (!board || !app || !side || !table) {
+        clearNormalRoundLayout();
+        return;
+      }
+
+      const boardRect = board.getBoundingClientRect();
+      const appRect = app.getBoundingClientRect();
+      const sideRect = side.getBoundingClientRect();
+      const wideLayout = boardRect.width > 0 && boardRect.height > 0 && sideRect.right <= boardRect.left && appRect.right > boardRect.right;
+      if (!wideLayout) {
+        clearNormalRoundLayout();
+        return;
+      }
+
+      const changed = app !== normalRoundApp || side !== normalRoundSide || table !== normalRoundTable
+        || Math.abs(boardRect.height - normalRoundBoardHeight) > 1;
+      if (changed && normalRoundApp) clearNormalRoundLayout();
+      const appStyle = getComputedStyle(app);
+      const appPadding = (parseFloat(appStyle.paddingTop) || 0) + (parseFloat(appStyle.paddingBottom) || 0);
+
+      normalRoundApp = app;
+      normalRoundSide = side;
+      normalRoundTable = table;
+      normalRoundBoardHeight = boardRect.height;
+      app.setAttribute("data-lfs-normal-fit", "");
+      app.style.setProperty("--lfs-normal-app-height", `${boardRect.height + appPadding}px`);
+      table.setAttribute("data-lfs-normal-fit", "");
+      for (const child of app.children) {
+        child.toggleAttribute("data-lfs-normal-moves", getComputedStyle(child).gridArea.split(" / ")[0] === "moves");
+      }
+      side.setAttribute("data-lfs-normal-fit", "");
+
+      normalRoundFrame = requestAnimationFrame(() => {
+        if (document.documentElement.hasAttribute("data-lfs-zen-mode") || app !== normalRoundApp) return;
+        const currentBoard = board.getBoundingClientRect();
+        const currentSide = side.getBoundingClientRect();
+        const offset = parseFloat(side.style.getPropertyValue("--lfs-normal-side-offset")) || 0;
+        const delta = currentBoard.top - currentSide.top;
+        if (Math.abs(delta) >= 0.01) side.style.setProperty("--lfs-normal-side-offset", `${offset + delta}px`);
+        document.dispatchEvent(new Event("scroll"));
+      });
+    });
+  }
+
+  function scheduleZenCenter() {
+    cancelAnimationFrame(zenCenterFrame);
+    zenCenterFrame = requestAnimationFrame(() => {
+      if (!zenBoard || !document.documentElement.hasAttribute("data-lfs-zen-mode")) return;
+      const board = zenBoard.querySelector("cg-board");
+      if (!board) return;
+      const boardRect = board.getBoundingClientRect();
+      if (!boardRect.width || !boardRect.height) return;
+      const offsetX = parseFloat(zenBoard.style.getPropertyValue("--lfs-zen-offset-x")) || 0;
+      const offsetY = parseFloat(zenBoard.style.getPropertyValue("--lfs-zen-offset-y")) || 0;
+      const deltaX = window.innerWidth / 2 - boardRect.left - boardRect.width / 2;
+      const deltaY = window.innerHeight * (0.5 - settings.zenBoardUpPercent / 100) - boardRect.top - boardRect.height / 2;
+      if (Math.abs(deltaX) >= 0.01 || Math.abs(deltaY) >= 0.01) {
+        zenBoard.style.setProperty("--lfs-zen-offset-x", `${offsetX + deltaX}px`);
+        zenBoard.style.setProperty("--lfs-zen-offset-y", `${offsetY + deltaY}px`);
+        // Chessground clears its cached pointer bounds on scroll, not on CSS translation.
+        document.dispatchEvent(new Event("scroll"));
+      }
+      requestAnimationFrame(syncZenSideElements);
+    });
+  }
+
+  function syncZenSideElements() {
+    if (!zenBoard || !document.documentElement.hasAttribute("data-lfs-zen-mode")) return;
+    const board = zenBoard.querySelector("cg-board");
+    if (!board) return;
+    const root = zenBoard.closest(".round__app, .analyse__board, .analyse, .bot-game, .puzzle, .study__main, .study, main") ?? zenBoard.parentElement;
+    if (!root) return;
+
+    const boardRect = board.getBoundingClientRect();
+    const visible = element => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    };
+    const materials = [...root.querySelectorAll(".material")].filter(visible);
+    let clocks = [...root.querySelectorAll(".rclock")].filter(visible);
+    if (!clocks.length) clocks = [...root.querySelectorAll(".clock")].filter(visible);
+    const nextElements = [...new Set([...materials, ...clocks])];
+    const nextSet = new Set(nextElements);
+    for (const element of zenSideElements) {
+      if (nextSet.has(element)) continue;
+      element.removeAttribute("data-lfs-zen-side");
+      element.style.removeProperty("--lfs-zen-side-left");
+      element.style.removeProperty("--lfs-zen-side-top");
+    }
+    zenSideElements = nextElements;
+    for (const element of zenSideElements) element.setAttribute("data-lfs-zen-side", "");
+
+    if (!boardRect.width || !boardRect.height) return;
+    const byTop = (a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top;
+    const topMaterial = materials.find(element => element.classList.contains("material-top")) ?? materials.slice().sort(byTop)[0];
+    const bottomMaterial = materials.find(element => element.classList.contains("material-bottom")) ?? materials.slice().sort(byTop).at(-1);
+    clocks.sort(byTop);
+    const topClock = clocks[0];
+    const bottomClock = clocks.length > 1 ? clocks.at(-1) : null;
+    const topMaterialRect = topMaterial?.getBoundingClientRect();
+    const bottomMaterialRect = bottomMaterial?.getBoundingClientRect();
+    const topClockRect = topClock?.getBoundingClientRect();
+    const bottomClockRect = bottomClock?.getBoundingClientRect();
+    const padding = 6;
+    const clockLeft = boardRect.right + padding;
+
+    const place = (element, left, top) => {
+      if (!element) return;
+      element.style.setProperty("--lfs-zen-side-left", `${left}px`);
+      element.style.setProperty("--lfs-zen-side-top", `${top}px`);
+    };
+    place(topClock, clockLeft, boardRect.top);
+    place(bottomClock, clockLeft, boardRect.bottom - (bottomClockRect?.height ?? 0));
+    place(topMaterial, boardRect.left - (topMaterialRect?.width ?? 0) - padding, boardRect.top);
+    place(bottomMaterial, boardRect.left - (bottomMaterialRect?.width ?? 0) - padding, boardRect.bottom - (bottomMaterialRect?.height ?? 0));
+  }
+
+  function clearZenOffset(board) {
+    for (const property of ["--lfs-zen-offset-x", "--lfs-zen-offset-y"]) {
+      board.style.removeProperty(property);
+    }
+    for (const element of zenSideElements) {
+      element.removeAttribute("data-lfs-zen-side");
+      element.style.removeProperty("--lfs-zen-side-left");
+      element.style.removeProperty("--lfs-zen-side-top");
+    }
+    zenSideElements = [];
+    document.dispatchEvent(new Event("scroll"));
   }
 
   function apply(root) {
@@ -129,6 +357,7 @@
       "--lfs-idle-mix-percent": `${settings.idleMixPercent}%`,
       "--lfs-hover-mix-percent": `${settings.hoverMixPercent}%`,
       "--lfs-hover-desaturation-setting": `${settings.hoverDesaturation}%`,
+      "--lfs-board-top-gap": `${settings.boardTopGapPercent}vh`,
       "--lfs-move-dot-size": `${settings.moveDotSize}%`,
       "--lfs-white-piece-color": settings.whitePieceColor,
       "--lfs-black-piece-color": settings.blackPieceColor,
@@ -163,6 +392,8 @@
 
     root.toggleAttribute("data-lfs-ready", true);
     syncAnalysisToolbar();
+    syncBoardLayout();
+    syncNormalRoundLayout();
     queuePlayTimeUpdate();
   }
 
@@ -286,6 +517,11 @@
     document.documentElement?.removeAttribute("data-lfs-board-hover");
   });
 
+  window.addEventListener("resize", () => {
+    if (document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenCenter();
+    else syncNormalRoundLayout();
+  });
+
   chrome.storage.local.get(null, stored => {
     settings = normalize(stored);
     applyWhenReady();
@@ -301,6 +537,11 @@
 
   // One observer for both jobs; play time is only re-formatted while a profile page is present.
   new MutationObserver(records => {
+    if (records.some(record => record.addedNodes.length || record.removedNodes.length)) {
+      syncBoardLayout();
+      if (document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenCenter();
+      else syncNormalRoundLayout();
+    }
     if (document.querySelector("#us_profile, .perf-stat")) queuePlayTimeUpdate();
     for (const record of records) {
       for (const node of record.addedNodes) {

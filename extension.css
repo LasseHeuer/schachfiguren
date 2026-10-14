@@ -150,6 +150,122 @@ html:not([data-lfs-disabled]) body {
   background: transparent !important;
 }
 
+[data-lfs-board-layout] {
+  padding-block-start: var(--lfs-board-top-gap) !important;
+}
+
+html:not([data-lfs-zen-mode]) .round__app[data-lfs-normal-fit] {
+  box-sizing: border-box !important;
+  height: var(--lfs-normal-app-height) !important;
+  min-height: 0 !important;
+  grid-template-rows: 0 0 auto auto auto auto minmax(0, 1fr) auto auto auto auto auto 0 auto !important;
+}
+
+html:not([data-lfs-zen-mode]) .round__app__table[data-lfs-normal-fit] {
+  min-height: 0 !important;
+  align-self: stretch !important;
+}
+
+html:not([data-lfs-zen-mode]) .round__app[data-lfs-normal-fit] > .rcontrols,
+html:not([data-lfs-zen-mode]) .round__app[data-lfs-normal-fit] > [data-lfs-normal-moves] {
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow: visible !important;
+}
+
+html:not([data-lfs-zen-mode]) .round__app[data-lfs-normal-fit] > [data-lfs-normal-moves] > .message {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  margin: 6px !important;
+}
+
+html:not([data-lfs-zen-mode]) .round__app[data-lfs-normal-fit] > [data-lfs-normal-moves] > :has(> .fbt) {
+  flex: 0 0 28px !important;
+}
+
+html:not([data-lfs-zen-mode]) .round__app[data-lfs-normal-fit] > [data-lfs-normal-moves] > :has(> .fbt) > :is(.fbt, .noop) {
+  height: 28px !important;
+  line-height: 28px !important;
+}
+
+html:not([data-lfs-zen-mode]) .round__app[data-lfs-normal-fit] .rcontrols .follow-up {
+  gap: 2px !important;
+  padding: 0 8px 4px !important;
+}
+
+html:not([data-lfs-zen-mode]) .round__app[data-lfs-normal-fit] .rcontrols .follow-up .fbt {
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 6px 0 !important;
+  font-size: 0.95rem !important;
+  line-height: 1.25 !important;
+}
+
+html:not([data-lfs-zen-mode]) .round__side[data-lfs-normal-fit] {
+  translate: 0 var(--lfs-normal-side-offset) !important;
+}
+
+html[data-lfs-zen-mode] body {
+  overflow: hidden !important;
+}
+
+html[data-lfs-zen-mode] body * {
+  visibility: hidden !important;
+}
+
+html[data-lfs-zen-mode] [data-lfs-zen-board],
+html[data-lfs-zen-mode] [data-lfs-zen-board] .cg-wrap,
+html[data-lfs-zen-mode] [data-lfs-zen-board] .cg-wrap *,
+html[data-lfs-zen-mode] [data-lfs-zen-board].cg-wrap,
+html[data-lfs-zen-mode] [data-lfs-zen-board].cg-wrap *,
+html[data-lfs-zen-mode] [data-lfs-zen-board] cg-board,
+html[data-lfs-zen-mode] [data-lfs-zen-board] cg-board *,
+html[data-lfs-zen-mode] [data-lfs-zen-side],
+html[data-lfs-zen-mode] [data-lfs-zen-side] *,
+html[data-lfs-zen-mode] .material,
+html[data-lfs-zen-mode] .material *,
+html[data-lfs-zen-mode] .rclock,
+html[data-lfs-zen-mode] .rclock *,
+html[data-lfs-zen-mode] .clock,
+html[data-lfs-zen-mode] .clock * {
+  visibility: visible !important;
+}
+
+html[data-lfs-zen-mode] [data-lfs-zen-board] {
+  translate: var(--lfs-zen-offset-x, 0px) var(--lfs-zen-offset-y, 0px) !important;
+}
+
+html[data-lfs-zen-mode] body .material[data-lfs-zen-side],
+html[data-lfs-zen-mode] body .rclock[data-lfs-zen-side],
+html[data-lfs-zen-mode] body .clock[data-lfs-zen-side] {
+  position: fixed !important;
+  top: var(--lfs-zen-side-top) !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: var(--lfs-zen-side-left) !important;
+  z-index: 2147483647 !important;
+  margin: 0 !important;
+  transform: none !important;
+  translate: none !important;
+}
+
+html[data-lfs-zen-mode] body .material[data-lfs-zen-side] {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  column-gap: 2px !important;
+}
+
+/* Translation creates a stacking context; keep it above the page mix layer. */
+html[data-lfs-zen-mode] body [data-lfs-zen-board] {
+  z-index: 2147483647 !important;
+}
+
+html[data-lfs-zen-mode] body :is(button, a[href], input, select, textarea, [role="button"]),
+html[data-lfs-zen-mode] [data-lfs-zen-board] :is(button, a[href], input, select, textarea, [role="button"]) {
+  visibility: hidden !important;
+}
+
 html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board::before {
   filter: none !important;
   opacity: 1 !important;
@@ -657,6 +773,40 @@ html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap cg-board piece
   box-shadow: none !important;
   font: 12px/1.3 system-ui, sans-serif !important;
   pointer-events: auto !important;
+}
+
+#lfs-zen-toggle {
+  all: initial;
+  position: fixed !important;
+  right: 206px !important;
+  bottom: 8px !important;
+  z-index: 2147483647 !important;
+  display: grid !important;
+  min-width: 44px !important;
+  height: 32px !important;
+  padding: 0 9px !important;
+  place-items: center !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--c-bg-high, #eee) !important;
+  color: var(--c-font, #222) !important;
+  font: 700 12px/1.3 system-ui, sans-serif !important;
+  cursor: pointer !important;
+}
+
+#lfs-zen-toggle:hover,
+#lfs-zen-toggle[aria-pressed="true"] {
+  background: #777 !important;
+  color: #fff !important;
+}
+
+#lfs-zen-toggle:focus-visible {
+  outline: 2px solid var(--c-primary, #788878) !important;
+  outline-offset: 2px !important;
+}
+
+#lfs-zen-toggle[hidden] {
+  display: none !important;
 }
 
 #lfs-analysis-toolbar * {

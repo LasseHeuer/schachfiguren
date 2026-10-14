@@ -241,6 +241,10 @@
       <section class="panel" id="panel-mehr" role="tabpanel" aria-labelledby="tab-mehr" data-panel="mehr" hidden>
         <label class="switch-setting"><span>Gesamtspielzeit nur in Stunden</span><input type="checkbox" data-setting="showPlayTimeInHours" role="switch"></label>
         <label class="switch-setting"><span>Spielerfarben im Analysegraphen</span><input type="checkbox" data-setting="analysisGraphColors" role="switch"></label>
+        <div class="range-grid single-range">
+          <label class="range-setting"><span>Abstand oben (% Fensterhoehe)</span><output data-value-for="boardTopGapPercent"></output><input type="range" min="0" max="30" step="1" data-setting="boardTopGapPercent"></label>
+          <label class="range-setting"><span>Zen: nach oben (% Fensterhoehe)</span><output data-value-for="zenBoardUpPercent"></output><input type="range" min="0" max="30" step="1" data-setting="zenBoardUpPercent"></label>
+        </div>
       </section>
 
       <section class="color-picker" id="color-picker" aria-labelledby="color-picker-title" hidden>

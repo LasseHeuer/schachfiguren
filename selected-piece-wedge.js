@@ -103,7 +103,7 @@
   }
 
   function getPieceScreenSquare(element, board, blackOrientation) {
-    const moveKey = element.classList.contains("anim") ? element.getAttribute("data-lfs-move-key")?.toLowerCase() : null;
+    const moveKey = element.getAttribute("data-lfs-move-key")?.toLowerCase();
     const match = /^([a-h])([1-8])$/.exec(moveKey ?? "");
     if (match) {
       return logicalToScreen({ row: 8 - Number(match[2]), col: match[1].charCodeAt(0) - 97 }, blackOrientation);
@@ -459,7 +459,7 @@
     element.removeAttribute("data-lfs-threatened-piece");
   }
 
-  function updateThreatenedPieces(board, position, dragPreview, threatened, enabled) {
+  function updateThreatenedPieces(board, position, dragPreview, threatened, enabled, blackOrientation) {
     const threats = [];
     for (const element of board.querySelectorAll(":scope > piece")) {
       if (!enabled) {
@@ -485,7 +485,7 @@
           clearThreatenedPieceOutline(element);
           continue;
         }
-        square = getScreenSquare(element, board);
+        square = getPieceScreenSquare(element, board, blackOrientation);
       }
 
       const piece = getPiece(element);
@@ -1692,7 +1692,7 @@
     }
 
     if (!settings?.enabled || !board.closest(".is2d") || !parsed) {
-      updateThreatenedPieces(board, null, dragPreview, { w: new Map(), b: new Map() }, false);
+      updateThreatenedPieces(board, null, dragPreview, { w: new Map(), b: new Map() }, false, false);
       renderThreatArcs(board, entry, []);
       entry.svg?.remove();
       entry.svg = null;
@@ -1708,7 +1708,8 @@
       parsed.position,
       dragPreview,
       threatenedSquares,
-      threatsEnabled
+      threatsEnabled,
+      parsed.blackOrientation
     );
 
     // While dragging, wedges are based on the piece's original square so they stay visible for all destinations, not only the hovered one.
@@ -1754,15 +1755,25 @@
     if (showUnselectedPotentials) {
       wedges.push(...getUnselectedPotentialWedges(wedgeParsed.position, wedgeParsed.blackOrientation, settings));
     }
+    // Suppress connections at animated destinations, but keep drag previews fully dynamic.
+    const animatedSquares = new Set();
+    if (settings.defenseCirclesEnabled && !dragPreview) {
+      for (const piece of board.querySelectorAll(":scope > piece.anim")) {
+        const square = getPieceScreenSquare(piece, board, parsed.blackOrientation);
+        if (square) animatedSquares.add(`${square.row},${square.col}`);
+      }
+    }
     const defenseSegments = settings.defenseCirclesEnabled
-      ? getDefenseConnections(parsed.position, parsed.blackOrientation).map(connection => ({
-        target: connection.target,
-        source: connection.source,
-        angle: Math.atan2(connection.source.row - connection.target.row, connection.source.col - connection.target.col),
-        type: parsed.position[connection.target.row][connection.target.col].type,
-        sourceType: parsed.position[connection.source.row][connection.source.col].type,
-        color: connection.color === "w" ? settings.whitePieceColor : settings.blackPieceColor
-      }))
+      ? getDefenseConnections(parsed.position, parsed.blackOrientation)
+        .filter(({ source, target }) => ![source, target].some(square => animatedSquares.has(`${square.row},${square.col}`)))
+        .map(connection => ({
+          target: connection.target,
+          source: connection.source,
+          angle: Math.atan2(connection.source.row - connection.target.row, connection.source.col - connection.target.col),
+          type: parsed.position[connection.target.row][connection.target.col].type,
+          sourceType: parsed.position[connection.source.row][connection.source.col].type,
+          color: connection.color === "w" ? settings.whitePieceColor : settings.blackPieceColor
+        }))
       : [];
       const centerOutlines = settings.threatCenterOutlineEnabled
          ? getOverloadedPieces(parsed.position, parsed.blackOrientation, shouldFilterHatchedThreats()).map(outline => {
