@@ -256,6 +256,118 @@ html[data-lfs-zen-mode] body .material[data-lfs-zen-side] {
   column-gap: 2px !important;
 }
 
+html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] .pv > span {
+  display: none !important;
+}
+
+html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] [data-lfs-pv-slider-container] {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 3 !important;
+  pointer-events: none !important;
+}
+
+html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"] {
+  position: absolute !important;
+  height: 22px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  appearance: none !important;
+  background: transparent !important;
+  cursor: ew-resize !important;
+  pointer-events: auto !important;
+}
+
+html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--c-primary, #629a62) var(--lfs-pv-progress, 0%), var(--c-border, #aaa) var(--lfs-pv-progress, 0%));
+}
+
+html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  margin-top: -4.5px;
+  appearance: none;
+  border: 2px solid var(--c-primary, #629a62);
+  border-radius: 50%;
+  background: var(--c-bg-box, #fff);
+}
+
+html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-moz-range-track {
+  height: 3px;
+  border-radius: 3px;
+  background: var(--c-border, #aaa);
+}
+
+html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-moz-range-progress {
+  height: 3px;
+  border-radius: 3px;
+  background: var(--c-primary, #629a62);
+}
+
+html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-moz-range-thumb {
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--c-primary, #629a62);
+  border-radius: 50%;
+  background: var(--c-bg-box, #fff);
+}
+
+html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]:focus-visible {
+  outline: 2px solid var(--c-primary, #629a62) !important;
+  outline-offset: 2px !important;
+}
+
+html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] > .pv-board {
+  display: none !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-pv-preview {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 100 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  visibility: visible !important;
+}
+
+html[data-lfs-zen-mode] body #lfs-pv-preview,
+html[data-lfs-zen-mode] body #lfs-pv-preview * {
+  visibility: visible !important;
+}
+
+html:not([data-lfs-disabled]) cg-board[data-lfs-pv-preview] > :is(piece, square, svg),
+html:not([data-lfs-disabled]) .cg-wrap:has(cg-board[data-lfs-pv-preview]) > :is(piece, .cg-shapes, .cg-shapes-below, .cg-custom-svgs) {
+  opacity: 0 !important;
+}
+
+html:not([data-lfs-disabled]) .cg-wrap:has(cg-board[data-lfs-pv-preview]) :is(.cg-shapes, .cg-shapes-below, .cg-custom-svgs) {
+  display: none !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-pv-preview > span {
+  position: absolute !important;
+  z-index: 3;
+  display: block !important;
+  width: 12.5% !important;
+  height: 12.5% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
+  pointer-events: none !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-pv-preview > .lfs-pv-piece {
+  background: var(--lfs-pv-piece-color) !important;
+  -webkit-mask: var(--lfs-pv-piece-mask) center / contain no-repeat !important;
+  mask: var(--lfs-pv-piece-mask) center / contain no-repeat !important;
+}
+
 /* Translation creates a stacking context; keep it above the page mix layer. */
 html[data-lfs-zen-mode] body [data-lfs-zen-board] {
   z-index: 2147483647 !important;
@@ -321,7 +433,8 @@ html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board square.last-move {
   background: none !important;
 }
 
-html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board > svg.lfs-last-move-line {
+html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board > svg.lfs-last-move-line,
+html:not([data-lfs-disabled]) #lfs-pv-preview > svg.lfs-last-move-line {
   position: absolute;
   inset: 0;
   z-index: 2;
@@ -365,7 +478,8 @@ html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-center-outline[dat
   box-shadow: none !important;
 }
 
-html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board > svg.lfs-last-move-line polygon {
+html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board > svg.lfs-last-move-line polygon,
+html:not([data-lfs-disabled]) #lfs-pv-preview > svg.lfs-last-move-line polygon {
   fill: var(--lfs-last-move-color);
 }
 

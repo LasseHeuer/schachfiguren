@@ -20,8 +20,10 @@
     svg.setAttribute("aria-hidden", "true");
     const line = document.createElementNS(svgNamespace, "polygon");
     svg.append(line);
-    const firstPiece = board.querySelector(":scope > piece");
-    board.insertBefore(svg, firstPiece);
+    if (board) {
+      const firstPiece = board.querySelector(":scope > piece");
+      board.insertBefore(svg, firstPiece);
+    }
     return { svg, line };
   }
 
@@ -55,13 +57,14 @@
       };
     });
 
+    entry.svg.style.display = drawLine(entry.line, first, second) ? "block" : "none";
+  }
+
+  function drawLine(line, first, second) {
     const dx = second.x - first.x;
     const dy = second.y - first.y;
     const length = Math.hypot(dx, dy);
-    if (length < 0.01) {
-      entry.svg.style.display = "none";
-      return;
-    }
+    if (length < 0.01) return false;
     const halfWidth = settings.lastMoveLineWidth / 200;
     const direction = { x: dx / length, y: dy / length };
     const perpendicular = { x: -direction.y * halfWidth, y: direction.x * halfWidth };
@@ -78,9 +81,8 @@
       { x: end.x - perpendicular.x, y: end.y - perpendicular.y },
       { x: start.x - perpendicular.x, y: start.y - perpendicular.y }
     ];
-    entry.line.setAttribute("points", points.map(point => `${point.x},${point.y}`).join(" "));
-
-    entry.svg.style.display = "block";
+    line.setAttribute("points", points.map(point => `${point.x},${point.y}`).join(" "));
+    return true;
   }
 
   function observeBoard(board) {
@@ -146,6 +148,21 @@
   scanBoards();
 
   globalThis.LichessLastMoveLine = {
+    createPreviewLine(uci, blackOrientation) {
+      if (!settings?.enabled || !settings.markLastMove) return null;
+      const squares = uci?.match(/[a-h][1-8]/g) ?? [];
+      if (squares.length !== 2) return null;
+      const [first, second] = squares.map(square => {
+        const file = square.charCodeAt(0) - 97;
+        const rank = 8 - Number(square[1]);
+        return {
+          x: (blackOrientation ? 7 - file : file) + 0.5,
+          y: (blackOrientation ? 7 - rank : rank) + 0.5
+        };
+      });
+      const { svg, line } = createOverlay();
+      return drawLine(line, first, second) ? svg : null;
+    },
     update(nextSettings) {
       settings = nextSettings;
       scanBoards();

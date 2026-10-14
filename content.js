@@ -25,6 +25,11 @@
   let normalRoundTable;
   let normalRoundBoardHeight = 0;
   let normalRoundFrame;
+  let pvPreviewFrame;
+  let pvPreview;
+  let pvPreviewBoard;
+  let pvPreviewSlider;
+  let pvPreviewFen;
   const analysisInputs = new Map();
   const analysisRows = new Map();
 
@@ -231,6 +236,7 @@
         const delta = currentBoard.top - currentSide.top;
         if (Math.abs(delta) >= 0.01) side.style.setProperty("--lfs-normal-side-offset", `${offset + delta}px`);
         document.dispatchEvent(new Event("scroll"));
+        schedulePvPreviewSync();
       });
     });
   }
@@ -253,7 +259,10 @@
         // Chessground clears its cached pointer bounds on scroll, not on CSS translation.
         document.dispatchEvent(new Event("scroll"));
       }
-      requestAnimationFrame(syncZenSideElements);
+      requestAnimationFrame(() => {
+        syncZenSideElements();
+        schedulePvPreviewSync();
+      });
     });
   }
 
@@ -295,17 +304,179 @@
     const topClockRect = topClock?.getBoundingClientRect();
     const bottomClockRect = bottomClock?.getBoundingClientRect();
     const padding = 6;
-    const clockLeft = boardRect.right + padding;
+    const materialLeft = boardRect.right + padding;
 
     const place = (element, left, top) => {
       if (!element) return;
       element.style.setProperty("--lfs-zen-side-left", `${left}px`);
       element.style.setProperty("--lfs-zen-side-top", `${top}px`);
     };
-    place(topClock, clockLeft, boardRect.top);
-    place(bottomClock, clockLeft, boardRect.bottom - (bottomClockRect?.height ?? 0));
-    place(topMaterial, boardRect.left - (topMaterialRect?.width ?? 0) - padding, boardRect.top);
-    place(bottomMaterial, boardRect.left - (bottomMaterialRect?.width ?? 0) - padding, boardRect.bottom - (bottomMaterialRect?.height ?? 0));
+    place(topClock, boardRect.left - (topClockRect?.width ?? 0) - padding, boardRect.top);
+    place(bottomClock, boardRect.left - (bottomClockRect?.width ?? 0) - padding, boardRect.bottom - (bottomClockRect?.height ?? 0));
+    place(topMaterial, materialLeft, boardRect.top);
+    place(bottomMaterial, materialLeft, boardRect.bottom - (bottomMaterialRect?.height ?? 0));
+  }
+
+  function schedulePvPreviewSync() {
+    cancelAnimationFrame(pvPreviewFrame);
+    pvPreviewFrame = requestAnimationFrame(syncPvPreview);
+  }
+
+  function previewPvMove(slider, index) {
+    const row = slider._lfsPvRow;
+    const moves = row ? [...row.querySelectorAll(":scope > .pv-san")] : [];
+    const move = moves[index];
+    if (!move) return;
+
+    slider.value = String(index);
+    slider.setAttribute("aria-valuetext", move.textContent.trim());
+    slider.style.setProperty("--lfs-pv-progress", `${moves.length > 1 ? index * 100 / (moves.length - 1) : 0}%`);
+    pvPreviewSlider = slider;
+    pvPreviewFen = row.closest(".pv_box")?.dataset.fen;
+    syncPvPreview();
+  }
+
+  function previewPvMoveAtPointer(slider, clientX) {
+    const moves = slider._lfsPvRow ? [...slider._lfsPvRow.querySelectorAll(":scope > .pv-san")] : [];
+    if (!moves.length) return;
+    const rect = slider.getBoundingClientRect();
+    const progress = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    previewPvMove(slider, Math.round(progress * (moves.length - 1)));
+  }
+
+  function syncPvLineSliders() {
+    for (const box of document.querySelectorAll(".pv_box")) {
+      const rows = [...box.querySelectorAll(":scope > .pv")];
+      let container = box.querySelector(":scope > [data-lfs-pv-slider-container]");
+      if (!rows.length) {
+        container?.remove();
+        box.removeAttribute("data-lfs-pv-sliders");
+        continue;
+      }
+
+      box.setAttribute("data-lfs-pv-sliders", "");
+      if (!container) {
+        container = document.createElement("div");
+        container.setAttribute("data-lfs-pv-slider-container", "");
+        box.append(container);
+      }
+
+      while (container.children.length > rows.length) container.lastElementChild.remove();
+      for (let index = 0; index < rows.length; index++) {
+        const row = rows[index];
+        let slider = container.children[index];
+        if (!slider) {
+          slider = document.createElement("input");
+          slider.type = "range";
+          slider.min = "0";
+          slider.step = "1";
+          slider.dir = "ltr";
+          slider.setAttribute("aria-label", `Vorschau Kandidatenlinie ${index + 1}`);
+          slider.addEventListener("pointerenter", event => previewPvMoveAtPointer(slider, event.clientX));
+          slider.addEventListener("pointermove", event => {
+            if (event.pointerType !== "touch") previewPvMoveAtPointer(slider, event.clientX);
+          });
+          slider.addEventListener("pointerleave", clearPvPreview);
+          slider.addEventListener("blur", clearPvPreview);
+          slider.addEventListener("pointerdown", event => event.stopPropagation());
+          slider.addEventListener("input", () => previewPvMove(slider, Number(slider.value)));
+          container.append(slider);
+        }
+
+        const moves = [...row.querySelectorAll(":scope > .pv-san")];
+        slider._lfsPvRow = row;
+        slider.max = String(Math.max(0, moves.length - 1));
+        slider.disabled = !moves.length;
+        slider.hidden = !moves.length;
+        if (slider.dataset.moveCount !== String(moves.length)) {
+          slider.value = "0";
+          slider.dataset.moveCount = String(moves.length);
+        }
+
+        const rowRect = row.getBoundingClientRect();
+        const boxRect = box.getBoundingClientRect();
+        const score = row.querySelector(":scope > strong");
+        const start = score ? score.getBoundingClientRect().right - boxRect.left + 6 : rowRect.left - boxRect.left + 8;
+        const end = rowRect.right - boxRect.left - 8;
+        slider.style.left = `${start}px`;
+        slider.style.top = `${rowRect.top - boxRect.top + rowRect.height / 2 - 11}px`;
+        slider.style.width = `${Math.max(24, end - start)}px`;
+      }
+    }
+  }
+
+  function clearPvPreview() {
+    pvPreview?.remove();
+    pvPreviewBoard?.removeAttribute("data-lfs-pv-preview");
+    pvPreview = null;
+    pvPreviewBoard = null;
+    pvPreviewSlider = null;
+    pvPreviewFen = null;
+  }
+
+  function syncPvPreview() {
+    if (!settings.enabled) {
+      for (const box of document.querySelectorAll(".pv_box[data-lfs-pv-sliders]")) {
+        box.removeAttribute("data-lfs-pv-sliders");
+        box.querySelector(":scope > [data-lfs-pv-slider-container]")?.remove();
+      }
+      clearPvPreview();
+      return;
+    }
+
+    syncPvLineSliders();
+    const boards = [...document.querySelectorAll(".round__app .main-board cg-board, .analyse__board cg-board, .bot-game__board cg-board, .puzzle__board cg-board, .study__board cg-board")];
+    const board = boards.find(candidate => candidate.getBoundingClientRect().width > 0 && candidate.getBoundingClientRect().height > 0);
+    const row = pvPreviewSlider?._lfsPvRow;
+    const move = row?.querySelectorAll(":scope > .pv-san")[Number(pvPreviewSlider.value)];
+    if (!board || !pvPreviewSlider?.isConnected || !row?.isConnected || !move?.dataset.board
+      || row.closest(".pv_box")?.dataset.fen !== pvPreviewFen) {
+      clearPvPreview();
+      return;
+    }
+
+    const blackOrientation = board.closest(".cg-wrap")?.classList.contains("orientation-black");
+    const key = `${move.dataset.board}:${blackOrientation}:${settings.markLastMove}:${settings.lastMoveLineWidth}`;
+    if (pvPreviewBoard !== board) pvPreviewBoard?.removeAttribute("data-lfs-pv-preview");
+    pvPreviewBoard = board;
+    pvPreview ??= document.createElement("div");
+    pvPreview.id = "lfs-pv-preview";
+    pvPreview.setAttribute("aria-hidden", "true");
+    if (pvPreview.parentElement !== board) board.append(pvPreview);
+    board.setAttribute("data-lfs-pv-preview", "");
+    if (pvPreview.dataset.position === key) return;
+
+    // Use Lichess's per-move FEN, not the mini-board's pixel-sized DOM.
+    const [fen, uci] = move.dataset.board.split("|");
+    const roles = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
+    const fragment = document.createDocumentFragment();
+    const place = (element, file, rank) => {
+      element.style.left = `${(blackOrientation ? 7 - file : file) * 12.5}%`;
+      element.style.top = `${(blackOrientation ? 7 - rank : rank) * 12.5}%`;
+      fragment.append(element);
+    };
+    const lastMoveLine = globalThis.LichessLastMoveLine.createPreviewLine(uci, blackOrientation);
+    if (lastMoveLine) fragment.append(lastMoveLine);
+    fen.split(" ")[0].split("[")[0].split("/").forEach((rank, rankIndex) => {
+      let file = 0;
+      for (const symbol of rank) {
+        if (/\d/.test(symbol)) {
+          file += Number(symbol);
+          continue;
+        }
+        const role = roles[symbol.toLowerCase()];
+        if (!role) continue;
+        const color = symbol === symbol.toUpperCase() ? "white" : "black";
+        const piece = document.createElement("span");
+        piece.className = "lfs-pv-piece";
+        piece.dataset.piece = `${color} ${role}`;
+        piece.style.setProperty("--lfs-pv-piece-color", `var(--lfs-${color}-piece-color)`);
+        piece.style.setProperty("--lfs-pv-piece-mask", `var(--lfs-piece-${color[0]}${symbol.toLowerCase()})`);
+        place(piece, file++, rankIndex);
+      }
+    });
+    pvPreview.replaceChildren(fragment);
+    pvPreview.dataset.position = key;
   }
 
   function clearZenOffset(board) {
@@ -394,6 +565,7 @@
     syncAnalysisToolbar();
     syncBoardLayout();
     syncNormalRoundLayout();
+    schedulePvPreviewSync();
     queuePlayTimeUpdate();
   }
 
@@ -520,7 +692,10 @@
   window.addEventListener("resize", () => {
     if (document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenCenter();
     else syncNormalRoundLayout();
+    schedulePvPreviewSync();
   });
+
+  document.addEventListener("scroll", schedulePvPreviewSync, true);
 
   chrome.storage.local.get(null, stored => {
     settings = normalize(stored);
@@ -537,6 +712,9 @@
 
   // One observer for both jobs; play time is only re-formatted while a profile page is present.
   new MutationObserver(records => {
+    if (records.some(record => record.addedNodes.length || record.removedNodes.length || record.type === "characterData")) {
+      schedulePvPreviewSync();
+    }
     if (records.some(record => record.addedNodes.length || record.removedNodes.length)) {
       syncBoardLayout();
       if (document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenCenter();
