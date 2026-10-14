@@ -16,6 +16,12 @@
     selectedLight: "#ffffff",
     checkSquareLight: "#e57373",
     engineArrowLight: "#4a4a4a",
+    engineArrowOutlineEnabled: false,
+    engineArrowOutlineWidthPercent: 3,
+    engineArrowShaftWidthPercent: 36,
+    engineArrowHeadSizePercent: 100,
+    engineArrowStartOffsetPercent: 20,
+    engineArrowEndOffsetPercent: 20,
     hoverMixLight: "#d4d2d2",
     boardLightDark: "#424240",
     boardDarkDark: "#3e3d40",
@@ -146,6 +152,11 @@
     hoverDesaturation: [0, 100],
     moveDotSize: [5, 50],
     lastMoveLineWidth: [1, 100],
+    engineArrowOutlineWidthPercent: [1, 10],
+    engineArrowShaftWidthPercent: [8, 60],
+    engineArrowHeadSizePercent: [50, 200],
+    engineArrowStartOffsetPercent: [0, 40],
+    engineArrowEndOffsetPercent: [0, 40],
     wedgeBaseWidthPercent: [1, 50],
     wedgeTipWidthPercent: [0.5, 25],
     wedgeGlowWidthPercent: [0, 50],
@@ -199,6 +210,16 @@
 
   function normalize(values = {}) {
     const result = { ...defaults, ...values };
+    const legacyArrowOffset = Number(values.engineArrowCenterOffsetPercent);
+    if (Number.isFinite(legacyArrowOffset)) {
+      if (!Object.prototype.hasOwnProperty.call(values, "engineArrowStartOffsetPercent")) {
+        result.engineArrowStartOffsetPercent = legacyArrowOffset;
+      }
+      if (!Object.prototype.hasOwnProperty.call(values, "engineArrowEndOffsetPercent")) {
+        result.engineArrowEndOffsetPercent = legacyArrowOffset;
+      }
+    }
+    delete result.engineArrowCenterOffsetPercent;
     for (const [percentKey, pixelKey] of [
       ["wedgeBaseWidthPercent", "wedgeBaseWidthPx"],
       ["wedgeTipWidthPercent", "wedgeTipWidthPx"],
@@ -275,7 +296,12 @@
     result.threatCenterHatchAngleDeg = Math.round(result.threatCenterHatchAngleDeg);
     result.threatCenterHatchSpeed = Number(result.threatCenterHatchSpeed.toFixed(2));
     result.threatCenterOutlineWidthPercent = Number(result.threatCenterOutlineWidthPercent.toFixed(1));
+    result.engineArrowOutlineWidthPercent = Number(result.engineArrowOutlineWidthPercent.toFixed(1));
+    result.engineArrowShaftWidthPercent = Number(result.engineArrowShaftWidthPercent.toFixed(1));
+    result.engineArrowStartOffsetPercent = Math.round(result.engineArrowStartOffsetPercent);
+    result.engineArrowEndOffsetPercent = Math.round(result.engineArrowEndOffsetPercent);
     result.lastMoveLineWidth = Math.round(result.lastMoveLineWidth);
+    result.engineArrowHeadSizePercent = Math.round(result.engineArrowHeadSizePercent);
 
     result.threatArcGapPercent = Math.round(result.threatArcGapPercent);
     result.threatArcRadialGapPercent = Math.round(result.threatArcRadialGapPercent);
@@ -313,6 +339,7 @@
       "markLastMove",
       "squareMoveDots",
       "analysisGraphColors",
+      "engineArrowOutlineEnabled",
       "showPlayTimeInHours",
       "analysisEnabled",
       "removeOutlines",

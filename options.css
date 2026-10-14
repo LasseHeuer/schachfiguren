@@ -93,6 +93,10 @@ output { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 10
 .bezier-handle:active { cursor: grabbing; }
 .bezier-handle:focus-visible { outline: none; stroke: #fff; stroke-width: 3; }
 .range-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 10px; }
+.engine-arrow-control-section { margin-top: 10px; padding: 10px; border-radius: 7px; background: #f5f6f3; }
+.engine-arrow-control-section summary { color: #536257; cursor: pointer; font-size: 10px; font-weight: 700; }
+.engine-arrow-control-section[open] summary { margin-bottom: 10px; }
+.engine-arrow-control-section .range-grid { margin-top: 0; }
 .threat-controls { grid-template-columns: 1fr; align-items: center; }
 .threat-range-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 12px; }
 .threat-display-mode { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }

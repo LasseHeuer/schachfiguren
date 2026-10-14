@@ -24,6 +24,7 @@
     }
     updateThreatDisplayControls();
     updateCenterOutlineControls();
+    updateEngineArrowOutlineControls(settings.engineArrowOutlineEnabled);
   }
 
   function updateOutput(control) {
@@ -113,6 +114,10 @@
     for (const control of document.querySelectorAll("[data-distance-factor]")) control.hidden = !enabled;
   }
 
+  function updateEngineArrowOutlineControls(enabled) {
+    document.querySelector("[data-engine-arrow-outline-controls]").hidden = !enabled;
+  }
+
   function updateThreatDisplayControls() {
     const attackMode = document.querySelector('[data-setting="threatAttackDisplayMode"]').value;
     const defenseMode = document.querySelector('[data-setting="threatDefenseDisplayMode"]').value;
@@ -154,6 +159,7 @@
       if (control.dataset.setting === "moveAnimationTimeDistance") updateDistanceFactorControls(control.checked);
       if (["threatAttackDisplayMode", "threatDefenseDisplayMode"].includes(control.dataset.setting)) updateThreatDisplayControls();
       if (control.dataset.setting === "threatCenterOutlineStyle") updateCenterOutlineControls();
+      if (control.dataset.setting === "engineArrowOutlineEnabled") updateEngineArrowOutlineControls(control.checked);
       if (control.dataset.setting === "enabled") {
         document.body.classList.toggle("extension-disabled", !control.checked);
       }

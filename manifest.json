@@ -5,8 +5,12 @@
   "description": "Figurensets, Brettfarben und weitere Lichess-Anpassungen mit zentralen Einstellungen.",
   "permissions": ["storage", "downloads", "clipboardWrite"],
   "host_permissions": ["https://lichess.org/*"],
+  "icons": {
+    "128": "extension-icon.png"
+  },
   "action": {
     "default_title": "Lichess Figurensets",
+    "default_icon": "extension-icon.png",
     "default_popup": "popup.html"
   },
   "options_page": "options.html",

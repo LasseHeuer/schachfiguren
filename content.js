@@ -305,11 +305,15 @@
     const bottomClockRect = bottomClock?.getBoundingClientRect();
     const padding = 6;
     const materialLeft = boardRect.right + padding;
+    const zenBoardRect = zenBoard.getBoundingClientRect();
 
     const place = (element, left, top) => {
       if (!element) return;
-      element.style.setProperty("--lfs-zen-side-left", `${left}px`);
-      element.style.setProperty("--lfs-zen-side-top", `${top}px`);
+      const insideZenBoard = zenBoard.contains(element);
+      const originLeft = insideZenBoard ? zenBoardRect.left + zenBoard.clientLeft : 0;
+      const originTop = insideZenBoard ? zenBoardRect.top + zenBoard.clientTop : 0;
+      element.style.setProperty("--lfs-zen-side-left", `${left - originLeft}px`);
+      element.style.setProperty("--lfs-zen-side-top", `${top - originTop}px`);
     };
     place(topClock, boardRect.left - (topClockRect?.width ?? 0) - padding, boardRect.top);
     place(bottomClock, boardRect.left - (bottomClockRect?.width ?? 0) - padding, boardRect.bottom - (bottomClockRect?.height ?? 0));
@@ -504,6 +508,12 @@
     root.toggleAttribute("data-lfs-remove-shadows", settings.removeShadows);
     root.toggleAttribute("data-lfs-remove-rounded-corners", settings.removeRoundedCorners);
     root.toggleAttribute("data-lfs-disable-animations", settings.disableAnimations);
+    root.toggleAttribute("data-lfs-engine-arrow-outline", settings.enabled && settings.engineArrowOutlineEnabled);
+    root.dataset.lfsEngineArrowOutlineWidth = settings.engineArrowOutlineWidthPercent;
+    root.dataset.lfsEngineArrowHeadSize = settings.engineArrowHeadSizePercent;
+    root.dataset.lfsEngineArrowShaftWidth = settings.engineArrowShaftWidthPercent;
+    root.dataset.lfsEngineArrowStartOffset = settings.engineArrowStartOffsetPercent;
+    root.dataset.lfsEngineArrowEndOffset = settings.engineArrowEndOffsetPercent;
     root.toggleAttribute("data-lfs-monochrome-board", settings.monochromeBoard);
     root.toggleAttribute("data-lfs-square-outline", settings.squareOutline);
     root.toggleAttribute("data-lfs-rund-comic", settings.pieceSet === "rund_comic");
