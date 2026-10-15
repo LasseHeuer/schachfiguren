@@ -23,6 +23,7 @@
     engineArrowHeadSizePercent: 100,
     engineArrowStartOffsetPercent: 20,
     engineArrowEndOffsetPercent: 20,
+    soundSettings: {},
     hoverMixLight: "#d4d2d2",
     boardLightDark: "#424240",
     boardDarkDark: "#3e3d40",

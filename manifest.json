@@ -3,7 +3,7 @@
   "name": "Lichess Figurensets",
   "version": "1.0.0",
   "description": "Figurensets, Brettfarben und weitere Lichess-Anpassungen mit zentralen Einstellungen.",
-  "permissions": ["storage", "downloads", "clipboardWrite"],
+  "permissions": ["storage", "downloads", "clipboardWrite", "unlimitedStorage"],
   "host_permissions": ["https://lichess.org/*"],
   "icons": {
     "128": "extension-icon.png"
@@ -18,12 +18,12 @@
     {
       "matches": ["https://lichess.org/*"],
       "css": ["extension.css"],
-      "js": ["settings.js", "last-move-line.js", "threat-coding.js", "king-movement-fields.js", "piece-bounce.js", "move-animation.js", "selected-piece-wedge.js", "content.js"],
+      "js": ["settings.js", "sound-catalog.js", "last-move-line.js", "threat-coding.js", "king-movement-fields.js", "piece-bounce.js", "move-animation.js", "selected-piece-wedge.js", "content.js"],
       "run_at": "document_start"
     },
     {
       "matches": ["https://lichess.org/*"],
-      "js": ["graph.js", "move-animation-main.js"],
+      "js": ["graph.js", "move-animation-main.js", "sounds-main.js"],
       "run_at": "document_start",
       "world": "MAIN"
     }
@@ -35,7 +35,8 @@
         "system_eckig/*.svg",
         "rund/*.svg",
         "rund_comic/*.svg",
-        "cage/*.svg"
+        "cage/*.svg",
+        "sounds/*.wav"
       ],
       "matches": ["https://lichess.org/*"]
     }

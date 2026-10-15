@@ -21,6 +21,7 @@
         <button class="tab" id="tab-hover" type="button" role="tab" aria-selected="false" aria-controls="panel-hover" data-tab="hover" tabindex="-1">Hover</button>
         <button class="tab" id="tab-effekte" type="button" role="tab" aria-selected="false" aria-controls="panel-effekte" data-tab="effekte" tabindex="-1">Effekte</button>
         <button class="tab" id="tab-mehr" type="button" role="tab" aria-selected="false" aria-controls="panel-mehr" data-tab="mehr" tabindex="-1">Mehr</button>
+        <button class="tab" id="tab-sounds" type="button" role="tab" aria-selected="false" aria-controls="panel-sounds" data-tab="sounds" tabindex="-1">Sounds</button>
       </nav>
 
       <section class="panel" id="panel-figuren" role="tabpanel" aria-labelledby="tab-figuren" data-panel="figuren">
@@ -261,6 +262,16 @@
         </div>
       </section>
 
+      <section class="panel sound-panel" id="panel-sounds" role="tabpanel" aria-labelledby="tab-sounds" data-panel="sounds" hidden>
+        <div class="sound-import">
+          <span><strong>Eigene Sounds</strong><small>Sounds aus „sounds“ sind enthalten. Weitere Dateien laden:</small></span>
+          <button id="sound-folder-button" type="button">Ordner waehlen</button>
+          <input id="sound-folder-input" type="file" accept="audio/*,.wav,.mp3,.ogg,.opus" webkitdirectory multiple hidden>
+        </div>
+        <p id="sound-folder-status" class="sound-note" role="status">12 eigene Sounds direkt verfuegbar.</p>
+        <div id="sound-settings" class="sound-settings" aria-live="polite"></div>
+      </section>
+
       <section class="color-picker" id="color-picker" aria-labelledby="color-picker-title" hidden>
         <header class="color-picker-header"><strong id="color-picker-title">Farbe</strong><button id="close-color-picker" type="button">Schliessen</button></header>
         <output class="color-preview" id="color-picker-preview">#ffffff</output>
@@ -274,6 +285,7 @@
       <footer class="footer"><span id="save-status" role="status" aria-live="polite">Automatisch gespeichert</span><div class="footer-actions"><button id="export-settings" type="button">Export</button><button id="copy-settings" type="button">Zwischenablage</button><button id="reset-settings" type="button">Zuruecksetzen</button></div></footer>
     </main>
     <script src="settings.js"></script>
+    <script src="sound-catalog.js"></script>
     <script src="bezier-editor.js"></script>
     <script src="popup.js"></script>
   </body>

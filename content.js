@@ -659,6 +659,16 @@
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type === "lfs-preview-sound" && typeof message.name === "string") {
+      window.postMessage({
+        channel: "lfs-sound-preview",
+        name: message.name,
+        source: message.source,
+        volume: message.volume
+      }, location.origin);
+      sendResponse({ ok: true });
+      return;
+    }
     if (message?.type !== "lfs-status") return;
 
     const root = document.documentElement;
@@ -708,13 +718,56 @@
 
   document.addEventListener("scroll", schedulePvPreviewSync, true);
 
-  chrome.storage.local.get(null, stored => {
+  const syncedCustomSoundFiles = new Set();
+  function syncSoundSettings() {
+    chrome.storage.local.get("soundSettings", stored => {
+      const soundSettings = stored.soundSettings && typeof stored.soundSettings === "object" ? stored.soundSettings : {};
+      const customNames = new Set(Object.values(soundSettings)
+        .map(setting => setting?.source)
+        .filter(source => typeof source === "string" && source.startsWith("custom:"))
+        .map(source => source.slice("custom:".length)));
+      const pendingNames = [...customNames].filter(name => !syncedCustomSoundFiles.has(name));
+      const fileKeys = pendingNames.map(name => `lfsCustomSound:${name}`);
+      const sendSettings = files => window.postMessage({
+        channel: "lfs-sound-settings",
+        settings: soundSettings,
+        files: Object.fromEntries(pendingNames.flatMap(name => {
+          const fileKey = `lfsCustomSound:${name}`;
+          const source = files[fileKey] || (globalThis.LichessSoundCatalog.customFiles.includes(name)
+            ? chrome.runtime.getURL(`sounds/${encodeURIComponent(name)}`)
+            : undefined);
+          return source ? [[name, source]] : [];
+        }))
+      }, location.origin);
+      if (!fileKeys.length) {
+        sendSettings({});
+        return;
+      }
+      chrome.storage.local.get(fileKeys, files => {
+        for (const name of pendingNames) {
+          if (files[`lfsCustomSound:${name}`] || globalThis.LichessSoundCatalog.customFiles.includes(name)) syncedCustomSoundFiles.add(name);
+        }
+        sendSettings(files);
+      });
+    });
+  }
+
+  chrome.storage.local.get(Object.keys(defaults), stored => {
     settings = normalize(stored);
     applyWhenReady();
+    syncSoundSettings();
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
+    const changedKeys = Object.keys(changes);
+    if (changedKeys.some(key => key === "soundSettings" || key === "lfsCustomSoundFiles" || key.startsWith("lfsCustomSound:"))) {
+      for (const key of changedKeys.filter(key => key.startsWith("lfsCustomSound:"))) {
+        syncedCustomSoundFiles.delete(key.slice("lfsCustomSound:".length));
+      }
+      syncSoundSettings();
+    }
+    if (!changedKeys.some(key => key !== "soundSettings" && Object.prototype.hasOwnProperty.call(defaults, key))) return;
     for (const [key, change] of Object.entries(changes)) settings[key] = change.newValue;
     settings = normalize(settings);
     applyWhenReady();

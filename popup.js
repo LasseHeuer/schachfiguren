@@ -1,5 +1,12 @@
 (() => {
   const controls = [...document.querySelectorAll("[data-setting]")];
+  const soundCatalog = globalThis.LichessSoundCatalog;
+  const soundSettingsKey = "soundSettings";
+  const soundFilesKey = "lfsCustomSoundFiles";
+  const soundFilePrefix = "lfsCustomSound:";
+  const soundSettingsElement = document.getElementById("sound-settings");
+  const soundFolderInput = document.getElementById("sound-folder-input");
+  const soundFolderStatus = document.getElementById("sound-folder-status");
   const toggle = document.querySelector('[data-setting="enabled"]');
   const status = document.getElementById("page-status");
   const saveStatus = document.getElementById("save-status");
@@ -20,6 +27,12 @@
   let activeCurveKey = "pieceBounceCurve";
   let activeColorInput;
   let bounceCurveEditor = null;
+  let currentSoundSettings = {};
+  let customSoundNames = [];
+  let pendingCustomSelection;
+  let openSoundList;
+  let previewAudio;
+  const customSoundCache = new Map();
   globalThis.LichessSettings.bindFineInputs([...controls, ...colorPickerRanges]);
 
   const uiStateKey = "popupUiState";
@@ -244,6 +257,256 @@
     }
   }
 
+  function customSoundStorageKey(name) {
+    return `${soundFilePrefix}${name}`;
+  }
+
+  function readCustomSound(name) {
+    if (customSoundCache.has(name)) return Promise.resolve(customSoundCache.get(name));
+    return new Promise(resolve => {
+      chrome.storage.local.get(customSoundStorageKey(name), values => {
+        const dataUrl = values[customSoundStorageKey(name)] || (soundCatalog.customFiles.includes(name)
+          ? chrome.runtime.getURL(`sounds/${encodeURIComponent(name)}`)
+          : undefined);
+        if (dataUrl) customSoundCache.set(name, dataUrl);
+        resolve(dataUrl);
+      });
+    });
+  }
+
+  function previewWebsiteSound(event, source, volume) {
+    return new Promise(resolve => {
+      chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+        const tab = tabs[0];
+        if (!tab?.url?.startsWith("https://lichess.org/")) {
+          resolve(false);
+          return;
+        }
+        chrome.tabs.sendMessage(tab.id, { type: "lfs-preview-sound", name: event.id, source, volume: Number(volume) }, response => {
+          resolve(!chrome.runtime.lastError && response?.ok === true);
+        });
+      });
+    });
+  }
+
+  async function previewSound(event, source, volume) {
+    if (source !== "website" && !source.startsWith("custom:")) {
+      if (await previewWebsiteSound(event, source, volume)) return;
+      soundFolderStatus.textContent = "Soundpack-Vorschau ist nur auf einer geoeffneten Lichess-Seite moeglich.";
+      return;
+    }
+    if (source === "website") {
+      if (await previewWebsiteSound(event, source, volume)) return;
+      soundFolderStatus.textContent = "Website-Soundvorschau ist nur auf einer geoeffneten Lichess-Seite moeglich.";
+      return;
+    }
+    const url = await readCustomSound(source.slice("custom:".length));
+    if (!url) {
+      soundFolderStatus.textContent = "Ordner „sounds“ waehlen, um diese Datei zu laden und vorzuspielen.";
+      return;
+    }
+    previewAudio?.pause();
+    previewAudio = new Audio(url);
+    previewAudio.volume = Math.max(0, Math.min(1, Number(volume) / 100));
+    previewAudio.play().catch(() => {
+      soundFolderStatus.textContent = "Soundvorschau konnte nicht abgespielt werden.";
+    });
+  }
+
+  function renderSoundSettings() {
+    openSoundList = undefined;
+    soundSettingsElement.replaceChildren();
+    for (const event of soundCatalog.events) {
+      const setting = currentSoundSettings[event.key] ?? { source: "website", volume: 100 };
+      const row = document.createElement("section");
+      row.className = "sound-setting";
+      const heading = document.createElement("h3");
+      heading.textContent = event.label;
+      const trigger = document.createElement("button");
+      trigger.type = "button";
+      trigger.className = "sound-select-trigger";
+      trigger.setAttribute("aria-haspopup", "listbox");
+      trigger.setAttribute("aria-expanded", "false");
+      trigger.setAttribute("aria-label", `Sound fuer ${event.label}`);
+      const options = document.createElement("div");
+      options.className = "sound-option-list";
+      options.id = `sound-options-${event.key}`;
+      options.setAttribute("role", "listbox");
+      options.hidden = true;
+      trigger.setAttribute("aria-controls", options.id);
+      const sourceOptions = [{ source: "website", label: "Lichess (aktuelle Auswahl)" }];
+      const availablePacks = soundCatalog.packs.filter(pack => !event.packs || event.packs.includes(pack.id));
+      for (const pack of availablePacks) sourceOptions.push({ source: `pack:${pack.id}`, label: pack.label });
+      const selectedCustomNames = Object.values(currentSoundSettings)
+        .map(value => value?.source)
+        .filter(source => typeof source === "string" && source.startsWith("custom:"))
+        .map(source => source.slice("custom:".length));
+      const allCustomNames = [...new Set([...soundCatalog.customFiles, ...customSoundNames, ...selectedCustomNames])];
+      for (const name of allCustomNames) sourceOptions.push({ source: `custom:${name}`, label: `Eigener Sound: ${name}` });
+      let selectedSource = sourceOptions.find(option => option.source === setting.source) ?? sourceOptions[0];
+      trigger.textContent = selectedSource.label;
+
+      function closeOptions() {
+        options.hidden = true;
+        trigger.setAttribute("aria-expanded", "false");
+        if (openSoundList === options) openSoundList = undefined;
+      }
+
+      trigger.addEventListener("click", () => {
+        if (!options.hidden) {
+          closeOptions();
+          return;
+        }
+        if (openSoundList && openSoundList !== options) {
+          openSoundList.hidden = true;
+          openSoundList.previousElementSibling?.setAttribute("aria-expanded", "false");
+        }
+        options.hidden = false;
+        trigger.setAttribute("aria-expanded", "true");
+        openSoundList = options;
+      });
+      trigger.addEventListener("keydown", eventKey => {
+        if (eventKey.key !== "ArrowDown" && eventKey.key !== "ArrowUp") return;
+        eventKey.preventDefault();
+        if (options.hidden) trigger.click();
+        options.querySelector("button")?.focus();
+      });
+      for (const sourceOption of sourceOptions) {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.className = "sound-option";
+        option.setAttribute("role", "option");
+        option.setAttribute("aria-selected", String(sourceOption.source === selectedSource.source));
+        option.textContent = sourceOption.label;
+        option.addEventListener("pointerenter", () => previewSound(event, sourceOption.source, volume.value));
+        option.addEventListener("click", () => {
+          if (sourceOption.source.startsWith("custom:") && !soundCatalog.customFiles.includes(sourceOption.source.slice("custom:".length)) && !customSoundNames.includes(sourceOption.source.slice("custom:".length))) {
+            pendingCustomSelection = { eventKey: event.key, source: sourceOption.source };
+            soundFolderStatus.textContent = "Waehle den Ordner „sounds“, um die eigene Datei zu laden.";
+            closeOptions();
+            soundFolderInput.click();
+            return;
+          }
+          selectedSource = sourceOption;
+          currentSoundSettings[event.key] = { source: sourceOption.source, volume: Number(volume.value) };
+          currentSettings[soundSettingsKey] = currentSoundSettings;
+          for (const sibling of options.querySelectorAll("[role=option]")) {
+            sibling.setAttribute("aria-selected", String(sibling === option));
+          }
+          trigger.textContent = sourceOption.label;
+          saveStatus.textContent = "";
+          chrome.storage.local.set({ [soundSettingsKey]: currentSoundSettings }, () => {
+            saveStatus.textContent = "Soundeinstellungen gespeichert";
+          });
+          closeOptions();
+          trigger.focus();
+        });
+        option.addEventListener("keydown", eventKey => {
+          if (eventKey.key === "Escape") {
+            closeOptions();
+            trigger.focus();
+          }
+        });
+        options.append(option);
+      }
+
+      const volumeLabel = document.createElement("label");
+      volumeLabel.className = "sound-volume";
+      const volumeText = document.createElement("span");
+      volumeText.textContent = "Lautstaerke";
+      const volume = document.createElement("input");
+      volume.type = "range";
+      volume.min = "0";
+      volume.max = "100";
+      volume.step = "1";
+      volume.value = String(Math.max(0, Math.min(100, Number(setting.volume ?? 100))));
+      volume.setAttribute("aria-label", `Lautstaerke fuer ${event.label}`);
+      const output = document.createElement("output");
+      output.value = `${volume.value}%`;
+      volumeLabel.append(volumeText, volume, output);
+      row.append(heading, trigger, options, volumeLabel);
+
+      const saveVolume = () => {
+        currentSoundSettings[event.key] = { source: selectedSource.source, volume: Number(volume.value) };
+        currentSettings[soundSettingsKey] = currentSoundSettings;
+        chrome.storage.local.set({ [soundSettingsKey]: currentSoundSettings }, () => {
+          saveStatus.textContent = "Soundeinstellungen gespeichert";
+        });
+      };
+      volume.addEventListener("input", () => {
+        output.value = `${volume.value}%`;
+        saveVolume();
+      });
+      volume.addEventListener("change", () => previewSound(event, selectedSource.source, volume.value));
+      soundSettingsElement.append(row);
+    }
+  }
+
+  function readAudioFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.addEventListener("load", () => resolve(reader.result), { once: true });
+      reader.addEventListener("error", () => reject(reader.error), { once: true });
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function importSoundFolder() {
+    const files = [...soundFolderInput.files].filter(file => file.type.startsWith("audio/") || /\.(wav|mp3|ogg|opus|m4a|aac)$/i.test(file.name));
+    if (!files.length) {
+      soundFolderStatus.textContent = "Im ausgewaehlten Ordner wurden keine Audiodateien gefunden.";
+      pendingCustomSelection = undefined;
+      soundFolderInput.value = "";
+      return;
+    }
+    soundFolderStatus.textContent = `${files.length} Sounddateien werden geladen …`;
+    const storedFiles = {};
+    const importedNames = new Set(customSoundNames);
+    try {
+      for (const file of files) {
+        const relativeName = file.webkitRelativePath.split("/").slice(1).join("/") || file.name;
+        storedFiles[customSoundStorageKey(relativeName)] = await readAudioFile(file);
+        importedNames.add(relativeName);
+      }
+    } catch {
+      soundFolderStatus.textContent = "Mindestens eine Sounddatei konnte nicht gelesen werden.";
+      pendingCustomSelection = undefined;
+      soundFolderInput.value = "";
+      return;
+    }
+    storedFiles[soundFilesKey] = [...importedNames].sort((a, b) => a.localeCompare(b));
+    chrome.storage.local.set(storedFiles, () => {
+      if (chrome.runtime.lastError) {
+        soundFolderStatus.textContent = "Sounddateien konnten nicht gespeichert werden.";
+        pendingCustomSelection = undefined;
+        soundFolderInput.value = "";
+        return;
+      }
+      for (const file of files) {
+        const relativeName = file.webkitRelativePath.split("/").slice(1).join("/") || file.name;
+        customSoundCache.delete(relativeName);
+      }
+      customSoundNames = storedFiles[soundFilesKey];
+      let importMessage = `${customSoundNames.length} eigene Sounddateien verfuegbar.`;
+      if (pendingCustomSelection) {
+        const fileName = pendingCustomSelection.source.slice("custom:".length);
+        if (customSoundNames.includes(fileName)) {
+          const current = currentSoundSettings[pendingCustomSelection.eventKey] ?? { volume: 100 };
+          currentSoundSettings[pendingCustomSelection.eventKey] = { ...current, source: pendingCustomSelection.source };
+          currentSettings[soundSettingsKey] = currentSoundSettings;
+          chrome.storage.local.set({ [soundSettingsKey]: currentSoundSettings });
+          importMessage = `„${fileName}“ wurde ausgewaehlt und geladen.`;
+        } else {
+          importMessage = `„${fileName}“ wurde im Ordner nicht gefunden.`;
+        }
+        pendingCustomSelection = undefined;
+      }
+      renderSoundSettings();
+      soundFolderStatus.textContent = importMessage;
+      soundFolderInput.value = "";
+    });
+  }
+
   function updateThreatDisplayControls() {
     for (const role of ["attack", "defense"]) {
       const mode = document.querySelector(`[data-setting="threat${role === "attack" ? "Attack" : "Defense"}DisplayMode"]`).value;
@@ -296,6 +559,16 @@
   }
 
   for (const tab of tabs) tab.addEventListener("click", () => setTab(tab.dataset.tab));
+
+  document.addEventListener("pointerdown", event => {
+    if (!openSoundList || openSoundList.parentElement.contains(event.target)) return;
+    openSoundList.hidden = true;
+    openSoundList.previousElementSibling?.setAttribute("aria-expanded", "false");
+    openSoundList = undefined;
+  });
+
+  document.getElementById("sound-folder-button").addEventListener("click", () => soundFolderInput.click());
+  soundFolderInput.addEventListener("change", importSoundFolder);
 
   for (const input of colorInputs) {
     input.title = "Eigenen Farbpicker mit Farbton, Saettigung und Helligkeit oeffnen";
@@ -397,7 +670,9 @@
   document.getElementById("reset-settings").addEventListener("click", () => {
     hideColorPicker();
     chrome.storage.local.set(globalThis.LichessSettings.defaults, () => {
+      currentSoundSettings = {};
       showSettings(globalThis.LichessSettings.defaults);
+      renderSoundSettings();
       saveStatus.textContent = "Standardwerte geladen";
     });
   });
@@ -445,8 +720,13 @@
     });
   }
 
-  chrome.storage.local.get(null, values => {
+  const settingKeys = [...new Set([...Object.keys(globalThis.LichessSettings.defaults), soundFilesKey])];
+  chrome.storage.local.get(settingKeys, values => {
     showSettings(values);
+    currentSoundSettings = values[soundSettingsKey] && typeof values[soundSettingsKey] === "object" ? values[soundSettingsKey] : {};
+    customSoundNames = Array.isArray(values[soundFilesKey]) ? values[soundFilesKey] : [];
+    renderSoundSettings();
+    if (customSoundNames.length) soundFolderStatus.textContent = `${customSoundNames.length} eigene Sounddateien verfuegbar.`;
     showPageStatus();
   });
 })();
