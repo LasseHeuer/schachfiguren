@@ -96,7 +96,7 @@ html::after {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: 2147483646;
+  z-index: 2147483645;
   background-color: color-mix(in srgb, transparent, var(--hover-mix-color) var(--mix-percent));
   backdrop-filter: none;
   transition: background-color 150ms ease, backdrop-filter 150ms ease;
@@ -136,7 +136,7 @@ html:has(cg-board) .cg-wrap .cg-shapes-below marker[id^="arrowhead-pr"] path {
 
 html:has(cg-board) .material {
   position: relative !important;
-  z-index: 2147483647 !important;
+  z-index: 2147483646 !important;
 }
 
 html:has(cg-board) .material mpiece {
@@ -228,6 +228,10 @@ html:has(cg-board) .cg-wrap .cg-custom-svgs,
 html:has(cg-board) .cg-wrap .cg-shapes,
 html:has(cg-board) .cg-wrap .cg-shapes-below,
 html:has(cg-board) piece:not(cg-board piece) {
+  z-index: 2147483646 !important;
+}
+
+html:has(cg-board) body :is(#promotion-choice, #analyse-cm, .board-menu, .popup, [role="dialog"], dialog[open]) {
   z-index: 2147483647 !important;
 }
 

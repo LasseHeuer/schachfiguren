@@ -90,7 +90,7 @@ html:not([data-lfs-disabled])::after {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: 2147483646;
+  z-index: 2147483645;
   background-color: color-mix(in srgb, transparent, var(--lfs-hover-mix-color) var(--lfs-mix-percent));
   backdrop-filter: none;
   transition: background-color 150ms ease, backdrop-filter 150ms ease;
@@ -117,10 +117,10 @@ html:not([data-lfs-disabled]) body .cg-wrap .cg-custom-svgs,
 html:not([data-lfs-disabled]) body .cg-wrap .cg-shapes,
 html:not([data-lfs-disabled]) body .cg-wrap .cg-shapes-below,
 html:not([data-lfs-disabled]) body piece:not(cg-board piece) {
-  z-index: 2147483647 !important;
+  z-index: 2147483646 !important;
 }
 
-html:not([data-lfs-disabled]) body #promotion-choice {
+html:not([data-lfs-disabled]) body :is(#promotion-choice, #analyse-cm, .board-menu, .popup, [role="dialog"], dialog[open]) {
   z-index: 2147483647 !important;
 }
 
@@ -523,7 +523,7 @@ html:not([data-lfs-disabled]) #acpl-chart-container {
 
 html:not([data-lfs-disabled]) .material {
   position: relative !important;
-  z-index: 2147483647 !important;
+  z-index: 2147483646 !important;
 }
 
 html:not([data-lfs-disabled]) .material mpiece {
