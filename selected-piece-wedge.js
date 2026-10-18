@@ -17,6 +17,7 @@
   };
   const pieceNamesByLetter = { P: "pawn", N: "knight", B: "bishop", R: "rook", Q: "queen", K: "king" };
   const observedBoards = new Map();
+  const moveDestinationPreviewCache = new WeakMap();
   let settings = null;
   let documentObserver = null;
   let hatchAnimationFrame = 0;
@@ -249,7 +250,7 @@
   }
 
   // Sliding pieces also defend through blocking pieces that can reach the defended piece themselves.
-  function getDefendedPieces(position, source, blackOrientation) {
+  function getDefendedPieces(position, source, blackOrientation, includeKingTargets = false) {
     const piece = position[source.row][source.col];
     const directions = slidingDirections[piece.type];
     if (!directions) {
@@ -264,7 +265,13 @@
       let col = source.col + dc;
       while (row >= 0 && row < 8 && col >= 0 && col < 8) {
         const occupant = position[row][col];
-        if (occupant?.type === "king") break;
+        if (occupant?.type === "king") {
+          if (includeKingTargets && occupant.color === piece.color
+            && blockers.every(blocker => canReach(position, blocker, { row, col }, blackOrientation))) {
+            defended.push({ row, col });
+          }
+          break;
+        }
         if (occupant) {
           const target = { row, col };
           if (occupant.color === piece.color && blockers.every(blocker => canReach(position, blocker, target, blackOrientation))) {
@@ -279,15 +286,15 @@
     return defended;
   }
 
-  function getDefenseConnections(position, blackOrientation) {
+  function getDefenseConnections(position, blackOrientation, includeKingTargets = false) {
     const connections = [];
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
         const defender = position[row][col];
         if (!defender) continue;
         const source = { row, col };
-        for (const target of getDefendedPieces(position, source, blackOrientation)) {
-          if (position[target.row][target.col].type === "king") continue;
+        for (const target of getDefendedPieces(position, source, blackOrientation, includeKingTargets)) {
+          if (!includeKingTargets && position[target.row][target.col].type === "king") continue;
           connections.push({ source, target, color: defender.color });
         }
       }
@@ -507,6 +514,102 @@
     for (const square of board.querySelectorAll(":scope > square[data-lfs-move-outline]")) {
       square.removeAttribute("data-lfs-move-outline");
     }
+  }
+
+  function clearMoveDestinationMarkers(board) {
+    for (const square of board.querySelectorAll(":scope > square[data-lfs-contested-move-dest]")) {
+      square.removeAttribute("data-lfs-contested-move-dest");
+    }
+  }
+
+  function createMovePreview(position, source, target, blackOrientation) {
+    const preview = position.map(row => [...row]);
+    const piece = preview[source.row][source.col];
+    if (!piece) return null;
+
+    const pawnDirection = (piece.color === "w") !== blackOrientation ? -1 : 1;
+    if (piece.type === "pawn" && source.col !== target.col && !preview[target.row][target.col]) {
+      const capturedRow = target.row - pawnDirection;
+      if (preview[capturedRow]?.[target.col]?.color !== piece.color
+        && preview[capturedRow]?.[target.col]?.type === "pawn") {
+        preview[capturedRow][target.col] = null;
+      }
+    }
+
+    preview[source.row][source.col] = null;
+    preview[target.row][target.col] = piece;
+
+    if (piece.type === "king" && source.row === target.row && Math.abs(target.col - source.col) === 2) {
+      const rookSourceCol = target.col > source.col ? 7 : 0;
+      const rookTargetCol = target.col > source.col ? target.col - 1 : target.col + 1;
+      const rook = preview[source.row][rookSourceCol];
+      if (rook?.color === piece.color && rook.type === "rook") {
+        preview[source.row][rookSourceCol] = null;
+        preview[source.row][rookTargetCol] = rook;
+      }
+    }
+
+    if (piece.type === "pawn" && target.row === (pawnDirection < 0 ? 0 : 7)) {
+      preview[target.row][target.col] = { ...piece, type: "queen" };
+    }
+    return preview;
+  }
+
+  function getMoveDestinationLines(board, position, source, blackOrientation) {
+    const piece = position[source.row]?.[source.col];
+    if (!piece) return { targetKeys: new Set(), threats: [], defenseSegments: [] };
+
+    const destinations = [...board.querySelectorAll(":scope > square.move-dest")]
+      .map(square => ({ square, target: getScreenSquare(square, board) }))
+      .filter(({ target }) => target);
+    const positionKey = position.map(row => row.map(occupant => occupant ? `${occupant.color}${occupant.type}` : "-").join("")).join("/");
+    const destinationKey = destinations.map(({ target }) => `${target.row},${target.col}`).join(";");
+    const cacheKey = `${positionKey}:${source.row},${source.col}:${blackOrientation}:${destinationKey}:${settings.threatenedPieceOutlineEnabled}:${settings.defenseCirclesEnabled}:${settings.whitePieceColor}:${settings.blackPieceColor}`;
+    const cached = moveDestinationPreviewCache.get(board);
+    if (cached?.key === cacheKey) {
+      for (const { square, target } of destinations) {
+        if (cached.result.targetKeys.has(`${target.row},${target.col}`)) square.setAttribute("data-lfs-contested-move-dest", "");
+      }
+      return cached.result;
+    }
+
+    const result = { targetKeys: new Set(), threats: [], defenseSegments: [] };
+    const checkedTargets = new Set();
+    for (const { target } of destinations) {
+      const targetKey = `${target.row},${target.col}`;
+      if (checkedTargets.has(targetKey)) continue;
+      checkedTargets.add(targetKey);
+
+      const preview = createMovePreview(position, source, target, blackOrientation);
+      if (!preview) continue;
+      const attackers = settings.threatenedPieceOutlineEnabled
+        ? getThreatenedSquares(preview, blackOrientation)[piece.color].get(targetKey) ?? []
+        : [];
+      const defenders = settings.defenseCirclesEnabled
+        ? getDefenseConnections(preview, blackOrientation, true)
+          .filter(connection => connection.target.row === target.row && connection.target.col === target.col)
+        : [];
+      if (!attackers.length && !defenders.length) continue;
+
+      result.targetKeys.add(targetKey);
+      if (attackers.length) {
+        result.threats.push({ square: target, color: piece.color, type: preview[target.row][target.col].type, attackers, useConfiguredRadius: true });
+      }
+      result.defenseSegments.push(...defenders.map(connection => ({
+        target: connection.target,
+        source: connection.source,
+        angle: Math.atan2(connection.source.row - connection.target.row, connection.source.col - connection.target.col),
+        type: preview[target.row][target.col].type,
+        sourceType: preview[connection.source.row][connection.source.col].type,
+        color: connection.color === "w" ? settings.whitePieceColor : settings.blackPieceColor,
+        useConfiguredRadius: true
+      })));
+    }
+    for (const { square, target } of destinations) {
+      if (result.targetKeys.has(`${target.row},${target.col}`)) square.setAttribute("data-lfs-contested-move-dest", "");
+    }
+    moveDestinationPreviewCache.set(board, { key: cacheKey, result });
+    return result;
   }
 
   function syncCenterOutlineImage(image, transforms = new Map()) {
@@ -1385,6 +1488,7 @@
           category: segment.category ?? "defense",
           type: segment.type,
           outline: figureRadii.get(segment.type),
+          useConfiguredRadius: segment.useConfiguredRadius,
           color: segment.color,
           direction,
           normal,
@@ -1402,20 +1506,24 @@
     const lateralTolerance = laneSpacing + 0.000001;
 
     function updateLineRadii(line) {
-      const usesBoundingSquare = line.type === "knight" || line.type === "queen";
-      if (usesBoundingSquare && !boundingSquareHalfSizes.has(line.type)) {
-        boundingSquareHalfSizes.set(line.type, getFigureBoundingSquareHalfSize(line.outline));
-      }
-      const collisionRadius = getLineFigureClearance(
-        line.outline,
-        line.angle,
-        line.offset,
-        settings.threatLineFigureMargin,
-        settings.threatLineThickness,
-        usesBoundingSquare ? boundingSquareHalfSizes.get(line.type) : undefined
-      );
       const configuredRadius = Math.sqrt(Math.max(0, settings.threatLineRadius ** 2 - line.offset ** 2));
-      line.innerRadius = Math.max(configuredRadius, collisionRadius);
+      if (line.useConfiguredRadius) {
+        line.innerRadius = configuredRadius;
+      } else {
+        const usesBoundingSquare = line.type === "knight" || line.type === "queen";
+        if (usesBoundingSquare && !boundingSquareHalfSizes.has(line.type)) {
+          boundingSquareHalfSizes.set(line.type, getFigureBoundingSquareHalfSize(line.outline));
+        }
+        const collisionRadius = getLineFigureClearance(
+          line.outline,
+          line.angle,
+          line.offset,
+          settings.threatLineFigureMargin,
+          settings.threatLineThickness,
+          usesBoundingSquare ? boundingSquareHalfSizes.get(line.type) : undefined
+        );
+        line.innerRadius = Math.max(configuredRadius, collisionRadius);
+      }
       line.outerRadius = line.innerRadius + settings.threatLineLength;
     }
 
@@ -1681,6 +1789,7 @@
 
   function renderBoard(board, entry) {
     clearMoveOutlineMarkers(board);
+    clearMoveDestinationMarkers(board);
 
     const dragPreview = globalThis.LichessThreatCoding?.getInteractionPreview(board);
     const parsed = dragPreview ? readDragPreview(dragPreview) : readPosition(board);
@@ -1775,6 +1884,19 @@
           color: connection.color === "w" ? settings.whitePieceColor : settings.blackPieceColor
         }))
       : [];
+    const moveDestinationLines = !dragPreview
+      && parsed.selected
+      && (settings.threatenedPieceOutlineEnabled || settings.defenseCirclesEnabled)
+      ? getMoveDestinationLines(board, parsed.position, parsed.selected, parsed.blackOrientation)
+      : { targetKeys: new Set(), threats: [], defenseSegments: [] };
+    const displayThreats = [
+      ...threats.filter(({ square }) => !moveDestinationLines.targetKeys.has(`${square.row},${square.col}`)),
+      ...moveDestinationLines.threats
+    ];
+    const displayDefenseSegments = [
+      ...defenseSegments.filter(({ target }) => !moveDestinationLines.targetKeys.has(`${target.row},${target.col}`)),
+      ...moveDestinationLines.defenseSegments
+    ];
       const centerOutlines = settings.threatCenterOutlineEnabled
          ? getOverloadedPieces(parsed.position, parsed.blackOrientation, shouldFilterHatchedThreats()).map(outline => {
         const piece = parsed.position[outline.target.row][outline.target.col];
@@ -1792,8 +1914,8 @@
     renderThreatArcs(
       board,
       entry,
-      threats,
-      defenseSegments,
+      displayThreats,
+      displayDefenseSegments,
       [...centerOutlines.filter(({ target }) => !moveOutlineTargets.has(`${target.row},${target.col}`)), ...moveOutlinePreviews],
       settings.threatAttackDisplayMode,
       settings.threatDefenseDisplayMode
@@ -1985,7 +2107,8 @@
           type: threat.type,
           sourceType: attacker.type,
           color,
-          category: "attack"
+          category: "attack",
+          useConfiguredRadius: threat.useConfiguredRadius
         });
       }
     }

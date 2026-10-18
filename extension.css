@@ -564,6 +564,10 @@ html:not([data-lfs-disabled])[data-lfs-square-move-dots] body[data-board] .is2d 
     var(--lfs-square-move-dot-size) var(--lfs-square-move-dot-size) no-repeat !important;
 }
 
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square[data-lfs-contested-move-dest] {
+  background: none !important;
+}
+
 html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square[data-lfs-move-outline] {
   background-image: none !important;
 }
