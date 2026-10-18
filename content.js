@@ -333,21 +333,28 @@
     return match[0].replace(",", ".").split(":").reduce((total, part) => total * 60 + Number(part), 0);
   }
 
+  function rememberZenClockMaximum(source) {
+    const remaining = clockSeconds(source);
+    if (remaining === null) return null;
+    const maximum = Math.max(zenClockMaxTimes.get(source) ?? remaining, remaining);
+    zenClockMaxTimes.set(source, maximum);
+    return { remaining, maximum };
+  }
+
   function updateZenClock(side, source) {
     const { row, time, fill } = zenClockRows[side];
     row.hidden = !source;
     if (!source) return;
 
     const face = source.matches(".clock") ? source : source.querySelector(".clock") ?? source;
-    const remaining = clockSeconds(source);
+    const clockTime = rememberZenClockMaximum(source);
+    const remaining = clockTime?.remaining ?? null;
     const showTime = !settings.zenClockShowTimeOnlyWhenLow || remaining !== null && remaining <= 10;
     time.hidden = !showTime;
     const nextText = face.textContent.trim();
     if (showTime && time.textContent !== nextText) time.textContent = nextText;
-    if (remaining !== null) {
-      const maximum = Math.max(zenClockMaxTimes.get(source) ?? remaining, remaining);
-      zenClockMaxTimes.set(source, maximum);
-      const width = `${Math.max(0, Math.min(100, remaining / maximum * 100))}%`;
+    if (clockTime) {
+      const width = `${Math.max(0, Math.min(100, remaining / clockTime.maximum * 100))}%`;
       if (fill.style.width !== width) fill.style.width = width;
     } else {
       if (fill.style.width !== "100%") fill.style.width = "100%";
@@ -924,6 +931,23 @@
         || node.nodeType === Node.ELEMENT_NODE && (node.id === "lfs-zen-clock-overlay" || node.closest("#lfs-zen-clock-overlay"))
         || node.parentElement?.closest("#lfs-zen-clock-overlay"));
     };
+    const clockSources = new Set();
+    const addClockSource = element => {
+      if (element?.nodeType !== Node.ELEMENT_NODE) return;
+      const source = element.closest(".rclock") ?? element.closest(".clock");
+      if (source) clockSources.add(source);
+    };
+    for (const record of records) {
+      addClockSource(targetElement(record));
+      for (const node of record.addedNodes) {
+        addClockSource(node);
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          node.querySelectorAll(".rclock, .clock").forEach(addClockSource);
+        }
+      }
+    }
+    for (const source of clockSources) rememberZenClockMaximum(source);
+
     const zenMode = document.documentElement.hasAttribute("data-lfs-zen-mode");
     const hasPreviewMutation = records.some(record => {
       const hasChangedNodes = record.addedNodes.length || record.removedNodes.length;
