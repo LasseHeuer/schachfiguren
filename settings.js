@@ -11,6 +11,11 @@
     boardVerticalOffset: 0,
     boardTopGapPercent: 0,
     zenBoardUpPercent: 0,
+    zenClockFontSizePx: 32,
+    zenClockMarginPx: 8,
+    zenClockLineThicknessPx: 3,
+    zenClockLineGapPx: 4,
+    zenClockShowTimeOnlyWhenLow: false,
     lastMoveLight: "#dae0d7",
     lastMoveLineWidth: 16,
     selectedLight: "#ffffff",
@@ -149,6 +154,10 @@
   const ranges = {
     boardTopGapPercent: [0, 30],
     zenBoardUpPercent: [0, 30],
+    zenClockFontSizePx: [16, 80],
+    zenClockMarginPx: [0, 48],
+    zenClockLineThicknessPx: [1, 10],
+    zenClockLineGapPx: [0, 24],
     idleMixPercent: [0, 100],
     hoverMixPercent: [0, 100],
     hoverDesaturation: [0, 100],
@@ -304,6 +313,9 @@
     result.engineArrowStartOffsetPercent = Math.round(result.engineArrowStartOffsetPercent);
     result.engineArrowEndOffsetPercent = Math.round(result.engineArrowEndOffsetPercent);
     result.lastMoveLineWidth = Math.round(result.lastMoveLineWidth);
+    for (const key of ["zenClockFontSizePx", "zenClockMarginPx", "zenClockLineThicknessPx", "zenClockLineGapPx"]) {
+      result[key] = Math.round(result[key]);
+    }
     result.engineArrowHeadSizePercent = Math.round(result.engineArrowHeadSizePercent);
 
     result.threatArcGapPercent = Math.round(result.threatArcGapPercent);
@@ -370,7 +382,8 @@
       "threatCenterHatchExchangeFilterEnabled",
       "moveAnimationLichessSpeed",
       "moveAnimationTimeDistance",
-      "complexPawn"
+      "complexPawn",
+      "zenClockShowTimeOnlyWhenLow"
     ]) {
       result[key] = Boolean(result[key]);
     }

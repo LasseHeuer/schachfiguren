@@ -21,6 +21,7 @@
         <button class="tab" id="tab-hover" type="button" role="tab" aria-selected="false" aria-controls="panel-hover" data-tab="hover" tabindex="-1">Hover</button>
         <button class="tab" id="tab-effekte" type="button" role="tab" aria-selected="false" aria-controls="panel-effekte" data-tab="effekte" tabindex="-1">Effekte</button>
         <button class="tab" id="tab-mehr" type="button" role="tab" aria-selected="false" aria-controls="panel-mehr" data-tab="mehr" tabindex="-1">Mehr</button>
+        <button class="tab" id="tab-zen" type="button" role="tab" aria-selected="false" aria-controls="panel-zen" data-tab="zen" tabindex="-1">Zen</button>
         <button class="tab" id="tab-sounds" type="button" role="tab" aria-selected="false" aria-controls="panel-sounds" data-tab="sounds" tabindex="-1">Sounds</button>
       </nav>
 
@@ -259,6 +260,17 @@
         <div class="range-grid single-range">
           <label class="range-setting"><span>Abstand oben (% Fensterhoehe)</span><output data-value-for="boardTopGapPercent"></output><input type="range" min="0" max="30" step="1" data-setting="boardTopGapPercent"></label>
           <label class="range-setting"><span>Zen: nach oben (% Fensterhoehe)</span><output data-value-for="zenBoardUpPercent"></output><input type="range" min="0" max="30" step="1" data-setting="zenBoardUpPercent"></label>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-zen" role="tabpanel" aria-labelledby="tab-zen" data-panel="zen" hidden>
+        <p class="zen-note">Darstellung der Spieluhren im Zenmodus.</p>
+        <label class="switch-setting"><span><strong>Zeit nur im roten Bereich anzeigen</strong><small>Die Zahl erscheint erst bei höchstens 10 Sekunden Restzeit.</small></span><input type="checkbox" data-setting="zenClockShowTimeOnlyWhenLow" role="switch"></label>
+        <div class="range-grid single-range">
+          <label class="range-setting"><span>Groesse der Zeitanzeige</span><output data-value-for="zenClockFontSizePx"></output><input type="range" min="16" max="80" step="1" data-setting="zenClockFontSizePx"></label>
+          <label class="range-setting"><span>Abstand zum Brett</span><output data-value-for="zenClockMarginPx"></output><input type="range" min="0" max="48" step="1" data-setting="zenClockMarginPx"></label>
+          <label class="range-setting"><span>Dicke der Zeitlinie</span><output data-value-for="zenClockLineThicknessPx"></output><input type="range" min="1" max="10" step="1" data-setting="zenClockLineThicknessPx"></label>
+          <label class="range-setting"><span>Abstand zwischen Zeit und Linie</span><output data-value-for="zenClockLineGapPx"></output><input type="range" min="0" max="24" step="1" data-setting="zenClockLineGapPx"></label>
         </div>
       </section>
 

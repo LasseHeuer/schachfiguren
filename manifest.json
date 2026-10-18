@@ -3,7 +3,7 @@
   "name": "Lichess Figurensets",
   "version": "1.0.0",
   "description": "Figurensets, Brettfarben und weitere Lichess-Anpassungen mit zentralen Einstellungen.",
-  "permissions": ["storage", "downloads", "clipboardWrite", "unlimitedStorage"],
+  "permissions": ["storage", "downloads", "clipboardWrite", "unlimitedStorage", "offscreen"],
   "host_permissions": ["https://lichess.org/*"],
   "icons": {
     "128": "extension-icon.png"
@@ -14,6 +14,9 @@
     "default_popup": "popup.html"
   },
   "options_page": "options.html",
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": ["https://lichess.org/*"],

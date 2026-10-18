@@ -223,11 +223,7 @@ html[data-lfs-zen-mode] [data-lfs-zen-board] cg-board *,
 html[data-lfs-zen-mode] [data-lfs-zen-side],
 html[data-lfs-zen-mode] [data-lfs-zen-side] *,
 html[data-lfs-zen-mode] .material,
-html[data-lfs-zen-mode] .material *,
-html[data-lfs-zen-mode] .rclock,
-html[data-lfs-zen-mode] .rclock *,
-html[data-lfs-zen-mode] .clock,
-html[data-lfs-zen-mode] .clock * {
+html[data-lfs-zen-mode] .material * {
   visibility: visible !important;
 }
 
@@ -235,9 +231,7 @@ html[data-lfs-zen-mode] [data-lfs-zen-board] {
   translate: var(--lfs-zen-offset-x, 0px) var(--lfs-zen-offset-y, 0px) !important;
 }
 
-html[data-lfs-zen-mode] body .material[data-lfs-zen-side],
-html[data-lfs-zen-mode] body .rclock[data-lfs-zen-side],
-html[data-lfs-zen-mode] body .clock[data-lfs-zen-side] {
+html[data-lfs-zen-mode] body .material[data-lfs-zen-side] {
   position: fixed !important;
   top: var(--lfs-zen-side-top) !important;
   right: auto !important;
@@ -254,6 +248,75 @@ html[data-lfs-zen-mode] body .material[data-lfs-zen-side] {
   flex-wrap: nowrap !important;
   align-items: center !important;
   column-gap: 2px !important;
+}
+
+#lfs-zen-clock-overlay {
+  display: none !important;
+}
+
+#lfs-zen-clock-overlay,
+#lfs-zen-clock-overlay * {
+  box-sizing: border-box !important;
+  visibility: visible !important;
+}
+
+html[data-lfs-zen-mode] #lfs-zen-clock-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483647 !important;
+  display: block !important;
+  pointer-events: none !important;
+}
+
+html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock {
+  position: fixed !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: var(--lfs-zen-clock-line-gap) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
+  translate: none !important;
+  text-align: center !important;
+}
+
+html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock[hidden] {
+  display: none !important;
+}
+
+html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-time {
+  display: block !important;
+  color: var(--c-font, #222) !important;
+  font: 600 var(--lfs-zen-clock-font-size) / 1.1 system-ui, sans-serif !important;
+  font-variant-numeric: tabular-nums !important;
+  white-space: nowrap !important;
+}
+
+html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-time[hidden] {
+  display: none !important;
+}
+
+html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-bar {
+  display: block !important;
+  width: 100% !important;
+  height: var(--lfs-zen-clock-line-thickness) !important;
+  overflow: hidden !important;
+  background: transparent !important;
+}
+
+html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-fill {
+  display: block !important;
+  height: 100% !important;
+  background: var(--lfs-white-piece-color, #d1521d) !important;
+  transition: width 1s linear !important;
+}
+
+html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock[data-player-color="black"] .lfs-zen-clock-fill {
+  background: var(--lfs-black-piece-color, #2ba4d1) !important;
+}
+
+html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock[data-side="bottom"] .lfs-zen-clock-bar {
+  order: -1 !important;
 }
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] .pv > span {

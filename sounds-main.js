@@ -3,6 +3,50 @@
   const patchedSounds = new WeakSet();
   let soundSettings = {};
   let customFiles = {};
+  let playbackId = 0;
+
+  const pageTransitionSounds = ["genericNotify"];
+
+  function absoluteSoundUrl(url) {
+    if (!url || /^(?:data:|chrome-extension:)/i.test(url)) return url;
+    return new URL(url, location.href).href;
+  }
+
+  function soundUrl(sound, name) {
+    const source = soundSettings[String(name).toLowerCase()]?.source || "website";
+    if (source.startsWith("custom:")) return absoluteSoundUrl(customFiles[source.slice("custom:".length)]);
+    if (source.startsWith("pack:")) {
+      const pack = source.slice("pack:".length);
+      const file = `${String(name)[0].toUpperCase()}${String(name).slice(1)}.mp3`;
+      return absoluteSoundUrl(sound.url(`${pack}/${file}`));
+    }
+    return absoluteSoundUrl(sound.resolvePath(name));
+  }
+
+  function preloadPageTransitionSounds(sound) {
+    for (const name of pageTransitionSounds) {
+      const url = soundUrl(sound, name);
+      if (url) window.postMessage({ channel: "lfs-audio-preload", url }, location.origin);
+    }
+  }
+
+  function playAcrossNavigation(url, volume) {
+    const id = `lfs-audio-${Date.now()}-${++playbackId}`;
+    return new Promise(resolve => {
+      const onResult = event => {
+        if (event.source !== window || event.origin !== location.origin
+          || event.data?.channel !== "lfs-audio-result" || event.data.id !== id) return;
+        window.removeEventListener("message", onResult);
+        resolve(event.data.ok === true);
+      };
+      window.addEventListener("message", onResult);
+      window.postMessage({ channel: "lfs-audio-play", id, url, volume }, location.origin);
+    });
+  }
+
+  function isPageTransitionSound(name) {
+    return String(name).toLowerCase() === "genericnotify";
+  }
 
   function dataUrlBytes(dataUrl) {
     const match = /^data:[^,]*;base64,([\s\S]*)$/.exec(dataUrl);
@@ -85,13 +129,22 @@
       const source = setting?.source || "website";
       const overrideName = `lfs:${name}:${source}`;
 
+      if (isPageTransitionSound(name)) {
+        const url = soundUrl(this, name);
+        const masterVolume = Number(this.getVolume?.() ?? 1);
+        if (url && masterVolume > 0 && multiplier > 0) {
+          const played = await playAcrossNavigation(url, masterVolume * volume * multiplier);
+          if (played) return;
+        }
+      }
+
       if (source.startsWith("custom:")) {
         const fileName = source.slice("custom:".length);
         const dataUrl = Object.hasOwn(customFiles, fileName) ? customFiles[fileName] : undefined;
         if (dataUrl) {
           try {
             await loadCustomSound(this, overrideName, fileName, dataUrl);
-            return playOverride(this, originalPlay, overrideName, volume * multiplier);
+            return await playOverride(this, originalPlay, overrideName, volume * multiplier);
           } catch (error) {
             console.warn("Eigener Lichess-Sound konnte nicht geladen werden", error);
           }
@@ -102,7 +155,7 @@
         const path = this.url(`${pack}/${file}`);
         try {
           await this.load(overrideName, path);
-          return playOverride(this, originalPlay, overrideName, volume * multiplier);
+          return await playOverride(this, originalPlay, overrideName, volume * multiplier);
         } catch (error) {
           console.warn(`Lichess-Soundpack ${pack} konnte nicht geladen werden`, error);
         }
@@ -131,6 +184,7 @@
         return originalMove.call(this, { ...options, volume: (options?.volume ?? 1) * multiplier });
       };
     }
+    preloadPageTransitionSounds(sound);
   }
 
   function observeSite(site) {
@@ -173,6 +227,7 @@
     if (event.data?.channel === channel) {
       soundSettings = event.data.settings && typeof event.data.settings === "object" ? event.data.settings : {};
       customFiles = { ...customFiles, ...(event.data.files && typeof event.data.files === "object" ? event.data.files : {}) };
+      if (window.site?.sound) preloadPageTransitionSounds(window.site.sound);
     } else if (event.data?.channel === "lfs-sound-preview" && typeof event.data.name === "string") {
       const sound = window.site?.sound;
       if (!sound?.play) return;
