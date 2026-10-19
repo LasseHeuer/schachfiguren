@@ -65,6 +65,17 @@
   let pvPreviewBoard;
   let pvPreviewSlider;
   let pvPreviewFen;
+  let pvPreviewSourceSlider;
+  let pvPreviewSourceRow;
+  let pvPreviewSourceFen;
+  let pvPreviewSourceOrientation;
+  let pvPreviewSourceIndex = -1;
+  let pvPreviewSpeedSlider;
+  let pvPreviewSpeedRow;
+  let pvPreviewSpeedFen;
+  let pvPreviewSpeedIndex = -1;
+  let pvPreviewSpeedTime = 0;
+  let pvPreviewStepDuration;
   const analysisInputs = new Map();
   const analysisRows = new Map();
 
@@ -501,6 +512,29 @@
     const move = moves[index];
     if (!move) return;
 
+    const now = performance.now();
+    const fen = row.closest(".pv_box")?.dataset.fen;
+    const sameSpeedTrack = pvPreviewSpeedSlider === slider && pvPreviewSpeedRow === row && pvPreviewSpeedFen === fen;
+    if (sameSpeedTrack && index !== pvPreviewSpeedIndex) {
+      const steps = Math.abs(index - pvPreviewSpeedIndex);
+      const elapsed = now - pvPreviewSpeedTime;
+      if (elapsed > 0) {
+        const measuredStepDuration = Math.max(16, Math.min(1000, elapsed / steps));
+        pvPreviewStepDuration = pvPreviewStepDuration == null
+          ? measuredStepDuration * 1.08
+          : pvPreviewStepDuration * 0.3 + measuredStepDuration * 1.08 * 0.7;
+      }
+    } else if (!sameSpeedTrack) {
+      pvPreviewStepDuration = undefined;
+    }
+    if (!sameSpeedTrack || index !== pvPreviewSpeedIndex) {
+      pvPreviewSpeedSlider = slider;
+      pvPreviewSpeedRow = row;
+      pvPreviewSpeedFen = fen;
+      pvPreviewSpeedIndex = index;
+      pvPreviewSpeedTime = now;
+    }
+
     slider.value = String(index);
     slider.setAttribute("aria-valuetext", move.textContent.trim());
     slider.style.setProperty("--lfs-pv-progress", `${moves.length > 1 ? index * 100 / (moves.length - 1) : 0}%`);
@@ -585,6 +619,17 @@
     pvPreviewBoard = null;
     pvPreviewSlider = null;
     pvPreviewFen = null;
+    pvPreviewSourceSlider = null;
+    pvPreviewSourceRow = null;
+    pvPreviewSourceFen = null;
+    pvPreviewSourceOrientation = null;
+    pvPreviewSourceIndex = -1;
+    pvPreviewSpeedSlider = null;
+    pvPreviewSpeedRow = null;
+    pvPreviewSpeedFen = null;
+    pvPreviewSpeedIndex = -1;
+    pvPreviewSpeedTime = 0;
+    pvPreviewStepDuration = undefined;
   }
 
   function syncPvPreview() {
@@ -611,6 +656,7 @@
     const blackOrientation = board.closest(".cg-wrap")?.classList.contains("orientation-black");
     const key = `${move.dataset.board}:${blackOrientation}:${settings.markLastMove}:${settings.lastMoveLineWidth}`;
     if (pvPreviewBoard !== board) pvPreviewBoard?.removeAttribute("data-lfs-pv-preview");
+    const sameBoard = pvPreviewBoard === board;
     pvPreviewBoard = board;
     pvPreview ??= document.createElement("div");
     pvPreview.id = "lfs-pv-preview";
@@ -621,15 +667,16 @@
 
     // Use Lichess's per-move FEN, not the mini-board's pixel-sized DOM.
     const [fen, uci] = move.dataset.board.split("|");
+    const previewMoves = [...row.querySelectorAll(":scope > .pv-san")];
+    const previewIndex = Number(pvPreviewSlider.value);
+    const samePreviewLine = pvPreviewSourceSlider === pvPreviewSlider && pvPreviewSourceRow === row
+      && pvPreviewSourceFen === pvPreviewFen && pvPreviewSourceOrientation === blackOrientation;
+    const adjacentPreview = samePreviewLine && Math.abs(previewIndex - pvPreviewSourceIndex) === 1;
+    const transitionUci = previewIndex > pvPreviewSourceIndex
+      ? uci
+      : previewMoves[pvPreviewSourceIndex]?.dataset.board.split("|")[1];
     const roles = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
-    const fragment = document.createDocumentFragment();
-    const place = (element, file, rank) => {
-      element.style.left = `${(blackOrientation ? 7 - file : file) * 12.5}%`;
-      element.style.top = `${(blackOrientation ? 7 - rank : rank) * 12.5}%`;
-      fragment.append(element);
-    };
-    const lastMoveLine = globalThis.LichessLastMoveLine.createPreviewLine(uci, blackOrientation);
-    if (lastMoveLine) fragment.append(lastMoveLine);
+    const targets = [];
     fen.split(" ")[0].split("[")[0].split("/").forEach((rank, rankIndex) => {
       let file = 0;
       for (const symbol of rank) {
@@ -640,16 +687,109 @@
         const role = roles[symbol.toLowerCase()];
         if (!role) continue;
         const color = symbol === symbol.toUpperCase() ? "white" : "black";
-        const piece = document.createElement("span");
-        piece.className = "lfs-pv-piece";
-        piece.dataset.piece = `${color} ${role}`;
-        piece.style.setProperty("--lfs-pv-piece-color", `var(--lfs-${color}-piece-color)`);
-        piece.style.setProperty("--lfs-pv-piece-mask", `var(--lfs-piece-${color[0]}${symbol.toLowerCase()})`);
-        place(piece, file++, rankIndex);
+        const targetFile = blackOrientation ? 7 - file : file;
+        const targetRank = blackOrientation ? 7 - rankIndex : rankIndex;
+        targets.push({
+          square: `${String.fromCharCode(97 + file)}${8 - rankIndex}`,
+          piece: `${color} ${role}`,
+          color,
+          role,
+          symbol,
+          left: targetFile * 12.5,
+          top: targetRank * 12.5
+        });
+        file++;
       }
     });
+
+    const boardRect = board.getBoundingClientRect();
+    const existingPieces = [...pvPreview.querySelectorAll(":scope > .lfs-pv-piece")];
+    const origins = new Map(existingPieces.map(piece => {
+      const rect = piece.getBoundingClientRect();
+      for (const animation of piece.getAnimations()) animation.cancel();
+      return [piece, {
+        left: boardRect.width ? (rect.left - boardRect.left) / boardRect.width * 100 : 0,
+        top: boardRect.height ? (rect.top - boardRect.top) / boardRect.height * 100 : 0
+      }];
+    }));
+    const usedPieces = new Set();
+    const reusedPieces = new Map();
+    const reuse = (target, piece) => {
+      if (!piece || usedPieces.has(piece)) return false;
+      usedPieces.add(piece);
+      reusedPieces.set(target, piece);
+      return true;
+    };
+
+    for (const target of targets) {
+      reuse(target, existingPieces.find(piece => piece.dataset.square === target.square && piece.dataset.piece === target.piece));
+    }
+
+    const moveSquares = adjacentPreview && transitionUci?.match(/^([a-h][1-8])([a-h][1-8])([qrbn])?$/);
+    if (moveSquares) {
+      const [, from, to] = moveSquares;
+      const movingBackwards = previewIndex < pvPreviewSourceIndex;
+      const sourceSquare = movingBackwards ? to : from;
+      const targetSquare = movingBackwards ? from : to;
+      const movingPiece = existingPieces.find(piece => piece.dataset.square === sourceSquare && !usedPieces.has(piece));
+      const destination = targets.find(target => target.square === targetSquare && target.color === movingPiece?.dataset.piece.split(" ")[0]);
+      if (movingPiece && destination && !reusedPieces.has(destination)) reuse(destination, movingPiece);
+    }
+
+    for (const target of targets) {
+      if (reusedPieces.has(target)) continue;
+      const candidates = existingPieces.filter(piece => !usedPieces.has(piece) && piece.dataset.piece === target.piece);
+      candidates.sort((first, second) => {
+        const distance = piece => {
+          const origin = origins.get(piece);
+          return Math.hypot((origin.left - target.left) * boardRect.width / 100, (origin.top - target.top) * boardRect.height / 100);
+        };
+        return distance(first) - distance(second);
+      });
+      reuse(target, candidates[0]);
+    }
+
+    const fragment = document.createDocumentFragment();
+    const lastMoveLine = globalThis.LichessLastMoveLine.createPreviewLine(uci, blackOrientation);
+    if (lastMoveLine) fragment.append(lastMoveLine);
+    const shouldAnimate = Boolean(pvPreview.dataset.position) && sameBoard && samePreviewLine && settings.enabled && !settings.disableAnimations
+      && typeof Element.prototype.animate === "function" && boardRect.width > 0 && boardRect.height > 0;
+    const baseDuration = pvPreviewStepDuration ?? (settings.moveAnimationLichessSpeed ? 250 : settings.moveAnimationDuration);
+    for (const target of targets) {
+      const piece = reusedPieces.get(target) ?? document.createElement("span");
+      const origin = origins.get(piece);
+      piece.className = "lfs-pv-piece";
+      piece.dataset.piece = target.piece;
+      piece.dataset.square = target.square;
+      piece.style.left = `${target.left}%`;
+      piece.style.top = `${target.top}%`;
+      piece.style.setProperty("--lfs-pv-piece-color", `var(--lfs-${target.color}-piece-color)`);
+      piece.style.setProperty("--lfs-pv-piece-mask", `var(--lfs-piece-${target.color[0]}${target.symbol.toLowerCase()})`);
+      if (shouldAnimate && origin && baseDuration > 0) {
+        const moveX = target.left - origin.left;
+        const moveY = target.top - origin.top;
+        const distance = Math.hypot(moveX / 12.5, moveY / 12.5);
+        const pixelDistance = Math.hypot(moveX * boardRect.width / 100, moveY * boardRect.height / 100);
+        if (pixelDistance > 0.5) {
+          const distanceFactor = pvPreviewStepDuration == null && settings.moveAnimationTimeDistance ? settings.moveAnimationDistanceFactor : 0;
+          const duration = baseDuration + distance * distanceFactor * baseDuration;
+          const easing = `cubic-bezier(${settings.moveAnimationCurve.map((value, index) => (index % 2 ? value / -90 : value)).join(", ")})`;
+          const animation = piece.animate([
+            { left: `${origin.left}%`, top: `${origin.top}%` },
+            { left: `${target.left}%`, top: `${target.top}%` }
+          ], { duration, easing, fill: "forwards" });
+          animation.onfinish = () => animation.cancel();
+        }
+      }
+      fragment.append(piece);
+    }
     pvPreview.replaceChildren(fragment);
     pvPreview.dataset.position = key;
+    pvPreviewSourceSlider = pvPreviewSlider;
+    pvPreviewSourceRow = row;
+    pvPreviewSourceFen = pvPreviewFen;
+    pvPreviewSourceOrientation = blackOrientation;
+    pvPreviewSourceIndex = previewIndex;
   }
 
   function clearZenOffset(board) {
