@@ -2,6 +2,8 @@
   const storageKey = "lfsBlunderList";
   const autoSyncStorageKey = "lfsBlunderAutoSync";
   const scheduler = globalThis.LichessPuzzleScheduler;
+  const maxBlunders = 500;
+  const recentGameCount = 10;
   const visitedAt = Date.now();
   const autoSyncInterval = 6 * 60 * 60 * 1000;
   const analysisOverlap = 7 * 24 * 60 * 60 * 1000;
@@ -26,13 +28,20 @@
       if (!["white", "black"].includes(item.color) || item.id !== `${item.gameId}:${item.ply}` || seen.has(item.id)) return false;
       seen.add(item.id);
       return true;
-    }).map(item => ({
-      ...item,
-      state: ["new", "learning", "review"].includes(item.state) ? item.state : "new",
-      dueAt: Number.isFinite(item.dueAt) ? item.dueAt : 0,
-      reps: Number.isInteger(item.reps) && item.reps >= 0 ? item.reps : 0,
-      lastReviewedAt: Number.isFinite(item.lastReviewedAt) ? item.lastReviewedAt : null,
-    }));
+    }).map(item => {
+      const reps = Number.isInteger(item.reps) && item.reps >= 0 ? item.reps : 0;
+      return {
+        ...item,
+        state: ["new", "learning", "review"].includes(item.state) ? item.state : "new",
+        dueAt: Number.isFinite(item.dueAt) ? item.dueAt : 0,
+        playedAt: Number.isFinite(item.playedAt) ? item.playedAt : 0,
+        reps,
+        attempts: Number.isInteger(item.attempts) && item.attempts >= reps ? item.attempts : reps,
+        lastReviewedAt: Number.isFinite(item.lastReviewedAt) ? item.lastReviewedAt : null,
+      };
+    }).sort((a, b) => b.playedAt - a.playedAt).slice(0, maxBlunders);
+    seen.clear();
+    items.forEach(item => seen.add(item.id));
     const activeQueue = [...new Set((Array.isArray(value?.activeQueue) ? value.activeQueue : []).filter(id => seen.has(id)))];
     const activeIndex = Number.isInteger(value?.activeIndex) && value.activeIndex >= 0 && value.activeIndex < activeQueue.length
       ? value.activeIndex : null;
@@ -82,7 +91,7 @@
       return [{
         id: `${game.id}:${ply}`, gameId: game.id, ply, color, opponent,
         best: evaluation.best ?? null, owner: user.toLowerCase(),
-        playedAt: game.createdAt ?? 0, state: "new", dueAt: 0, reps: 0,
+        playedAt: game.createdAt ?? 0, state: "new", dueAt: 0, reps: 0, attempts: 0,
       }];
     });
   }
@@ -99,6 +108,9 @@
     renderPage();
     let count = 0;
     let imported = [];
+    let importedCount = 0;
+    let limitReached = false;
+    const importedIds = new Set(data.items.map(item => item.id));
     const merge = async () => {
       const batch = imported;
       imported = [];
@@ -122,11 +134,22 @@
       const decoder = new TextDecoder();
       let pending = "";
       const consume = async line => {
-        if (!line.trim()) return;
-        imported.push(...extractBlunders(JSON.parse(line), user));
+        if (!line.trim() || limitReached) return;
+        const additions = extractBlunders(JSON.parse(line), user).filter(item => !importedIds.has(item.id));
+        for (const item of additions) {
+          if (importedCount >= maxBlunders) break;
+          importedIds.add(item.id);
+          imported.push(item);
+          importedCount++;
+        }
         count++;
-        if (count % 20 === 0) {
+        if (count % 20 === 0 || importedCount >= maxBlunders) {
           await merge();
+        }
+        if (importedCount >= maxBlunders) {
+          limitReached = true;
+          await reader.cancel?.();
+        } else if (count % 20 === 0) {
           message = `${count} analysierte Partien eingelesen ...`;
           renderPage();
         }
@@ -137,15 +160,21 @@
           pending += decoder.decode(value, { stream: !done });
           const lines = pending.split("\n");
           pending = lines.pop();
-          for (const line of lines) await consume(line);
+          for (const line of lines) {
+            await consume(line);
+            if (limitReached) break;
+          }
+          if (limitReached) break;
           if (done) break;
         }
-        if (pending.trim()) await consume(pending);
+        if (!limitReached && pending.trim()) await consume(pending);
       } finally {
         reader.releaseLock();
       }
       await merge();
-      message = `${count} analysierte Partien eingelesen. Nicht analysierte Partien müssen zuerst auf Lichess analysiert werden.`;
+      message = limitReached
+        ? `Maximal ${maxBlunders} neue Blunder eingelesen.`
+        : `${count} analysierte Partien eingelesen. Nicht analysierte Partien müssen zuerst auf Lichess analysiert werden.`;
       return true;
     } catch (error) {
       await merge();
@@ -205,7 +234,52 @@
     const item = ownItems().find(item => item.id === ids[0]);
     if (!item) return;
     const ownIds = new Set(ownItems().map(item => item.id));
-    return save(current => ({ ...current, activeQueue: ids.filter(id => ownIds.has(id)), activeIndex: 0 }), () => location.assign(exerciseUrl(item)));
+    const queue = ids.filter(id => ownIds.has(id));
+    return save(current => ({
+      ...current,
+      items: current.items.map(entry => entry.id === queue[0] ? { ...entry, attempts: entry.attempts + 1 } : entry),
+      activeQueue: queue,
+      activeIndex: 0,
+    }), () => location.assign(exerciseUrl(item)));
+  }
+
+  async function recentGameIds() {
+    const user = username();
+    if (!user) throw new Error("Melde dich bei Lichess an, um zu trainieren.");
+    const query = new URLSearchParams({ max: String(recentGameCount), ongoing: "false", moves: "false", clocks: "false", opening: "false" });
+    const response = await fetch(`/api/games/user/${encodeURIComponent(user)}?${query}`, {
+      headers: { Accept: "application/x-ndjson" },
+    });
+    if (!response.ok) throw new Error(`Die letzten Partien konnten nicht geladen werden (HTTP ${response.status}).`);
+    const text = await response.text();
+    return new Set(text.split("\n").filter(Boolean).slice(0, recentGameCount).map(line => JSON.parse(line).id));
+  }
+
+  let trainingStarting = false;
+  async function startTraining(ids) {
+    if (trainingStarting || !ids.length) return;
+    trainingStarting = true;
+    message = `Die letzten ${recentGameCount} Partien werden ausgeschlossen ...`;
+    renderPage();
+    try {
+      const recent = await recentGameIds();
+      const queue = ids.filter(id => {
+        const item = ownItems().find(entry => entry.id === id);
+        return item && !recent.has(item.gameId);
+      });
+      if (!queue.length) {
+        message = `Keine passenden Blunder außerhalb der letzten ${recentGameCount} Partien.`;
+        location.hash = "blunder-list";
+        return;
+      }
+      await startQueue(queue);
+    } catch (error) {
+      message = `Training konnte nicht gestartet werden: ${error.message}`;
+      location.hash = "blunder-list";
+    } finally {
+      trainingStarting = false;
+      renderPage();
+    }
   }
 
   function openBlunders() {
@@ -215,7 +289,7 @@
       return;
     }
     const due = dueItems();
-    startQueue((due.length ? due : items).map(item => item.id));
+    return startTraining((due.length ? due : items).map(item => item.id));
   }
 
   function activeItem() {
@@ -235,41 +309,73 @@
 
   function renderPage() {
     if (!page) return;
+    const scrollTop = page.querySelector(".lfs-playlist-list")?.scrollTop ?? 0;
     const due = dueItems();
+    const items = ownItems();
+    const solvedCount = items.reduce((total, item) => total + item.reps, 0);
+    const attemptCount = items.reduce((total, item) => total + item.attempts, 0);
     const header = document.createElement("header");
     header.className = "lfs-playlist-page-header";
     const title = document.createElement("h1");
     title.textContent = "Blunder-Liste";
-    header.append(title, button("Zur Startseite", "home"));
+    const home = button("Startseite", "home");
+    home.classList.add("lfs-playlist-quiet");
+    const score = document.createElement("div");
+    score.className = "lfs-playlist-score";
+    const scoreValue = document.createElement("strong");
+    scoreValue.textContent = `${solvedCount} / ${attemptCount}`;
+    const scoreLabel = document.createElement("small");
+    scoreLabel.textContent = "Gelöst / Versuche";
+    score.append(scoreValue, scoreLabel);
+    header.append(title, score, home);
     const summary = document.createElement("p");
-    summary.textContent = `${due.length} Stellungen bereit · ${ownItems().length} insgesamt. Gesammelt werden nur deine eigenen groben Fehler aus analysierten Partien.`;
+    summary.className = "lfs-playlist-page-summary";
+    summary.textContent = `${items.length} Stellungen · ${due.length} bereit`;
     const status = document.createElement("p");
     status.setAttribute("role", "status");
     status.textContent = message;
     const actions = document.createElement("div");
     actions.className = "lfs-playlist-page-actions";
-    const start = button(`Bereite Stellungen starten (${due.length})`, "start", true);
-    start.disabled = !due.length;
-    const sync = button(importing ? "Wird eingelesen ..." : "Partien synchronisieren", "sync");
+    const start = button(`Trainieren (${due.length})`, "start", true);
+    start.disabled = trainingStarting || !due.length;
+    const sync = button(importing ? "Wird eingelesen ..." : "Synchronisieren", "sync");
+    sync.classList.add("lfs-playlist-quiet");
     sync.disabled = importing;
     actions.append(start, sync);
     page.replaceChildren(header, summary, actions, status);
     const list = document.createElement("ol");
     list.className = "lfs-playlist-list";
-    for (const item of ownItems()) {
+    list.tabIndex = 0;
+    list.setAttribute("aria-label", "Gespeicherte Blunder-Stellungen");
+    for (const item of items) {
       const row = document.createElement("li");
       const link = document.createElement("a");
       link.href = exerciseUrl(item);
       link.dataset.action = "play";
       link.dataset.id = item.id;
       link.textContent = `Gegen ${item.opponent}, Zug ${Math.ceil(item.ply / 2)} (${item.color === "white" ? "Weiß" : "Schwarz"})`;
+      link.title = link.textContent;
       const status = document.createElement("small");
       status.className = "lfs-playlist-item-status";
       status.textContent = item.state === "new" ? "Neu" : item.dueAt <= Date.now() ? "Fällig" : `in ${intervalLabel(item.dueAt - Date.now())}`;
-      row.append(link, status);
+      status.dataset.ready = String(item.state === "new" || item.dueAt <= Date.now());
+      const score = document.createElement("span");
+      score.className = "lfs-playlist-item-score";
+      score.textContent = `${item.reps} / ${item.attempts}`;
+      score.title = "Gelöst / Versuche";
+      row.append(link, status, score);
       list.append(row);
     }
-    page.append(list);
+    if (items.length) {
+      page.append(list);
+      list.scrollTop = scrollTop;
+    }
+    else {
+      const empty = document.createElement("p");
+      empty.className = "lfs-playlist-empty";
+      empty.textContent = "Noch keine Stellungen. Synchronisiere deine analysierten Partien.";
+      page.append(empty);
+    }
     clearTimeout(refreshTimer);
     const nextDue = ownItems().reduce((next, item) => item.dueAt > Date.now() ? Math.min(next, item.dueAt) : next, Infinity);
     if (Number.isFinite(nextDue)) refreshTimer = setTimeout(renderPage, Math.min(Math.max(1, nextDue - Date.now()), 2147483647));
@@ -281,10 +387,10 @@
     switch (control.dataset.action) {
       case "home": location.hash = ""; break;
       case "sync": importGames(); break;
-      case "start": startQueue(dueItems().map(item => item.id)); break;
+      case "start": startTraining(dueItems().map(item => item.id)); break;
       case "play":
         event.preventDefault();
-        startQueue([control.dataset.id]);
+        startTraining([control.dataset.id]);
         break;
     }
   }
@@ -321,22 +427,23 @@
       description.textContent = `Wiederholung in ${intervalLabel(item.dueAt - Date.now())} geplant.`;
       toolbar.append(button(data.activeIndex + 1 < data.activeQueue.length ? "Nächste Stellung" : "Sitzung abschließen", "next", true));
     } else if (exerciseState === "solved") {
+      toolbar.replaceChildren();
       const ratings = document.createElement("div");
       ratings.className = "lfs-review-ratings";
-      for (const [label, grade] of [["Nochmal", 1], ["Schwer", 2], ["Gut", 3], ["Leicht", 4]]) {
+      for (const [label, grade] of [["Einfach", 4], ["Gut", 3], ["Schwer", 2], ["Nochmal", 1]]) {
         const rating = button(label, "rate");
         rating.classList.add("lfs-review-button");
         rating.dataset.grade = String(grade);
-        const interval = document.createElement("small");
-        interval.textContent = intervalLabel(scheduler.schedule(item, grade).dueAt - Date.now());
-        rating.append(interval);
+        rating.title = `Wiederholung in ${intervalLabel(scheduler.schedule(item, grade).dueAt - Date.now())}`;
         ratings.append(rating);
       }
       toolbar.append(ratings);
     } else if (["ready", "wrong"].includes(exerciseState)) {
       toolbar.append(button("Lösung zeigen", "reveal"));
     }
-    toolbar.append(button("Zur Blunder-Liste", "list"));
+    const back = button("Zur Blunder-Liste", "list");
+    back.classList.add("lfs-playlist-quiet");
+    toolbar.append(back);
   }
 
   function toolbarClick(event) {
@@ -353,7 +460,13 @@
         if (current.activeQueue[current.activeIndex] !== item.id) return current;
         const nextIndex = current.activeIndex + 1;
         const hasNext = nextIndex < current.activeQueue.length;
-        return { ...current, activeIndex: hasNext ? nextIndex : null, activeQueue: hasNext ? current.activeQueue : [] };
+        const nextId = hasNext ? current.activeQueue[nextIndex] : null;
+        return {
+          ...current,
+          items: hasNext ? current.items.map(entry => entry.id === nextId ? { ...entry, attempts: entry.attempts + 1 } : entry) : current.items,
+          activeIndex: hasNext ? nextIndex : null,
+          activeQueue: hasNext ? current.activeQueue : [],
+        };
       }, current => {
         const next = current.items.find(entry => entry.id === current.activeQueue[current.activeIndex]);
         location.assign(next ? exerciseUrl(next) : "/#blunder-list");

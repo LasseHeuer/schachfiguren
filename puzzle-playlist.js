@@ -36,6 +36,7 @@
         stability: Number.isFinite(entry?.stability) ? entry.stability : 0,
         difficulty: Number.isFinite(entry?.difficulty) ? entry.difficulty : 0,
         reps,
+        attempts: Number.isInteger(entry?.attempts) && entry.attempts >= reps ? entry.attempts : reps,
         lapses: Number.isInteger(entry?.lapses) && entry.lapses >= 0 ? entry.lapses : 0,
         lastReviewedAt: Number.isFinite(entry?.lastReviewedAt) ? entry.lastReviewedAt : null,
         lastRating: Number.isInteger(entry?.lastRating) && entry.lastRating >= 1 && entry.lastRating <= 4 ? entry.lastRating : null,
@@ -136,7 +137,9 @@
 
   function startQueue(ids) {
     if (!ids.length) return;
-    savePlaylist({ ...playlist, activeQueue: ids, activeIndex: 0 }, () => {
+    const [firstId] = ids;
+    const items = playlist.items.map(item => item.id === firstId ? { ...item, attempts: item.attempts + 1 } : item);
+    savePlaylist({ ...playlist, items, activeQueue: ids, activeIndex: 0 }, () => {
       location.assign(trainingPath(ids[0]));
     });
   }
@@ -236,11 +239,14 @@
 
   function renderPlaylistPage() {
     if (!playlistPage) return;
+    const scrollTop = playlistPage.querySelector(".lfs-playlist-list")?.scrollTop ?? 0;
     const now = Date.now();
     scheduleDueRefresh(now);
     const dueCount = playlist.items.filter(item => item.state !== "new" && item.dueAt <= now).length;
     const newCount = playlist.items.filter(item => item.state === "new").length;
     const readyCount = dueCount + newCount;
+    const solvedCount = playlist.items.reduce((total, item) => total + item.reps, 0);
+    const attemptCount = playlist.items.reduce((total, item) => total + item.attempts, 0);
     const viewKey = JSON.stringify([playlist.items, playlist.activeQueue, playlist.activeIndex, dueCount, newCount]);
     if (renderedPlaylistKey === viewKey) return;
     renderedPlaylistKey = viewKey;
@@ -249,9 +255,18 @@
     header.className = "lfs-playlist-page-header";
     const title = document.createElement("h1");
     title.textContent = "Rätsel-Playlist";
-    header.append(title, makeButton("Zur Startseite", "home"));
+    header.append(title, makeButton("Startseite", "home", "lfs-playlist-quiet"));
+    const score = document.createElement("div");
+    score.className = "lfs-playlist-score";
+    const scoreValue = document.createElement("strong");
+    scoreValue.textContent = `${solvedCount} / ${attemptCount}`;
+    const scoreLabel = document.createElement("small");
+    scoreLabel.textContent = "Gelöst / Versuche";
+    score.append(scoreValue, scoreLabel);
+    header.insertBefore(score, header.lastElementChild);
     const summary = document.createElement("p");
-    summary.textContent = `${dueCount} Wiederholungen fällig · ${newCount} neu · ${playlist.items.length} insgesamt`;
+    summary.className = "lfs-playlist-page-summary";
+    summary.textContent = `${playlist.items.length} Rätsel · ${dueCount} fällig · ${newCount} neu`;
     playlistPage.replaceChildren(header, summary);
 
     if (!playlist.items.length) {
@@ -264,6 +279,8 @@
 
     const list = document.createElement("ol");
     list.className = "lfs-playlist-list";
+    list.tabIndex = 0;
+    list.setAttribute("aria-label", "Gespeicherte Rätsel");
     playlist.items.forEach((entry, index) => {
       const item = document.createElement("li");
       const link = document.createElement("a");
@@ -274,19 +291,27 @@
       const status = document.createElement("small");
       status.className = "lfs-playlist-item-status";
       status.textContent = dueLabel(entry, now);
-      const remove = makeButton("Entfernen", "remove");
+      status.dataset.ready = String(isDue(entry, now));
+      const score = document.createElement("span");
+      score.className = "lfs-playlist-item-score";
+      score.textContent = `${entry.reps} / ${entry.attempts}`;
+      score.title = "Gelöst / Versuche";
+      const remove = makeButton("×", "remove", "lfs-playlist-remove");
+      remove.title = "Aus Playlist entfernen";
+      remove.setAttribute("aria-label", `Rätsel ${index + 1} aus Playlist entfernen`);
       remove.dataset.id = entry.id;
-      item.append(link, status, remove);
+      item.append(link, status, score, remove);
       list.append(item);
     });
     const actions = document.createElement("div");
     actions.className = "lfs-playlist-page-actions";
     actions.append(
-      makeButton(`Bereite Rätsel starten (${readyCount})`, "start-due", "lfs-playlist-primary"),
-      makeButton("Alle nacheinander", "start-all"),
+      makeButton(`Trainieren (${readyCount})`, "start-due", "lfs-playlist-primary"),
+      makeButton("Alle spielen", "start-all", "lfs-playlist-quiet"),
     );
     actions.querySelector('[data-action="start-due"]').disabled = readyCount === 0;
-    playlistPage.append(list, actions);
+    playlistPage.append(actions, list);
+    list.scrollTop = scrollTop;
   }
 
   function scheduleDueRefresh(now) {
@@ -394,45 +419,32 @@
     puzzleToolbar.dataset.puzzleId = id;
     puzzleMenuSaveButton.dataset.puzzleId = id;
     puzzleMenuSaveButton.textContent = saveDescription;
-    puzzleMenuSaveButton.className = `lfs-playlist-button ${savedIndex < 0 ? "lfs-playlist-primary" : ""}`.trim();
+    puzzleMenuSaveButton.className = `lfs-playlist-button ${savedIndex < 0 ? "lfs-playlist-primary" : "lfs-playlist-quiet lfs-playlist-toolbar-remove"}`;
     puzzleMenuSaveButton.setAttribute("aria-pressed", String(savedIndex >= 0));
-    puzzleToolbar.replaceChildren(puzzleMenuSaveButton);
+    puzzleToolbar.replaceChildren();
 
     if (isComplete && savedItem) {
       if (ratedThisVisit) {
-        const planned = document.createElement("p");
-        planned.className = "lfs-review-saved";
-        planned.textContent = `Wiederholung geplant: ${dueLabel(savedItem)}.`;
-        puzzleToolbar.append(planned);
         if (isActivePuzzle) {
           const nextIndex = playlist.activeIndex + 1;
           const isLast = nextIndex >= playlist.activeQueue.length;
           puzzleToolbar.append(makeButton(isLast ? "Sitzung abschließen" : `Nächstes Rätsel (${nextIndex + 1}/${playlist.activeQueue.length})`, isLast ? "finish" : "next", "lfs-playlist-primary"));
         }
       } else {
-        const heading = document.createElement("h3");
-        heading.textContent = "Wie gut konntest du dich erinnern?";
-        const explanation = document.createElement("p");
-        explanation.textContent = "Bewerte den Lösungsweg, nicht die Qualität des Rätsels.";
         const ratings = document.createElement("div");
         ratings.className = "lfs-review-ratings";
         const now = Date.now();
-        for (const [label, grade] of [["Nochmal", 1], ["Schwer", 2], ["Gut", 3], ["Leicht", 4]]) {
+        for (const [label, grade] of [["Einfach", 4], ["Gut", 3], ["Schwer", 2], ["Nochmal", 1]]) {
           const result = scheduler.schedule(savedItem, grade, now);
           const button = makeButton(label, "rate", "lfs-review-button");
           button.dataset.grade = String(grade);
-          const interval = document.createElement("small");
-          interval.textContent = formatInterval(result.dueAt - now);
-          button.append(interval);
+          button.title = `Wiederholung in ${formatInterval(result.dueAt - now)}`;
           ratings.append(button);
         }
-        puzzleToolbar.append(heading, explanation, ratings);
+        puzzleToolbar.append(ratings);
       }
-    } else if (isActivePuzzle) {
-      const progress = document.createElement("p");
-      progress.textContent = `Rätsel ${playlist.activeIndex + 1} von ${playlist.activeQueue.length}. Nach dem Lösen kannst du die Erinnerung bewerten.`;
-      puzzleToolbar.append(progress);
     }
+    puzzleToolbar.append(puzzleMenuSaveButton);
 
     if (puzzleToolbar.dataset.handlerBound) return;
     puzzleToolbar.dataset.handlerBound = "true";
@@ -467,7 +479,8 @@
       finishPlaylistSession();
       return true;
     }
-    savePlaylist({ ...playlist, activeIndex: nextIndex }, () => {
+    const items = playlist.items.map(item => item.id === nextId ? { ...item, attempts: item.attempts + 1 } : item);
+    savePlaylist({ ...playlist, items, activeIndex: nextIndex }, () => {
       location.assign(trainingPath(nextId));
     });
     return true;

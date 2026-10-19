@@ -12,6 +12,7 @@ function loadList(file, exports, extra = {}) {
   const locks = new Map();
   const context = vm.createContext({
     URLSearchParams, TextDecoder, Date, setTimeout, clearTimeout,
+    fetch: async () => ({ ok: true, text: async () => "" }),
     document: {
       querySelector: () => ({ textContent: "Player", getAttribute: () => null }),
       addEventListener: () => {}, dispatchEvent: event => dispatched.push(event),
@@ -98,10 +99,24 @@ test("normalizes saved cards and removes invalid queue entries", () => {
   assert.equal(api.normalize({ ...normalized, activeIndex: -1 }).activeIndex, null);
 });
 
+test("keeps no more than the 500 most recent blunders", () => {
+  const { api } = loadList("blunder-list.js", "normalize");
+  const items = Array.from({ length: 501 }, (_, index) => {
+    const gameId = String(index + 1).padStart(8, "0");
+    return { id: `${gameId}:1`, gameId, ply: 1, color: "white", playedAt: index + 1 };
+  });
+  const normalized = api.normalize({ items, activeQueue: [items[0].id], activeIndex: 0 });
+  assert.equal(normalized.items.length, 500);
+  assert.equal(normalized.items[0].gameId, "00000501");
+  assert.deepEqual(Array.from(normalized.activeQueue), []);
+  assert.equal(normalized.activeIndex, null);
+});
+
 test("prioritizes due reviews, schedules ratings and starts before the error", async () => {
   const { api, context, assigned, writes } = loadList("blunder-list.js", `
     dueItems, startQueue, extractBlunders,
-    setData: value => { data = normalize(value); testPersisted[storageKey] = data; render = () => {}; }
+    setData: value => { data = normalize(value); testPersisted[storageKey] = data; render = () => {}; },
+    getData: () => data
   `);
   const item = api.extractBlunders(game, "player")[0];
   const due = { ...item, id: "ijklmnop:2", gameId: "ijklmnop", ply: 2, state: "review", dueAt: 1 };
@@ -112,6 +127,7 @@ test("prioritizes due reviews, schedules ratings and starts before the error", a
   await api.startQueue([item.id]);
   assert.equal(assigned[0], "/abcdefgh/white?lfs-blunder=1#0");
   assert.equal(writes[0].lfsBlunderList.activeIndex, 0);
+  assert.equal(api.getData().items.find(entry => entry.id === item.id).attempts, 1);
   for (const grade of [1, 2, 3, 4]) {
     const scheduled = context.LichessPuzzleScheduler.schedule(item, grade, 1000);
     assert.ok(scheduled.dueAt > 1000);
@@ -130,13 +146,39 @@ test("opening the Blunder button starts due positions directly, or the first sav
   const due = { ...first, id: "ijklmnop:2", gameId: "ijklmnop", ply: 2, state: "review", dueAt: 1 };
   const later = { ...first, id: "qrstuvwx:3", gameId: "qrstuvwx", ply: 3, state: "review", dueAt: Date.now() + 86400000 };
   api.setData({ items: [first, later, due] });
-  api.openBlunders();
+  await api.openBlunders();
   await settle();
   assert.equal(assigned[0], "/ijklmnop/white?lfs-blunder=2#1");
   api.setData({ items: [first, later] });
-  api.openBlunders();
+  await api.openBlunders();
   await settle();
   assert.equal(assigned[1], "/abcdefgh/white?lfs-blunder=1#0");
+});
+
+test("training excludes positions from the latest ten Lichess games", async () => {
+  const games = Array.from({ length: 12 }, (_, index) => ({
+    ...game,
+    id: String(index + 1).padStart(8, "0"),
+    createdAt: 1200 - index,
+  }));
+  const latest = games.slice(0, 10).map(({ id }) => JSON.stringify({ id })).join("\n");
+  let request;
+  const { api, assigned, settle } = loadList("blunder-list.js", `
+    extractBlunders, openBlunders,
+    setData: value => { data = normalize(value); testPersisted[storageKey] = data; render = () => {}; },
+    getData: () => data
+  `, {
+    fetch: async url => {
+      request = url;
+      return { ok: true, text: async () => latest };
+    },
+  });
+  api.setData({ items: games.map(item => api.extractBlunders(item, "player")[0]) });
+  await api.openBlunders();
+  await settle();
+  assert.equal(new URL(request, "https://lichess.org").searchParams.get("max"), "10");
+  assert.deepEqual(assigned, [`/${games[10].id}/white?lfs-blunder=1#0`]);
+  assert.equal(api.getData().activeQueue.length, 2);
 });
 
 test("streamed synchronization preserves existing repetition progress and deduplicates", async () => {
@@ -167,7 +209,7 @@ test("streamed synchronization preserves existing repetition progress and dedupl
   assert.equal(api.getData().items[0].dueAt, 123456);
   assert.ok(url.includes("analysed=true"));
   assert.ok(url.includes("ongoing=false"));
-  assert.equal(writes.length, 1);
+  assert.equal(writes.length, 0);
 });
 
 test("automatically imports recent games with an analysis overlap and records success", async () => {
@@ -255,6 +297,7 @@ test("ratings are saved only once and sessions advance and finish", async () => 
   api.click("next");
   await settle();
   assert.equal(assigned.at(-1), "/ijklmnop/white?lfs-blunder=1#0");
+  assert.equal(persisted.lfsBlunderList.items[1].attempts, 1);
   api.visit(second);
   api.click("rate", "1");
   await settle();
@@ -291,9 +334,37 @@ test("keeps imported positions when an export stream is interrupted", async () =
   assert.match(api.getMessage(), /Einlesen unterbrochen/);
 });
 
+test("stops importing after 500 new blunders", async () => {
+  let cancelled = 0;
+  const content = Array.from({ length: 501 }, (_, index) => JSON.stringify({
+    ...game,
+    id: String(index + 1).padStart(8, "0"),
+    createdAt: 100000 - index,
+  })).join("\n") + "\n";
+  const { api } = loadList("blunder-list.js", `
+    importGames,
+    getData: () => data,
+    getMessage: () => message
+  `, {
+    fetch: async () => ({
+      ok: true,
+      body: { getReader: () => ({
+        read: async () => ({ value: Buffer.from(content), done: false }),
+        cancel: async () => { cancelled++; },
+        releaseLock: () => {},
+      }) },
+    }),
+  });
+  await api.importGames();
+  assert.equal(api.getData().items.length, 500);
+  assert.equal(cancelled, 1);
+  assert.match(api.getMessage(), /500/);
+});
+
 test("playlist button starts a puzzle directly, prioritizing due cards", () => {
   const { api, assigned, context, dispatched } = loadList("puzzle-playlist.js", `
     ensureHomeClickHandler,
+    getPlaylist: () => playlist,
     setup: value => {
       playlist = normalizePlaylist(value);
       render = () => {};
@@ -307,6 +378,7 @@ test("playlist button starts a puzzle directly, prioritizing due cards", () => {
   api.ensureHomeClickHandler();
   context.click({ target: { closest: () => ({ dataset: { action: "open" } }) } });
   assert.equal(assigned[0], "/training/Def34");
+  assert.equal(api.getPlaylist().items.find(item => item.id === "Def34").attempts, 1);
   context.click({ target: { closest: () => ({ dataset: { action: "blunders" } }) } });
   assert.equal(dispatched.at(-1).type, "lfs-blunder-open");
 });
@@ -324,6 +396,93 @@ test("playlist click still starts directly when all saved cards are scheduled fo
   api.ensureHomeClickHandler();
   context.click({ target: { closest: () => ({ dataset: { action: "open" } }) } });
   assert.equal(assigned[0], "/training/Abc12");
+});
+
+function listDocument() {
+  const createElement = tag => ({
+    tagName: tag, children: [], dataset: {}, attributes: {}, className: "", textContent: "",
+    classList: { add() {} },
+    get lastElementChild() { return this.children.at(-1); },
+    append(...children) {
+      this.children.push(...children);
+      children.forEach(child => { child.parentElement = this; });
+    },
+    insertBefore(child, sibling) {
+      this.children.splice(this.children.indexOf(sibling), 0, child);
+      child.parentElement = this;
+    },
+    replaceChildren(...children) { this.children = []; this.append(...children); },
+    setAttribute(name, value) { this.attributes[name] = value; },
+    addEventListener() {},
+    querySelector(selector) {
+      const action = selector.match(/data-action="([^"]+)"/)?.[1];
+      return this.children.find(child => child.dataset.action === action) ?? null;
+    },
+  });
+  return {
+    createElement,
+    querySelector: () => ({ textContent: "Player", getAttribute: () => null }),
+    addEventListener() {},
+  };
+}
+
+test("playlist renders compact rows with individual scores and actions above the scroll list", () => {
+  const document = listDocument();
+  const { api } = loadList("puzzle-playlist.js", `
+    renderPlaylistPage,
+    setup: () => {
+      playlist = normalizePlaylist({ items: [{ id: "Abc12", state: "review", reps: 2, attempts: 3 }] });
+      playlistPage = document.createElement("section");
+    },
+    getPage: () => playlistPage
+  `, { document });
+  api.setup();
+  api.renderPlaylistPage();
+  const page = api.getPage();
+  assert.equal(page.children[0].children[1].children[0].textContent, "2 / 3");
+  assert.equal(page.children[2].className, "lfs-playlist-page-actions");
+  const list = page.children[3];
+  assert.equal(list.className, "lfs-playlist-list");
+  assert.equal(list.tabIndex, 0);
+  assert.equal(list.children[0].children[2].textContent, "2 / 3");
+  assert.equal(list.children[0].children[3].attributes["aria-label"], "Rätsel 1 aus Playlist entfernen");
+});
+
+test("solved playlist exercises show only rating buttons first and remove last", () => {
+  const document = listDocument();
+  const parent = document.createElement("section");
+  document.querySelector = selector => selector === ".puzzle__session" ? parent : {};
+  const { api } = loadList("puzzle-playlist.js", `
+    renderPuzzleToolbar,
+    setup: () => {
+      puzzleId = () => "Abc12";
+      playlist = normalizePlaylist({ items: [{ id: "Abc12" }] });
+    },
+    getToolbar: () => puzzleToolbar
+  `, { document });
+  api.setup();
+  api.renderPuzzleToolbar();
+  const toolbar = api.getToolbar();
+  assert.equal(toolbar.children.length, 2);
+  assert.deepEqual(Array.from(toolbar.children[0].children, button => button.textContent), ["Einfach", "Gut", "Schwer", "Nochmal"]);
+  assert.ok(toolbar.children[0].children.every(button => button.children.length === 0));
+  assert.equal(toolbar.children.at(-1).dataset.action, "menu-save");
+});
+
+test("blunder overview shows total and individual scores in keyboard-scrollable rows", () => {
+  const document = listDocument();
+  const { api } = loadList("blunder-list.js", `
+    renderPage, extractBlunders,
+    setup: item => { data = normalize({ items: [item] }); page = document.createElement("section"); },
+    getPage: () => page
+  `, { document });
+  api.setup({ ...api.extractBlunders(game, "player")[0], reps: 1, attempts: 2 });
+  api.renderPage();
+  const page = api.getPage();
+  assert.equal(page.children[0].children[1].children[0].textContent, "1 / 2");
+  const list = page.children.at(-1);
+  assert.equal(list.tabIndex, 0);
+  assert.equal(list.children[0].children[2].textContent, "1 / 2");
 });
 
 function loadTraining() {
