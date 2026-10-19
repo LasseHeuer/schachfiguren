@@ -910,13 +910,11 @@
     return `#${channels.map(channel => Math.round(channel * weight + 255 * (1 - weight)).toString(16).padStart(2, "0")).join("")}`;
   }
 
-  function createOverlay(board) {
+  function createOverlay() {
     const svg = document.createElementNS(svgNamespace, "svg");
     svg.classList.add("lfs-selected-piece-wedge");
     svg.setAttribute("viewBox", "0 0 8 8");
     svg.setAttribute("aria-hidden", "true");
-    const firstPiece = board.querySelector(":scope > piece");
-    board.insertBefore(svg, firstPiece);
     return svg;
   }
 
@@ -1928,9 +1926,8 @@
 
     const boardRect = board.getBoundingClientRect();
     if (!boardRect.width || !boardRect.height) return;
-    if (!entry.svg) entry.svg = createOverlay(board);
-    const firstPiece = board.querySelector(":scope > piece");
-    if (entry.svg.parentNode !== board || entry.svg.nextSibling !== firstPiece) board.insertBefore(entry.svg, firstPiece);
+    if (!entry.svg) entry.svg = createOverlay();
+    globalThis.LichessBoardOverlay.place(board, entry.svg, "between-pieces");
 
     const baseWidth = settings.wedgeBaseWidthPercent / 100;
     const tipWidth = settings.wedgeTipWidthPercent / 100;
@@ -2123,7 +2120,7 @@
       entry.arcSvg.setAttribute("viewBox", "0 0 8 8");
       entry.arcSvg.setAttribute("aria-hidden", "true");
     }
-    if (entry.arcSvg && entry.arcSvg.parentNode !== board) board.append(entry.arcSvg);
+    if (entry.arcSvg) globalThis.LichessBoardOverlay.place(board, entry.arcSvg, "above-pieces");
 
     if (entry.arcSvg) {
       entry.arcSvg.replaceChildren();
@@ -2149,7 +2146,7 @@
       entry.centerSvg.setAttribute("viewBox", "0 0 8 8");
       entry.centerSvg.setAttribute("aria-hidden", "true");
     }
-    if (entry.centerSvg.parentNode !== board) board.append(entry.centerSvg);
+    globalThis.LichessBoardOverlay.place(board, entry.centerSvg, "above-pieces");
     entry.centerSvg.toggleAttribute("data-lfs-hatching", settings.threatCenterOutlineStyle === "hatching");
 
     const defs = document.createElementNS(svgNamespace, "defs");

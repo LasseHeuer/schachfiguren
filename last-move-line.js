@@ -1,5 +1,5 @@
 (() => {
-  const boardSelector = ".cg-wrap cg-board";
+  const boardSelector = "cg-board";
   const svgNamespace = "http://www.w3.org/2000/svg";
   const observedBoards = new Map();
   let settings = null;
@@ -13,17 +13,13 @@
     });
   }
 
-  function createOverlay(board) {
+  function createOverlay() {
     const svg = document.createElementNS(svgNamespace, "svg");
     svg.classList.add("lfs-last-move-line");
     svg.setAttribute("viewBox", "0 0 8 8");
     svg.setAttribute("aria-hidden", "true");
     const line = document.createElementNS(svgNamespace, "polygon");
     svg.append(line);
-    if (board) {
-      const firstPiece = board.querySelector(":scope > piece");
-      board.insertBefore(svg, firstPiece);
-    }
     return { svg, line };
   }
 
@@ -45,17 +41,13 @@
       return;
     }
 
-    if (!entry.svg) Object.assign(entry, createOverlay(board));
-    else {
-      if (entry.svg.parentNode !== board) board.insertBefore(entry.svg, board.querySelector(":scope > piece"));
+    if (!entry.svg) Object.assign(entry, createOverlay());
+    globalThis.LichessBoardOverlay.place(board, entry.svg, "between-pieces");
+    const [first, second] = [...squares].map(square => globalThis.LichessBoardOverlay.getBoardPoint(board, square, boardRect));
+    if (!first || !second) {
+      entry.svg.style.display = "none";
+      return;
     }
-    const [first, second] = [...squares].map(square => {
-      const rect = square.getBoundingClientRect();
-      return {
-        x: ((rect.left + rect.width / 2 - boardRect.left) / boardRect.width) * 8,
-        y: ((rect.top + rect.height / 2 - boardRect.top) / boardRect.height) * 8
-      };
-    });
 
     entry.svg.style.display = drawLine(entry.line, first, second) ? "block" : "none";
   }
@@ -118,10 +110,6 @@
     return node.nodeType === Node.ELEMENT_NODE && (node.matches("cg-board") || Boolean(node.querySelector("cg-board")));
   }
 
-  function containsBoardContainer(node) {
-    return node.nodeType === Node.ELEMENT_NODE && (node.matches(".cg-wrap") || Boolean(node.querySelector(".cg-wrap")));
-  }
-
   function scanBoards() {
     const boards = new Set(document.querySelectorAll(boardSelector));
     for (const board of boards) observeBoard(board);
@@ -138,7 +126,7 @@
 
   const documentObserver = new MutationObserver(mutations => {
     const shouldRefresh = mutations.some(mutation => mutation.type === "attributes"
-      ? containsBoardContainer(mutation.target)
+      ? containsBoard(mutation.target)
       : [...mutation.addedNodes, ...mutation.removedNodes].some(containsBoard));
     if (!shouldRefresh) return;
     scanBoards();

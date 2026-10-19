@@ -47,6 +47,8 @@
   let zenToggle;
   let boardLayout;
   let zenBoard;
+  let zenOrientationObserver;
+  let zenOrientationBoard;
   let zenCenterFrame;
   let zenClockFrame;
   let zenSideFrame;
@@ -78,6 +80,21 @@
   let pvPreviewStepDuration;
   const analysisInputs = new Map();
   const analysisRows = new Map();
+
+  function observeZenBoardOrientation(board) {
+    const nextOrientationBoard = board?.matches(".cg-wrap") ? board : board?.querySelector(".cg-wrap") ?? null;
+    if (nextOrientationBoard === zenOrientationBoard) return;
+    zenOrientationObserver?.disconnect();
+    zenOrientationBoard = nextOrientationBoard;
+    if (!zenOrientationBoard) return;
+
+    zenOrientationObserver = new MutationObserver(() => {
+      if (!document.documentElement.hasAttribute("data-lfs-zen-mode")) return;
+      scheduleZenClockUpdate();
+      scheduleZenSideUpdate();
+    });
+    zenOrientationObserver.observe(zenOrientationBoard, { attributes: true, attributeFilter: ["class"] });
+  }
 
   function syncAnalysisToolbar() {
     if (!analysisToolbar) {
@@ -198,6 +215,7 @@
     }
     boardLayout = layout;
     zenBoard = nextZenBoard;
+    observeZenBoardOrientation(zenBoard);
     boardLayout?.toggleAttribute("data-lfs-board-layout", settings.boardTopGapPercent > 0);
     zenBoard?.toggleAttribute("data-lfs-zen-board", true);
     if (zenToggle) {
@@ -357,7 +375,7 @@
       bar.append(fill);
       row.append(time, bar);
       zenClockOverlay.append(row);
-      zenClockRows[side] = { row, time, fill };
+      zenClockRows[side] = { row, time, bar, fill };
     }
     document.documentElement.append(zenClockOverlay);
   }
@@ -398,7 +416,7 @@
   }
 
   function positionZenClock(side, boardRect) {
-    const { row } = zenClockRows[side];
+    const { row, bar } = zenClockRows[side];
     if (row.hidden) return;
     row.style.left = `${boardRect.left}px`;
     row.style.width = `${boardRect.width}px`;
@@ -407,6 +425,11 @@
       ? boardRect.top - margin - row.getBoundingClientRect().height
       : boardRect.bottom + margin;
     row.style.top = `${top}px`;
+
+    const devicePixelRatio = window.devicePixelRatio || 1;
+    bar.style.transform = "none";
+    const barTop = bar.getBoundingClientRect().top;
+    bar.style.transform = `translateY(${Math.round(barTop * devicePixelRatio) / devicePixelRatio - barTop}px)`;
   }
 
   function setZenClockPlayerColors() {
@@ -490,7 +513,9 @@
 
     ensureZenClockOverlay();
     zenClockOverlay.style.setProperty("--lfs-zen-clock-font-size", `${settings.zenClockFontSizePx}px`);
-    zenClockOverlay.style.setProperty("--lfs-zen-clock-line-thickness", `${settings.zenClockLineThicknessPx}px`);
+    const devicePixelRatio = window.devicePixelRatio || 1;
+    const lineThickness = Math.max(1, Math.round(settings.zenClockLineThicknessPx * devicePixelRatio)) / devicePixelRatio;
+    zenClockOverlay.style.setProperty("--lfs-zen-clock-line-thickness", `${lineThickness}px`);
     zenClockOverlay.style.setProperty("--lfs-zen-clock-line-gap", `${settings.zenClockLineGapPx}px`);
     const bottomClock = clocks.length > 1 ? clocks.at(-1) : clocks[0]?.classList.contains("rclock-bottom") ? clocks[0] : null;
     zenClockSources = { top: topClock === bottomClock ? null : topClock, bottom: bottomClock };

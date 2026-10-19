@@ -108,7 +108,7 @@ html:not([data-lfs-disabled]) .main-board.cg-wrap {
 
 html:not([data-lfs-disabled]) body .cg-wrap {
   position: relative;
-  z-index: auto !important;
+  z-index: 2147483646 !important;
 }
 
 html:not([data-lfs-disabled]) body .cg-wrap cg-board,
@@ -128,6 +128,7 @@ html:not([data-lfs-disabled]) #top:hover {
   z-index: 2147483647 !important;
 }
 
+html:not([data-lfs-disabled]) body:has(#top:hover) .cg-wrap,
 html:not([data-lfs-disabled]) body:has(#top:hover) .cg-wrap cg-board,
 html:not([data-lfs-disabled]) body:has(#top:hover) .cg-wrap > piece,
 html:not([data-lfs-disabled]) body:has(#top:hover) .cg-wrap .cg-custom-svgs,
@@ -148,6 +149,223 @@ html:not([data-lfs-disabled])::before {
 
 html:not([data-lfs-disabled]) body {
   background: transparent !important;
+}
+
+html:not([data-lfs-disabled]) [data-lfs-playlist-hidden] {
+  display: none !important;
+}
+
+html:not([data-lfs-disabled]) [data-lfs-playlist-page-hidden] {
+  display: none !important;
+}
+
+html:not([data-lfs-disabled]) [data-lfs-blunder-hidden] {
+  display: none !important;
+}
+
+html[data-lfs-blunder-training="active"] :is(.analyse__moves, .analyse__controls, .analyse__fork, .analyse__acpl, .analyse__underboard, .analyse__tools > :not(.lfs-blunder-toolbar), .eval-gauge, .cg-shapes, .cg-shapes-below) {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.lfs-blunder-toolbar {
+  padding: 1rem;
+}
+
+.lfs-playlist-card {
+  box-sizing: border-box;
+  padding: 1rem;
+  background: var(--c-bg-box, #fff);
+  color: var(--c-font, #333);
+}
+
+.lfs-playlist-card h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.lfs-playlist-card p {
+  margin: 0.5rem 0 1rem;
+}
+
+.lfs-playlist-button {
+  box-sizing: border-box;
+  min-height: 2.5rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--c-border, #aaa);
+  background: var(--c-bg-high, #eee);
+  color: var(--c-font, #333);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.lfs-playlist-button:hover {
+  filter: brightness(1.08);
+}
+
+.lfs-playlist-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.lfs-playlist-card > .lfs-playlist-button {
+  width: 100%;
+}
+
+.lfs-playlist-card > .lfs-playlist-button + .lfs-playlist-button {
+  margin-top: 0.5rem;
+}
+
+.lfs-playlist-primary {
+  border-color: var(--c-primary, #629924);
+  background: var(--c-primary, #629924);
+  color: var(--c-primary-over, #fff);
+}
+
+.lfs-playlist-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.lfs-playlist-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lfs-playlist-list a {
+  grid-column: 1;
+  color: inherit;
+}
+
+.lfs-playlist-item-status {
+  grid-column: 1;
+  color: var(--c-font-dim, #777);
+}
+
+.lfs-playlist-list .lfs-playlist-button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.lfs-playlist-toolbar {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+}
+
+.lfs-playlist-toolbar .lfs-playlist-button {
+  width: 100%;
+}
+
+.lfs-playlist-page {
+  box-sizing: border-box;
+  grid-column: 1 / -1;
+  min-width: 0;
+  min-height: 60vh;
+  width: 100%;
+  padding: clamp(1rem, 4vw, 3rem);
+  background: var(--c-bg-box, #fff);
+  color: var(--c-font, #333);
+}
+
+.lfs-playlist-page-header,
+.lfs-playlist-page-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.lfs-playlist-page-header h1 {
+  margin: 0;
+  font-size: clamp(1.5rem, 4vw, 2.25rem);
+}
+
+.lfs-playlist-page > p {
+  margin: 0.75rem 0 1.5rem;
+  color: var(--c-font-dim, #777);
+}
+
+.lfs-playlist-page .lfs-playlist-list {
+  max-width: 52rem;
+  margin-block: 1.5rem;
+}
+
+.lfs-playlist-page .lfs-playlist-list li {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--c-border, #aaa);
+}
+
+.lfs-playlist-page .lfs-playlist-list a {
+  font-size: 1.05rem;
+}
+
+.lfs-playlist-page-actions {
+  justify-content: flex-start;
+}
+
+.lfs-playlist-page-actions .lfs-playlist-button {
+  min-width: min(100%, 14rem);
+}
+
+.lfs-playlist-toolbar h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.lfs-review-ratings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.lfs-review-button {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.2rem;
+}
+
+.lfs-review-button small {
+  opacity: 0.75;
+}
+
+.lfs-review-saved {
+  margin: 0;
+  padding: 0.65rem;
+  background: var(--c-bg-high, #eee);
+}
+
+#lfs-puzzle-playlist-toolbar {
+  grid-area: session;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: clamp(0.85rem, 2vw, 1.25rem);
+  border: 1px solid var(--c-border, #aaa);
+  background: var(--c-bg-box, #fff);
+  color: var(--c-font, #333);
+}
+
+.puzzle__session > #lfs-puzzle-playlist-toolbar {
+  /* Lichess wraps result rows in reverse order; keep the playlist below them. */
+  order: -1;
+  flex: 0 0 100%;
+  margin-top: 0.85rem;
+}
+
+@media (min-width: 40rem) {
+  .lfs-review-ratings {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 [data-lfs-board-layout] {
@@ -511,31 +729,18 @@ html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board square.last-move {
   background: none !important;
 }
 
-html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board > svg.lfs-last-move-line,
+html:not([data-lfs-disabled]) cg-board > svg[data-lfs-board-overlay],
 html:not([data-lfs-disabled]) #lfs-pv-preview > svg.lfs-last-move-line {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  pointer-events: none;
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: visible !important;
+  pointer-events: none !important;
 }
 
-html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-selected-piece-wedge,
-html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-arc,
-html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-center-outline {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  pointer-events: none;
-}
-
-html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-center-outline {
-  z-index: 6 !important;
+html:not([data-lfs-disabled]) #lfs-pv-preview > svg.lfs-last-move-line {
+  z-index: 1 !important;
 }
 
 html:not([data-lfs-disabled]) .is2d cg-board piece > svg.lfs-king-movement-fields {
@@ -556,7 +761,7 @@ html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-center-outline[dat
   box-shadow: none !important;
 }
 
-html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board > svg.lfs-last-move-line polygon,
+html:not([data-lfs-disabled]) cg-board > svg.lfs-last-move-line polygon,
 html:not([data-lfs-disabled]) #lfs-pv-preview > svg.lfs-last-move-line polygon {
   fill: var(--lfs-last-move-color);
 }
@@ -622,8 +827,8 @@ html:not([data-lfs-disabled]) #promotion-choice square[data-lfs-promotion-tone="
   background-color: var(--lfs-board-dark-active) !important;
 }
 
-html:not([data-lfs-disabled]) .round__app:has(.main-board .cg-wrap.orientation-white) .material-top,
-html:not([data-lfs-disabled]) .round__app:has(.main-board .cg-wrap.orientation-black) .material-bottom {
+html:not([data-lfs-disabled]) .round__app:has(.main-board > .cg-wrap.orientation-white) .material-top,
+html:not([data-lfs-disabled]) .round__app:has(.main-board > .cg-wrap.orientation-black) .material-bottom {
   --lfs-captured-piece-color: var(--lfs-white-piece-color);
   --lfs-captured-pawn: var(--lfs-piece-wp);
   --lfs-captured-bishop: var(--lfs-piece-wb);
@@ -633,8 +838,8 @@ html:not([data-lfs-disabled]) .round__app:has(.main-board .cg-wrap.orientation-b
   --lfs-captured-king: var(--lfs-piece-wk);
 }
 
-html:not([data-lfs-disabled]) .round__app:has(.main-board .cg-wrap.orientation-white) .material-bottom,
-html:not([data-lfs-disabled]) .round__app:has(.main-board .cg-wrap.orientation-black) .material-top {
+html:not([data-lfs-disabled]) .round__app:has(.main-board > .cg-wrap.orientation-white) .material-bottom,
+html:not([data-lfs-disabled]) .round__app:has(.main-board > .cg-wrap.orientation-black) .material-top {
   --lfs-captured-piece-color: var(--lfs-black-piece-color);
   --lfs-captured-pawn: var(--lfs-piece-bp);
   --lfs-captured-bishop: var(--lfs-piece-bb);
@@ -644,8 +849,8 @@ html:not([data-lfs-disabled]) .round__app:has(.main-board .cg-wrap.orientation-b
   --lfs-captured-king: var(--lfs-piece-bk);
 }
 
-html:not([data-lfs-disabled]) .analyse__board:has(.cg-wrap.orientation-white) .material-top,
-html:not([data-lfs-disabled]) .analyse__board:has(.cg-wrap.orientation-black) .material-bottom,
+html:not([data-lfs-disabled]) .analyse__board:has(> .cg-wrap.orientation-white) .material-top,
+html:not([data-lfs-disabled]) .analyse__board:has(> .cg-wrap.orientation-black) .material-bottom,
 html:not([data-lfs-disabled]) .bot-game:has(.cg-wrap.orientation-white) .material-top,
 html:not([data-lfs-disabled]) .bot-game:has(.cg-wrap.orientation-black) .material-bottom {
   --lfs-captured-piece-color: var(--lfs-white-piece-color);
@@ -657,8 +862,8 @@ html:not([data-lfs-disabled]) .bot-game:has(.cg-wrap.orientation-black) .materia
   --lfs-captured-king: var(--lfs-piece-wk);
 }
 
-html:not([data-lfs-disabled]) .analyse__board:has(.cg-wrap.orientation-white) .material-bottom,
-html:not([data-lfs-disabled]) .analyse__board:has(.cg-wrap.orientation-black) .material-top,
+html:not([data-lfs-disabled]) .analyse__board:has(> .cg-wrap.orientation-white) .material-bottom,
+html:not([data-lfs-disabled]) .analyse__board:has(> .cg-wrap.orientation-black) .material-top,
 html:not([data-lfs-disabled]) .bot-game:has(.cg-wrap.orientation-white) .material-bottom,
 html:not([data-lfs-disabled]) .bot-game:has(.cg-wrap.orientation-black) .material-top {
   --lfs-captured-piece-color: var(--lfs-black-piece-color);

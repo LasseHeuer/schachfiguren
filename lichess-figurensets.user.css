@@ -145,8 +145,8 @@ html:has(cg-board) .material mpiece {
   background: var(--captured-piece-color) !important;
 }
 
-html:has(cg-board) .round__app:has(.main-board .cg-wrap.orientation-white) .material-top,
-html:has(cg-board) .round__app:has(.main-board .cg-wrap.orientation-black) .material-bottom {
+html:has(cg-board) .round__app:has(.main-board > .cg-wrap.orientation-white) .material-top,
+html:has(cg-board) .round__app:has(.main-board > .cg-wrap.orientation-black) .material-bottom {
   --captured-piece-color: var(--white-piece-color);
   --captured-pawn: url(/*[[figurenset]]*//wp.svg?v=2);
   --captured-bishop: url(/*[[figurenset]]*//wb.svg?v=2);
@@ -156,8 +156,8 @@ html:has(cg-board) .round__app:has(.main-board .cg-wrap.orientation-black) .mate
   --captured-king: url(/*[[figurenset]]*//wk.svg?v=2);
 }
 
-html:has(cg-board) .round__app:has(.main-board .cg-wrap.orientation-white) .material-bottom,
-html:has(cg-board) .round__app:has(.main-board .cg-wrap.orientation-black) .material-top {
+html:has(cg-board) .round__app:has(.main-board > .cg-wrap.orientation-white) .material-bottom,
+html:has(cg-board) .round__app:has(.main-board > .cg-wrap.orientation-black) .material-top {
   --captured-piece-color: var(--black-piece-color);
   --captured-pawn: url(/*[[figurenset]]*//bp.svg?v=2);
   --captured-bishop: url(/*[[figurenset]]*//bb.svg?v=2);
@@ -167,8 +167,8 @@ html:has(cg-board) .round__app:has(.main-board .cg-wrap.orientation-black) .mate
   --captured-king: url(/*[[figurenset]]*//bk.svg?v=2);
 }
 
-html:has(cg-board) .analyse__board:has(.cg-wrap.orientation-white) .material-top,
-html:has(cg-board) .analyse__board:has(.cg-wrap.orientation-black) .material-bottom,
+html:has(cg-board) .analyse__board:has(> .cg-wrap.orientation-white) .material-top,
+html:has(cg-board) .analyse__board:has(> .cg-wrap.orientation-black) .material-bottom,
 html:has(cg-board) .bot-game:has(.cg-wrap.orientation-white) .material-top,
 html:has(cg-board) .bot-game:has(.cg-wrap.orientation-black) .material-bottom {
   --captured-piece-color: var(--white-piece-color);
@@ -180,8 +180,8 @@ html:has(cg-board) .bot-game:has(.cg-wrap.orientation-black) .material-bottom {
   --captured-king: url(/*[[figurenset]]*//wk.svg?v=2);
 }
 
-html:has(cg-board) .analyse__board:has(.cg-wrap.orientation-white) .material-bottom,
-html:has(cg-board) .analyse__board:has(.cg-wrap.orientation-black) .material-top,
+html:has(cg-board) .analyse__board:has(> .cg-wrap.orientation-white) .material-bottom,
+html:has(cg-board) .analyse__board:has(> .cg-wrap.orientation-black) .material-top,
 html:has(cg-board) .bot-game:has(.cg-wrap.orientation-white) .material-bottom,
 html:has(cg-board) .bot-game:has(.cg-wrap.orientation-black) .material-top {
   --captured-piece-color: var(--black-piece-color);
@@ -219,7 +219,7 @@ html:has(cg-board) .material mpiece.king { -webkit-mask: var(--captured-king) ce
 /* Die Mischebene liegt ueber der Oberflaeche, nicht aber ueber Brett und Figuren. */
 html:has(cg-board) .cg-wrap {
   position: relative;
-  z-index: auto !important;
+  z-index: 2147483646 !important;
 }
 
 html:has(cg-board) .cg-wrap cg-board,
@@ -239,6 +239,7 @@ html:has(cg-board) #top:hover {
   z-index: 2147483647 !important;
 }
 
+html:has(cg-board) body:has(#top:hover) .cg-wrap,
 html:has(cg-board) body:has(#top:hover) .cg-wrap cg-board,
 html:has(cg-board) body:has(#top:hover) .cg-wrap > piece,
 html:has(cg-board) body:has(#top:hover) .cg-wrap .cg-custom-svgs,

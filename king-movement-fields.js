@@ -48,7 +48,8 @@
     let complete = true;
 
     for (const element of board.querySelectorAll(":scope > piece")) {
-      if (element.classList.contains("ghost") || element.classList.contains("fading") || element.classList.contains("dragging")) {
+      if (element.classList.contains("ghost") || element.classList.contains("fading")
+        || element.classList.contains("dragging") || element.classList.contains("anim")) {
         complete = false;
         continue;
       }
@@ -173,8 +174,8 @@
 
     const parsed = readPosition(board);
     if (!parsed) return;
+    if (!parsed.complete) return;
     if (!parsed.kings.length) {
-      if (!parsed.complete) return;
       removeOverlays(entry);
       return;
     }
