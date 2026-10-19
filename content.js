@@ -126,6 +126,7 @@
         if (enabled) scheduleZenCenter();
         else {
           clearZenOffset(zenBoard);
+          syncZenPromotionChoice();
           syncNormalRoundLayout();
         }
         if (event.detail) zenToggle.blur();
@@ -295,10 +296,34 @@
         document.dispatchEvent(new Event("scroll"));
       }
       requestAnimationFrame(() => {
+        syncZenPromotionChoice();
         syncZenSideElements();
         schedulePvPreviewSync();
       });
     });
+  }
+
+  function syncZenPromotionChoice() {
+    const choice = document.querySelector("#promotion-choice");
+    if (!choice) return;
+    if (!zenBoard || !document.documentElement.hasAttribute("data-lfs-zen-mode") || zenBoard.contains(choice)) {
+      choice.removeAttribute("data-lfs-zen-promotion-outside-board");
+      choice.style.removeProperty("--lfs-zen-promotion-top");
+      choice.style.removeProperty("--lfs-zen-promotion-left");
+      choice.style.removeProperty("--lfs-zen-promotion-width");
+      choice.style.removeProperty("--lfs-zen-promotion-height");
+      return;
+    }
+
+    const board = zenBoard.querySelector("cg-board");
+    const rect = board?.getBoundingClientRect();
+    if (!rect?.width || !rect.height) return;
+
+    choice.setAttribute("data-lfs-zen-promotion-outside-board", "");
+    choice.style.setProperty("--lfs-zen-promotion-top", `${rect.top}px`);
+    choice.style.setProperty("--lfs-zen-promotion-left", `${rect.left}px`);
+    choice.style.setProperty("--lfs-zen-promotion-width", `${rect.width}px`);
+    choice.style.setProperty("--lfs-zen-promotion-height", `${rect.height}px`);
   }
 
   function ensureZenClockOverlay() {

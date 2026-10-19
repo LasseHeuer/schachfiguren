@@ -222,6 +222,8 @@ html[data-lfs-zen-mode] [data-lfs-zen-board] cg-board,
 html[data-lfs-zen-mode] [data-lfs-zen-board] cg-board *,
 html[data-lfs-zen-mode] [data-lfs-zen-side],
 html[data-lfs-zen-mode] [data-lfs-zen-side] *,
+html[data-lfs-zen-mode] #promotion-choice,
+html[data-lfs-zen-mode] #promotion-choice *,
 html[data-lfs-zen-mode] .material,
 html[data-lfs-zen-mode] .material * {
   visibility: visible !important;
@@ -434,6 +436,19 @@ html:not([data-lfs-disabled]) #lfs-pv-preview > .lfs-pv-piece {
 /* Translation creates a stacking context; keep it above the page mix layer. */
 html[data-lfs-zen-mode] body [data-lfs-zen-board] {
   z-index: 2147483647 !important;
+}
+
+html[data-lfs-zen-mode] #promotion-choice[data-lfs-zen-promotion-outside-board] {
+  position: fixed !important;
+  inset: auto !important;
+  top: var(--lfs-zen-promotion-top) !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: var(--lfs-zen-promotion-left) !important;
+  width: var(--lfs-zen-promotion-width) !important;
+  height: var(--lfs-zen-promotion-height) !important;
+  transform: none !important;
+  translate: none !important;
 }
 
 html[data-lfs-zen-mode] body :is(button, a[href], input, select, textarea, [role="button"]),
