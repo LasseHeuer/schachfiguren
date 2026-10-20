@@ -15,6 +15,9 @@
     zenClockMarginPx: 8,
     zenClockLineThicknessPx: 3,
     zenClockLineGapPx: 4,
+    zenClockBlinkFrequency: 2,
+    zenClockActiveEndSizePercent: 8,
+    zenClockActiveEndBlendPercent: 25,
     zenClockShowTimeOnlyWhenLow: false,
     lastMoveLight: "#dae0d7",
     lastMoveLineWidth: 16,
@@ -158,6 +161,9 @@
     zenClockMarginPx: [0, 48],
     zenClockLineThicknessPx: [1, 10],
     zenClockLineGapPx: [0, 24],
+    zenClockBlinkFrequency: [0.5, 5],
+    zenClockActiveEndSizePercent: [1, 30],
+    zenClockActiveEndBlendPercent: [0, 50],
     idleMixPercent: [0, 100],
     hoverMixPercent: [0, 100],
     hoverDesaturation: [0, 100],
@@ -313,9 +319,10 @@
     result.engineArrowStartOffsetPercent = Math.round(result.engineArrowStartOffsetPercent);
     result.engineArrowEndOffsetPercent = Math.round(result.engineArrowEndOffsetPercent);
     result.lastMoveLineWidth = Math.round(result.lastMoveLineWidth);
-    for (const key of ["zenClockFontSizePx", "zenClockMarginPx", "zenClockLineThicknessPx", "zenClockLineGapPx"]) {
+    for (const key of ["zenClockFontSizePx", "zenClockMarginPx", "zenClockLineThicknessPx", "zenClockLineGapPx", "zenClockActiveEndSizePercent", "zenClockActiveEndBlendPercent"]) {
       result[key] = Math.round(result[key]);
     }
+    result.zenClockBlinkFrequency = Number(result.zenClockBlinkFrequency.toFixed(1));
     result.engineArrowHeadSizePercent = Math.round(result.engineArrowHeadSizePercent);
 
     result.threatArcGapPercent = Math.round(result.threatArcGapPercent);

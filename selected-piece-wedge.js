@@ -24,6 +24,7 @@
   let hatchScrollLastTime = null;
   let hatchScrollDistance = 0;
 
+
   function scheduleRender(board) {
     const entry = observedBoards.get(board);
     if (!entry || entry.frame) return;
@@ -77,11 +78,24 @@
     }
   }
 
-  document.addEventListener("pointermove", () => {
-    for (const board of observedBoards.keys()) {
-      if (globalThis.LichessThreatCoding?.getInteractionPreview(board)) scheduleRender(board);
+  document.addEventListener("lfs-hover-preview-change", event => scheduleRender(event.detail));
+
+  document.addEventListener("pointermove", event => {
+    for (const [board, entry] of observedBoards) {
+      const hasDraggingPiece = Boolean(board.querySelector(":scope > piece.dragging"));
+      if (!board.contains(event.target) && !entry.previewPieceSvg && !hasDraggingPiece) continue;
+      if (!entry.previewPieceSvg && !hasDraggingPiece && !board.querySelector(":scope > square.selected")) continue;
+
+      const preview = globalThis.LichessThreatCoding?.getInteractionPreview(board, event.clientX, event.clientY);
+      if (preview?.isHoverPreview) {
+        const targetKey = `${preview.source.row},${preview.source.col}:${preview.target.row},${preview.target.col}`;
+        if (!entry.previewPieceSvg || entry.previewTargetKey !== targetKey) scheduleRender(board);
+      } else if (preview || entry.previewPieceSvg) {
+        scheduleRender(board);
+      }
     }
   }, true);
+
 
   function getScreenSquare(element, board) {
     const style = getComputedStyle(element);
@@ -506,6 +520,13 @@
         }
         threats.push({ square, color: piece.color, type: piece.type, attackers });
       } else clearThreatenedPieceOutline(element);
+    }
+    if (enabled && dragPreview?.isHoverPreview
+      && (dragPreview.target.row !== dragPreview.source.row || dragPreview.target.col !== dragPreview.source.col)) {
+      const square = logicalToScreen(dragPreview.target, dragPreview.blackOrientation);
+      const piece = position[square.row]?.[square.col];
+      const attackers = piece && threatened[piece.color].get(`${square.row},${square.col}`);
+      if (attackers) threats.push({ square, color: piece.color, type: piece.type, attackers });
     }
     return threats;
   }
@@ -1777,7 +1798,10 @@
   // The drag preview has no DOM elements; the rotation of an outlined figure comes from its own element.
   function findPieceElement(board, square, dragPreview, blackOrientation) {
     const draggedSquare = dragPreview && logicalToScreen(dragPreview.legal ? dragPreview.target : dragPreview.source, dragPreview.blackOrientation);
-    if (draggedSquare?.row === square.row && draggedSquare?.col === square.col) return getDraggingPiece(board);
+    if (draggedSquare?.row === square.row && draggedSquare?.col === square.col) {
+      if (!dragPreview.isHoverPreview) return getDraggingPiece(board);
+      square = logicalToScreen(dragPreview.source, dragPreview.blackOrientation);
+    }
     return [...board.querySelectorAll(":scope > piece")].find(element => {
       if (element.classList.contains("ghost") || element.classList.contains("fading") || element.classList.contains("dragging")) return false;
       const screen = getPieceScreenSquare(element, board, blackOrientation);
@@ -1785,12 +1809,259 @@
     }) ?? null;
   }
 
+  function clearMovePreviewPiece(board, entry) {
+    for (const square of board.querySelectorAll(":scope > square[data-lfs-preview-move-dest]")) {
+      square.removeAttribute("data-lfs-preview-move-dest");
+    }
+    for (const piece of board.querySelectorAll(":scope > piece[data-lfs-move-preview-origin], :scope > piece[data-lfs-move-preview-hidden]")) {
+      piece.removeAttribute("data-lfs-move-preview-origin");
+      piece.removeAttribute("data-lfs-move-preview-hidden");
+    }
+    if (entry.previewAnimationFrame) cancelAnimationFrame(entry.previewAnimationFrame);
+    entry.previewAnimationFrame = 0;
+    entry.previewAnimation = null;
+    entry.previewTranslation = { x: 0, y: 0 };
+    entry.previewOpacity = 0;
+    entry.previewTargetKey = null;
+    entry.previewSourceKey = null;
+    if (!entry.previewPieceSvg) return;
+    entry.previewPieceSvg.remove();
+    entry.previewPieceSvg = null;
+    entry.previewPieceGroup = null;
+    entry.previewPieceImage = null;
+  }
+
+  function bezierCoordinate(t, firstControl, secondControl) {
+    const inverse = 1 - t;
+    return 3 * inverse * inverse * t * firstControl + 3 * inverse * t * t * secondControl + t * t * t;
+  }
+
+  function getMovePreviewEasedProgress(progress) {
+    // Use the same configurable curve as the candidate-move animation.
+    const [time1, value1, time2, value2] = settings.moveAnimationCurve;
+    let low = 0;
+    let high = 1;
+    for (let iteration = 0; iteration < 12; iteration++) {
+      const middle = (low + high) / 2;
+      if (bezierCoordinate(middle, time1, time2) < progress) low = middle;
+      else high = middle;
+    }
+    return bezierCoordinate((low + high) / 2, value1 / -90, value2 / -90);
+  }
+
+  function getMovePreviewState(entry, now = performance.now()) {
+    const animation = entry.previewAnimation;
+    if (!animation) return { ...entry.previewTranslation, opacity: entry.previewOpacity };
+    const progress = Math.min(1, (now - animation.startedAt) / animation.duration);
+    const eased = getMovePreviewEasedProgress(progress);
+    return {
+      x: animation.from.x + (animation.to.x - animation.from.x) * eased,
+      y: animation.from.y + (animation.to.y - animation.from.y) * eased,
+      opacity: animation.from.opacity + (1 - animation.from.opacity) * eased
+    };
+  }
+
+  function setMovePreviewTarget(board, entry, preview, sourceSquare, targetSquare) {
+    const targetKey = `${preview.source.row},${preview.source.col}:${preview.target.row},${preview.target.col}`;
+    const sourceKey = `${sourceSquare.row},${sourceSquare.col}`;
+    const to = { x: targetSquare.col - sourceSquare.col, y: targetSquare.row - sourceSquare.row };
+    if (entry.previewSourceKey !== sourceKey) {
+      if (entry.previewAnimationFrame) cancelAnimationFrame(entry.previewAnimationFrame);
+      entry.previewAnimationFrame = 0;
+      entry.previewAnimation = null;
+      entry.previewTranslation = { x: 0, y: 0 };
+      entry.previewOpacity = 0;
+      entry.previewTargetKey = null;
+      entry.previewSourceKey = sourceKey;
+      entry.previewPieceGroup.setAttribute("transform", "translate(0 0)");
+      entry.previewPieceGroup.setAttribute("opacity", "0");
+    }
+    if (entry.previewTargetKey === targetKey) {
+      const currentAnimation = entry.previewAnimation;
+      const animationAlreadyTargets = currentAnimation
+        && Math.hypot(currentAnimation.to.x - to.x, currentAnimation.to.y - to.y) < 0.005;
+      const alreadyAtTarget = !currentAnimation
+        && Math.hypot(entry.previewTranslation.x - to.x, entry.previewTranslation.y - to.y) < 0.005;
+      if (settings.disableAnimations) {
+        if (alreadyAtTarget) return;
+        if (entry.previewAnimationFrame) cancelAnimationFrame(entry.previewAnimationFrame);
+        entry.previewAnimationFrame = 0;
+        entry.previewAnimation = null;
+        entry.previewPieceGroup.setAttribute("transform", `translate(${to.x} ${to.y})`);
+        entry.previewTranslation = to;
+        entry.previewPieceGroup.setAttribute("opacity", "1");
+        entry.previewOpacity = 1;
+        return;
+      }
+      if (alreadyAtTarget || animationAlreadyTargets) return;
+    }
+
+    const now = performance.now();
+    const from = getMovePreviewState(entry, now);
+    if (entry.previewAnimationFrame) cancelAnimationFrame(entry.previewAnimationFrame);
+    entry.previewAnimationFrame = 0;
+    entry.previewAnimation = null;
+    entry.previewPieceGroup.setAttribute("transform", `translate(${from.x} ${from.y})`);
+    entry.previewPieceGroup.setAttribute("opacity", String(from.opacity));
+    entry.previewTranslation = { x: from.x, y: from.y };
+    entry.previewOpacity = from.opacity;
+    entry.previewTargetKey = targetKey;
+
+    // Same duration formula as the normal move animation (move-animation.js).
+    const remaining = Math.hypot(to.x - from.x, to.y - from.y);
+    const travel = settings.moveAnimationTimeDistance ? Math.hypot(to.x, to.y) : 1;
+    const baseDuration = settings.moveAnimationLichessSpeed ? 250 : settings.moveAnimationDuration;
+    const distanceFactor = settings.moveAnimationTimeDistance ? settings.moveAnimationDistanceFactor : 0;
+    const duration = baseDuration + travel * distanceFactor * baseDuration;
+    if (!settings.enabled || settings.disableAnimations || duration <= 0 || remaining < 0.005) {
+      entry.previewPieceGroup.setAttribute("transform", `translate(${to.x} ${to.y})`);
+      entry.previewTranslation = to;
+      entry.previewOpacity = 1;
+      entry.previewPieceGroup.setAttribute("opacity", "1");
+      return;
+    }
+
+    entry.previewAnimation = { from, to, startedAt: now, duration };
+    const animate = timestamp => {
+      const animation = entry.previewAnimation;
+      if (!animation) return;
+      const progress = Math.min(1, (timestamp - animation.startedAt) / animation.duration);
+      const eased = getMovePreviewEasedProgress(progress);
+      const current = {
+        x: animation.from.x + (animation.to.x - animation.from.x) * eased,
+        y: animation.from.y + (animation.to.y - animation.from.y) * eased,
+        opacity: animation.from.opacity + (1 - animation.from.opacity) * eased
+      };
+      entry.previewPieceGroup.setAttribute("transform", `translate(${current.x} ${current.y})`);
+      entry.previewPieceGroup.setAttribute("opacity", String(current.opacity));
+      entry.previewTranslation = current;
+      entry.previewOpacity = current.opacity;
+      if (progress >= 1) {
+        entry.previewTranslation = animation.to;
+        entry.previewOpacity = 1;
+        entry.previewAnimation = null;
+        entry.previewAnimationFrame = 0;
+        return;
+      }
+      entry.previewAnimationFrame = requestAnimationFrame(animate);
+    };
+    entry.previewAnimationFrame = requestAnimationFrame(animate);
+  }
+
+  function renderMovePreviewPiece(board, entry, preview) {
+    for (const square of board.querySelectorAll(":scope > square[data-lfs-preview-move-dest]")) {
+      square.removeAttribute("data-lfs-preview-move-dest");
+    }
+    for (const piece of board.querySelectorAll(":scope > piece[data-lfs-move-preview-origin], :scope > piece[data-lfs-move-preview-hidden]")) {
+      piece.removeAttribute("data-lfs-move-preview-origin");
+      piece.removeAttribute("data-lfs-move-preview-hidden");
+    }
+    if (!preview?.isHoverPreview || !preview.legal) {
+      clearMovePreviewPiece(board, entry);
+      return;
+    }
+
+    const { basePosition, position, blackOrientation } = preview;
+    const newPieces = [];
+    const changedPieces = [];
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const previous = basePosition[row][col];
+        const next = position[row][col];
+        if (previous === next) continue;
+        const square = logicalToScreen({ row, col }, blackOrientation);
+        if (previous) changedPieces.push({ piece: previous, square, source: { row, col } });
+        if (next) newPieces.push({ piece: next, square });
+      }
+    }
+
+    for (const changed of changedPieces) {
+      const element = findPieceElement(board, changed.square, null, blackOrientation);
+      if (!element) continue;
+      const isSelectedOrigin = changed.source.row === preview.source.row && changed.source.col === preview.source.col;
+      const pieceMovesElsewhere = newPieces.some(candidate => candidate.piece === changed.piece
+        && (candidate.square.row !== changed.square.row || candidate.square.col !== changed.square.col));
+      element.setAttribute(isSelectedOrigin || pieceMovesElsewhere
+        ? "data-lfs-move-preview-origin"
+        : "data-lfs-move-preview-hidden", "");
+    }
+    if (preview.source.row === preview.target.row && preview.source.col === preview.target.col) {
+      const sourceSquare = logicalToScreen(preview.source, blackOrientation);
+      findPieceElement(board, sourceSquare, null, blackOrientation)?.setAttribute("data-lfs-move-preview-origin", "");
+    }
+
+    if (!entry.previewPieceSvg) {
+      entry.previewPieceSvg = document.createElementNS(svgNamespace, "svg");
+      entry.previewPieceSvg.classList.add("lfs-move-preview-piece");
+      entry.previewPieceSvg.setAttribute("viewBox", "0 0 8 8");
+      entry.previewPieceSvg.setAttribute("aria-hidden", "true");
+    }
+
+    const sourceSquare = logicalToScreen(preview.source, blackOrientation);
+    const targetSquare = logicalToScreen(preview.target, blackOrientation);
+    for (const square of board.querySelectorAll(":scope > square.move-dest, :scope > square.premove-dest")) {
+      const screen = getScreenSquare(square, board);
+      if (screen?.row === targetSquare.row && screen.col === targetSquare.col) {
+        square.setAttribute("data-lfs-preview-move-dest", "");
+      }
+    }
+    if (!entry.previewPieceGroup) {
+      entry.previewPieceGroup = document.createElementNS(svgNamespace, "g");
+      entry.previewPieceGroup.setAttribute("transform", "translate(0 0)");
+      entry.previewPieceImage = document.createElementNS(svgNamespace, "image");
+      entry.previewPieceImage.setAttribute("width", "1");
+      entry.previewPieceImage.setAttribute("height", "1");
+      entry.previewPieceImage.setAttribute("preserveAspectRatio", "xMidYMid meet");
+      entry.previewPieceImage.setAttribute("pointer-events", "none");
+      entry.previewPieceGroup.append(entry.previewPieceImage);
+      entry.previewPieceSvg.append(entry.previewPieceGroup);
+    }
+
+    const movedPiece = position[preview.target.row][preview.target.col];
+    const color = movedPiece[0];
+    const type = pieceNamesByLetter[movedPiece[1]];
+    entry.previewPieceImage.setAttribute("x", String(sourceSquare.col));
+    entry.previewPieceImage.setAttribute("y", String(sourceSquare.row));
+    entry.previewPieceImage.setAttribute("href", getPieceAssetUrl(color, type));
+    if (isPieceRotated(color, blackOrientation)) {
+      entry.previewPieceImage.setAttribute("transform", `rotate(180 ${sourceSquare.col + 0.5} ${sourceSquare.row + 0.5})`);
+    } else {
+      entry.previewPieceImage.removeAttribute("transform");
+    }
+
+    for (const child of [...entry.previewPieceSvg.children]) {
+      if (child !== entry.previewPieceGroup) child.remove();
+    }
+    for (const { piece, square } of newPieces) {
+      if (square.row === targetSquare.row && square.col === targetSquare.col) continue;
+      const image = document.createElementNS(svgNamespace, "image");
+      const otherColor = piece[0];
+      const otherType = pieceNamesByLetter[piece[1]];
+      image.setAttribute("x", String(square.col));
+      image.setAttribute("y", String(square.row));
+      image.setAttribute("width", "1");
+      image.setAttribute("height", "1");
+      image.setAttribute("preserveAspectRatio", "xMidYMid meet");
+      image.setAttribute("href", getPieceAssetUrl(otherColor, otherType));
+      image.setAttribute("pointer-events", "none");
+      if (isPieceRotated(otherColor, blackOrientation)) {
+        image.setAttribute("transform", `rotate(180 ${square.col + 0.5} ${square.row + 0.5})`);
+      }
+      entry.previewPieceSvg.append(image);
+    }
+    setMovePreviewTarget(board, entry, preview, sourceSquare, targetSquare);
+    globalThis.LichessBoardOverlay.place(board, entry.previewPieceSvg, "above-pieces");
+    const lineOverlay = [...board.children].find(child => child === entry.arcSvg || child === entry.centerSvg);
+    if (lineOverlay) board.insertBefore(entry.previewPieceSvg, lineOverlay);
+  }
+
   function renderBoard(board, entry) {
     clearMoveOutlineMarkers(board);
     clearMoveDestinationMarkers(board);
 
-    const dragPreview = globalThis.LichessThreatCoding?.getInteractionPreview(board);
-    const parsed = dragPreview ? readDragPreview(dragPreview) : readPosition(board);
+    const movePreview = globalThis.LichessThreatCoding?.getInteractionPreview(board);
+    const dragPreview = movePreview;
+    const parsed = movePreview ? readDragPreview(movePreview) : readPosition(board);
     const selectedPiece = parsed?.selected && parsed.position[parsed.selected.row]?.[parsed.selected.col];
     const selectedColor = settings?.enabled && settings.moveDotsPlayerColor ? selectedPiece?.color : null;
     if (board.getAttribute("data-lfs-selected-piece-color") !== (selectedColor ?? "")) {
@@ -1799,6 +2070,7 @@
     }
 
     if (!settings?.enabled || !board.closest(".is2d") || !parsed) {
+      clearMovePreviewPiece(board, entry);
       updateThreatenedPieces(board, null, dragPreview, { w: new Map(), b: new Map() }, false, false);
       renderThreatArcs(board, entry, []);
       entry.svg?.remove();
@@ -1918,6 +2190,7 @@
       settings.threatAttackDisplayMode,
       settings.threatDefenseDisplayMode
     );
+    renderMovePreviewPiece(board, entry, movePreview);
     if (!wedges.length) {
       entry.svg?.remove();
       entry.svg = null;
@@ -2244,7 +2517,20 @@
   function observeBoard(board) {
     if (observedBoards.has(board)) return;
     const entry = {
-      svg: null, arcSvg: null, centerSvg: null, frame: 0, hatchPatterns: []
+      svg: null,
+      arcSvg: null,
+      centerSvg: null,
+      previewPieceSvg: null,
+      previewPieceGroup: null,
+      previewPieceImage: null,
+      previewAnimation: null,
+      previewAnimationFrame: 0,
+      previewTranslation: { x: 0, y: 0 },
+      previewOpacity: 0,
+      previewTargetKey: null,
+      previewSourceKey: null,
+      frame: 0,
+      hatchPatterns: []
     };
     observedBoards.set(board, entry);
 
@@ -2296,10 +2582,12 @@
       entry.wrapperObserver?.disconnect();
       entry.resizeObserver?.disconnect();
       if (entry.frame) cancelAnimationFrame(entry.frame);
+
       for (const piece of board.querySelectorAll(":scope > piece")) clearThreatenedPieceOutline(piece);
       entry.svg?.remove();
       entry.arcSvg?.remove();
       entry.centerSvg?.remove();
+      clearMovePreviewPiece(board, entry);
       observedBoards.delete(board);
     }
     syncHatchAnimation();

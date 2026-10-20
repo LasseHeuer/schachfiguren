@@ -51,12 +51,14 @@
   let zenOrientationBoard;
   let zenCenterFrame;
   let zenClockFrame;
+  let zenClockProgressFrame;
   let zenSideFrame;
   let zenSideElements = [];
   let zenClockOverlay;
   let zenClockRows;
   let zenClockSources = { top: null, bottom: null };
   const zenClockMaxTimes = new WeakMap();
+  const zenClockProgress = new WeakMap();
   let normalRoundApp;
   let normalRoundSide;
   let normalRoundTable;
@@ -372,6 +374,9 @@
       bar.className = "lfs-zen-clock-bar";
       const fill = document.createElement("span");
       fill.className = "lfs-zen-clock-fill";
+      const end = document.createElement("span");
+      end.className = "lfs-zen-clock-active-end";
+      fill.append(end);
       bar.append(fill);
       row.append(time, bar);
       zenClockOverlay.append(row);
@@ -387,25 +392,45 @@
     return match[0].replace(",", ".").split(":").reduce((total, part) => total * 60 + Number(part), 0);
   }
 
-  function rememberZenClockMaximum(source) {
-    const remaining = clockSeconds(source);
+  function rememberZenClockMaximum(source, remaining = clockSeconds(source)) {
     if (remaining === null) return null;
     const maximum = Math.max(zenClockMaxTimes.get(source) ?? remaining, remaining);
     zenClockMaxTimes.set(source, maximum);
     return { remaining, maximum };
   }
 
-  function updateZenClock(side, source) {
+  function updateZenClock(side, source, now = performance.now()) {
     const { row, time, fill } = zenClockRows[side];
     row.hidden = !source;
-    if (!source) return;
+    if (!source) {
+      row.removeAttribute("data-running");
+      row.removeAttribute("data-critical");
+      return false;
+    }
 
     const face = source.matches(".clock") ? source : source.querySelector(".clock") ?? source;
-    const clockTime = rememberZenClockMaximum(source);
-    const remaining = clockTime?.remaining ?? null;
+    const reading = clockSeconds(source);
+    const clockTime = rememberZenClockMaximum(source, reading);
+    const running = face.matches(".running") || source.matches(".running") || Boolean(source.querySelector(".running"));
+    const nextText = face.textContent.trim();
+    let progress = zenClockProgress.get(source);
+    if (reading !== null && (!progress || progress.reading !== reading || progress.running !== running)) {
+      let remaining = reading;
+      if (running && progress?.running && reading <= progress.reading) {
+        // Carry the sub-second estimate across displayed clock ticks to avoid visible steps.
+        const predicted = progress.remaining - (now - progress.timestamp) / 1000;
+        if (predicted >= reading && predicted - reading <= 1.1) remaining = predicted;
+      }
+      progress = { reading, remaining, timestamp: now, running };
+      zenClockProgress.set(source, progress);
+    }
+    const remaining = reading === null ? null : running
+      ? Math.max(0, progress.remaining - (now - progress.timestamp) / 1000)
+      : reading;
+    row.toggleAttribute("data-running", running);
+    row.toggleAttribute("data-critical", remaining !== null && remaining <= 10);
     const showTime = !settings.zenClockShowTimeOnlyWhenLow || remaining !== null && remaining <= 10;
     time.hidden = !showTime;
-    const nextText = face.textContent.trim();
     if (showTime && time.textContent !== nextText) time.textContent = nextText;
     if (clockTime) {
       const width = `${Math.max(0, Math.min(100, remaining / clockTime.maximum * 100))}%`;
@@ -413,23 +438,34 @@
     } else {
       if (fill.style.width !== "100%") fill.style.width = "100%";
     }
+    return running;
+  }
+
+  function animateZenClockProgress() {
+    zenClockProgressFrame = 0;
+    if (document.hidden || !document.documentElement.hasAttribute("data-lfs-zen-mode") || !zenClockRows) return;
+    const now = performance.now();
+    const topRunning = updateZenClock("top", zenClockSources.top, now);
+    const bottomRunning = updateZenClock("bottom", zenClockSources.bottom, now);
+    if (topRunning || bottomRunning) zenClockProgressFrame = requestAnimationFrame(animateZenClockProgress);
+  }
+
+  function scheduleZenClockProgress() {
+    cancelAnimationFrame(zenClockProgressFrame);
+    if (!document.hidden) zenClockProgressFrame = requestAnimationFrame(animateZenClockProgress);
   }
 
   function positionZenClock(side, boardRect) {
-    const { row, bar } = zenClockRows[side];
+    const { row, fill } = zenClockRows[side];
     if (row.hidden) return;
     row.style.left = `${boardRect.left}px`;
     row.style.width = `${boardRect.width}px`;
+    fill.style.setProperty("--lfs-zen-clock-end-size", `${boardRect.width * settings.zenClockActiveEndSizePercent / 100}px`);
     const margin = settings.zenClockMarginPx;
     const top = side === "top"
       ? boardRect.top - margin - row.getBoundingClientRect().height
       : boardRect.bottom + margin;
     row.style.top = `${top}px`;
-
-    const devicePixelRatio = window.devicePixelRatio || 1;
-    bar.style.transform = "none";
-    const barTop = bar.getBoundingClientRect().top;
-    bar.style.transform = `translateY(${Math.round(barTop * devicePixelRatio) / devicePixelRatio - barTop}px)`;
   }
 
   function setZenClockPlayerColors() {
@@ -444,16 +480,19 @@
 
   function scheduleZenClockUpdate() {
     cancelAnimationFrame(zenClockFrame);
+    cancelAnimationFrame(zenClockProgressFrame);
     zenClockFrame = requestAnimationFrame(() => {
       if (!document.documentElement.hasAttribute("data-lfs-zen-mode") || !zenClockRows) return;
       setZenClockPlayerColors();
       const boardRect = zenBoard?.querySelector("cg-board")?.getBoundingClientRect();
-      updateZenClock("top", zenClockSources.top);
-      updateZenClock("bottom", zenClockSources.bottom);
+      const now = performance.now();
+      const topRunning = updateZenClock("top", zenClockSources.top, now);
+      const bottomRunning = updateZenClock("bottom", zenClockSources.bottom, now);
       if (boardRect?.width && boardRect.height) {
         positionZenClock("top", boardRect);
         positionZenClock("bottom", boardRect);
       }
+      if (topRunning || bottomRunning) scheduleZenClockProgress();
     });
   }
 
@@ -474,10 +513,18 @@
       const rect = element.getBoundingClientRect();
       return rect.width > 0 && rect.height > 0;
     };
-    const materials = [...root.querySelectorAll(".material")].filter(visible);
+    const materials = [...root.querySelectorAll(".material")];
     let clocks = [...root.querySelectorAll(".rclock")].filter(visible);
     if (!clocks.length) clocks = [...root.querySelectorAll(".clock")].filter(visible);
-    const nextElements = [...new Set(materials)];
+    let topMaterial = materials.find(element => element.classList.contains("material-top"));
+    let bottomMaterial = materials.find(element => element.classList.contains("material-bottom"));
+    if (!topMaterial && !bottomMaterial) {
+      [topMaterial, bottomMaterial] = [materials[0] ?? null, materials[1] ?? null];
+    } else {
+      topMaterial ??= materials.find(element => element !== bottomMaterial) ?? null;
+      bottomMaterial ??= materials.find(element => element !== topMaterial) ?? null;
+    }
+    const nextElements = [...new Set([topMaterial, bottomMaterial].filter(Boolean))];
     const nextSet = new Set(nextElements);
     for (const element of zenSideElements) {
       if (nextSet.has(element)) continue;
@@ -490,8 +537,6 @@
 
     if (!boardRect.width || !boardRect.height) return;
     const byTop = (a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top;
-    const topMaterial = materials.find(element => element.classList.contains("material-top")) ?? materials.slice().sort(byTop)[0];
-    const bottomMaterial = materials.find(element => element.classList.contains("material-bottom")) ?? materials.slice().sort(byTop).at(-1);
     clocks.sort(byTop);
     const topClock = clocks[0];
     const topMaterialRect = topMaterial?.getBoundingClientRect();
@@ -520,10 +565,12 @@
     const bottomClock = clocks.length > 1 ? clocks.at(-1) : clocks[0]?.classList.contains("rclock-bottom") ? clocks[0] : null;
     zenClockSources = { top: topClock === bottomClock ? null : topClock, bottom: bottomClock };
     setZenClockPlayerColors();
+    let running = false;
     for (const side of ["top", "bottom"]) {
-      updateZenClock(side, zenClockSources[side]);
+      running = updateZenClock(side, zenClockSources[side]) || running;
       positionZenClock(side, boardRect);
     }
+    if (running) scheduleZenClockProgress();
   }
 
   function schedulePvPreviewSync() {
@@ -890,7 +937,9 @@
       "--lfs-selected-dark": settings.selectedDark,
       "--lfs-check-dark": settings.checkSquareDark,
       "--lfs-engine-arrow-dark": settings.engineArrowDark,
-      "--lfs-hover-mix-dark": settings.hoverMixDark
+      "--lfs-hover-mix-dark": settings.hoverMixDark,
+      "--lfs-zen-clock-blink-duration": `${1 / settings.zenClockBlinkFrequency}s`,
+      "--lfs-zen-clock-end-blend": `${settings.zenClockActiveEndBlendPercent}%`
     };
 
     for (const [name, value] of Object.entries(variables)) root.style.setProperty(name, value);
@@ -912,6 +961,7 @@
     syncNormalRoundLayout();
     schedulePvPreviewSync();
     queuePlayTimeUpdate();
+    if (document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenClockUpdate();
   }
 
   const dayPattern = /(\d[\d.,\s\u00a0]*)\s*(?:days?|tage?|jours?|d[ií]as?|giorni?|dias?|dagen?|dagar?|дн(?:я|ей|ь)?)/iu;
@@ -1050,6 +1100,18 @@
     schedulePvPreviewSync();
   });
 
+  const refreshZenClock = () => {
+    if (document.hidden) {
+      cancelAnimationFrame(zenClockFrame);
+      cancelAnimationFrame(zenClockProgressFrame);
+      return;
+    }
+    scheduleZenClockUpdate();
+  };
+  document.addEventListener("visibilitychange", refreshZenClock);
+  window.addEventListener("focus", refreshZenClock);
+  window.addEventListener("pageshow", refreshZenClock);
+
   document.addEventListener("scroll", schedulePvPreviewSync, true);
 
   const syncedCustomSoundFiles = new Set();
@@ -1167,5 +1229,5 @@
         }
       }
     }
-  }).observe(document, { childList: true, subtree: true, characterData: true });
+  }).observe(document, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["class"] });
 })();

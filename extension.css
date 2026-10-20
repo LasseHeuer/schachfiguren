@@ -700,22 +700,82 @@ html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-time[hidden] {
 }
 
 html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-bar {
+  position: relative !important;
   display: block !important;
   width: 100% !important;
   height: var(--lfs-zen-clock-line-thickness) !important;
   overflow: hidden !important;
   background: transparent !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
 }
 
 html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-fill {
+  position: relative !important;
   display: block !important;
   height: 100% !important;
-  background: var(--lfs-white-piece-color, #d1521d) !important;
-  transition: width 1s linear !important;
+  transition: none !important;
+  background: var(--lfs-zen-clock-player-color, var(--lfs-white-piece-color, #d1521d)) !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
 }
 
 html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock[data-player-color="black"] .lfs-zen-clock-fill {
-  background: var(--lfs-black-piece-color, #2ba4d1) !important;
+  --lfs-zen-clock-player-color: var(--lfs-black-piece-color, #2ba4d1);
+}
+
+html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock[data-critical] .lfs-zen-clock-fill::before {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1 !important;
+  display: block !important;
+  background: #fff !important;
+  content: "" !important;
+  animation: lfs-zen-clock-pulse var(--lfs-zen-clock-blink-duration, 0.5s) linear infinite !important;
+}
+
+html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock[data-running] .lfs-zen-clock-active-end {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  display: block !important;
+  width: min(var(--lfs-zen-clock-end-size, 48px), 100%) !important;
+  background: var(--lfs-zen-clock-player-color, #d1521d) !important;
+}
+
+html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock[data-running] .lfs-zen-clock-active-end::after {
+  position: absolute !important;
+  inset: 0 !important;
+  display: block !important;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    #fff calc(100% - var(--lfs-zen-clock-end-blend, 25%)),
+    #fff 100%) !important;
+  content: "" !important;
+  animation: lfs-zen-clock-pulse var(--lfs-zen-clock-blink-duration, 0.5s) linear infinite !important;
+}
+
+@keyframes lfs-zen-clock-pulse {
+  /* Linear samples approximate one sine wave so the pulse has no hard on/off edges. */
+  0%, 100% { opacity: 0; }
+  6.25% { opacity: 0.038; }
+  12.5% { opacity: 0.146; }
+  18.75% { opacity: 0.309; }
+  25% { opacity: 0.5; }
+  31.25% { opacity: 0.691; }
+  37.5% { opacity: 0.854; }
+  43.75% { opacity: 0.962; }
+  50% { opacity: 1; }
+  56.25% { opacity: 0.962; }
+  62.5% { opacity: 0.854; }
+  68.75% { opacity: 0.691; }
+  75% { opacity: 0.5; }
+  81.25% { opacity: 0.309; }
+  87.5% { opacity: 0.146; }
+  93.75% { opacity: 0.038; }
 }
 
 html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock[data-side="bottom"] .lfs-zen-clock-bar {
@@ -922,6 +982,14 @@ html:not([data-lfs-disabled]) #lfs-pv-preview > svg.lfs-last-move-line {
   pointer-events: none !important;
 }
 
+html:not([data-lfs-disabled]) .is2d cg-board > piece[data-lfs-move-preview-origin] {
+  opacity: 0.25 !important;
+}
+
+html:not([data-lfs-disabled]) .is2d cg-board > piece[data-lfs-move-preview-hidden] {
+  opacity: 0 !important;
+}
+
 html:not([data-lfs-disabled]) #lfs-pv-preview > svg.lfs-last-move-line {
   z-index: 1 !important;
 }
@@ -968,6 +1036,12 @@ html:not([data-lfs-disabled])[data-lfs-square-move-dots] body[data-board] .is2d 
 }
 
 html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square[data-lfs-contested-move-dest] {
+  background: none !important;
+}
+
+html:not([data-lfs-disabled])[data-lfs-square-move-dots] body[data-board] .is2d .cg-wrap cg-board square[data-lfs-preview-move-dest]:not(.oc),
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square[data-lfs-preview-move-dest]:not(.oc),
+html:not([data-lfs-disabled]) .is2d cg-board > square[data-lfs-preview-move-dest]:not(.oc) {
   background: none !important;
 }
 

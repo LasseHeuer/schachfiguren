@@ -127,7 +127,7 @@
   function getDestinationState(position, king, target) {
     if (!isInside(target.row, target.col)) return "edge";
     const occupant = position[target.row][target.col];
-    if (occupant?.[0] === king.color) return "piece";
+    if (occupant) return "piece";
 
     const nextPosition = position.map(row => [...row]);
     nextPosition[king.row][king.col] = "";
@@ -170,11 +170,17 @@
       removeOverlays(entry);
       return;
     }
-    if (board.querySelector(":scope > piece.dragging, :scope > piece.king.ghost, :scope > piece.king.fading")) return;
+    if (board.querySelector(":scope > piece.dragging, :scope > piece.king.ghost, :scope > piece.king.fading")) {
+      removeOverlays(entry);
+      return;
+    }
 
     const parsed = readPosition(board);
     if (!parsed) return;
-    if (!parsed.complete) return;
+    if (!parsed.complete) {
+      removeOverlays(entry);
+      return;
+    }
     if (!parsed.kings.length) {
       removeOverlays(entry);
       return;

@@ -19,6 +19,8 @@
   let threatCanvas = null;
   const displayedThreatKeys = new WeakMap();
   const pendingThreatKeys = new WeakMap();
+  const hoveredMoveTargets = new WeakMap();
+  const knightHoverGaps = new WeakMap();
   const dirtyBoards = new Set();
   const waitingBoards = new Set();
   let renderFrame = 0;
@@ -182,6 +184,12 @@
     return Boolean(board.closest(".cg-wrap")?.classList.contains("orientation-black"));
   }
 
+  function logicalToScreen(square, blackOrientation) {
+    return blackOrientation
+      ? { row: 7 - square.row, col: 7 - square.col }
+      : square;
+  }
+
   function getLogicalSquare(element, board, blackOrientation) {
     const key = element.dataset.key?.toLowerCase();
     if (key && /^[a-h][1-8]$/.test(key)) {
@@ -219,7 +227,10 @@
     }
 
     preview[source.row][source.col] = "";
-    preview[target.row][target.col] = piece;
+    const promotionRow = piece[0] === "w" ? 0 : 7;
+    preview[target.row][target.col] = piece[1] === "P" && target.row === promotionRow
+      ? `${piece[0]}Q`
+      : piece;
 
     if (piece[1] === "K" && source.row === target.row && Math.abs(target.col - source.col) === 2) {
       const rookSourceCol = target.col > source.col ? 7 : 0;
@@ -242,14 +253,6 @@
       if (destination) destinations.add(`${destination.row},${destination.col}`);
     }
     return destinations;
-  }
-
-  function getAllowedMovePreview(board, position, source, x, y, blackOrientation) {
-    const target = getLogicalSquareAtPoint(board, x, y, blackOrientation);
-    if (!target) return null;
-    const allowed = getAllowedDestinations(board, blackOrientation);
-    if (!allowed.has(`${target.row},${target.col}`)) return null;
-    return createPreviewPosition(position, source, target);
   }
 
   function readBoard(board) {
@@ -452,29 +455,142 @@
       target: position ? target : activePieceDrag.source,
       legal: Boolean(position),
       basePosition: activePieceDrag.position,
-      blackOrientation
+      blackOrientation,
+      isHoverPreview: false
     };
   }
 
-  function getDragPreview(board) {
-    const preview = getDragPreviewState(board);
-    return preview ? { position: preview.position, blackOrientation: preview.blackOrientation } : null;
+  function distanceToSegment(point, start, end) {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const lengthSquared = dx * dx + dy * dy;
+    const progress = lengthSquared
+      ? Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
+      : 0;
+    return Math.hypot(point.x - (start.x + progress * dx), point.y - (start.y + progress * dy));
   }
 
-  function getSelectedMovePreview(board, position, blackOrientation) {
-    if (!lastPointerPosition) return null;
+  function getHoverMoveTarget(board, allowed, blackOrientation, x, y, source, isKnight = false) {
+    const pointSquare = getLogicalSquareAtPoint(board, x, y, blackOrientation);
+    if (!pointSquare) return null;
+    if (pointSquare.row === source.row && pointSquare.col === source.col) return source;
+    // A move field under the pointer wins.
+    if (allowed.has(`${pointSquare.row},${pointSquare.col}`)) return pointSquare;
+
+    // Any other field returns the figure to its origin, except inside the corridor between two diagonally connected move fields.
+    const boardRect = board.getBoundingClientRect();
+    const point = {
+      x: (x - boardRect.left) * 8 / boardRect.width,
+      y: (y - boardRect.top) * 8 / boardRect.height
+    };
+    const previousState = hoveredMoveTargets.get(board);
+    const previous = previousState?.source.row === source.row && previousState.source.col === source.col
+      ? previousState.target
+      : null;
+    const candidates = [...allowed].map(key => {
+      const [row, col] = key.split(",").map(Number);
+      const screen = logicalToScreen({ row, col }, blackOrientation);
+      return { square: { row, col }, screen, center: { x: screen.col + 0.5, y: screen.row + 0.5 } };
+    });
+    const distanceTo = candidate => Math.hypot(point.x - candidate.center.x, point.y - candidate.center.y);
+    const isPrevious = candidate => previous && candidate.square.row === previous.row && candidate.square.col === previous.col;
+
+    let corridor = null;
+    const corridorRadius = 0.3;
+    for (let firstIndex = 0; firstIndex < candidates.length; firstIndex++) {
+      for (let secondIndex = firstIndex + 1; secondIndex < candidates.length; secondIndex++) {
+        const first = candidates[firstIndex];
+        const second = candidates[secondIndex];
+        const rows = Math.abs(first.screen.row - second.screen.row);
+        const cols = Math.abs(first.screen.col - second.screen.col);
+        const diagonal = rows === 1 && cols === 1;
+        const straightKnightGap = isKnight && ((rows === 2 && cols === 0) || (rows === 0 && cols === 2));
+        if (!diagonal && !straightKnightGap) continue;
+        const distance = distanceToSegment(point, first.center, second.center);
+        if (distance > corridorRadius || (corridor && distance >= corridor.distance)) continue;
+
+        const nearest = distanceTo(first) <= distanceTo(second) ? first : second;
+        const other = nearest === first ? second : first;
+        const target = isPrevious(other) && distanceTo(other) <= distanceTo(nearest) + 0.1 ? other : nearest;
+        corridor = { distance, target: target.square };
+      }
+    }
+    return corridor?.target ?? source;
+  }
+
+  function clearKnightHoverGap(board) {
+    const gap = knightHoverGaps.get(board);
+    if (gap) clearTimeout(gap.timer);
+    knightHoverGaps.delete(board);
+  }
+
+  function getSelectedMovePreview(board, position, blackOrientation, x, y) {
     const selectedSquare = board.querySelector(":scope > square.selected");
     if (!selectedSquare) return null;
     const source = getLogicalSquare(selectedSquare, board, blackOrientation);
     if (!source || !position[source.row][source.col]) return null;
-    return getAllowedMovePreview(
+    const allowed = getAllowedDestinations(board, blackOrientation);
+    const isKnight = position[source.row][source.col][1] === "N";
+    let target = getHoverMoveTarget(
       board,
-      position,
+      allowed,
+      blackOrientation,
+      x,
+      y,
       source,
-      lastPointerPosition.x,
-      lastPointerPosition.y,
-      blackOrientation
+      isKnight
     );
+    if (!target) return null;
+    const pointerSquare = getLogicalSquareAtPoint(board, x, y, blackOrientation);
+    const isKnightGap = isKnight && pointerSquare
+      && !position[pointerSquare.row][pointerSquare.col]
+      && !allowed.has(`${pointerSquare.row},${pointerSquare.col}`)
+      && (target.row !== source.row || target.col !== source.col);
+    if (isKnightGap) {
+      const key = `${source.row},${source.col}:${pointerSquare.row},${pointerSquare.col}`;
+      let gap = knightHoverGaps.get(board);
+      if (gap?.key !== key) {
+        clearKnightHoverGap(board);
+        gap = { key, expired: false, timer: null };
+        gap.timer = setTimeout(() => {
+          gap.expired = true;
+          scheduleRender(board);
+          document.dispatchEvent(new CustomEvent("lfs-hover-preview-change", { detail: board }));
+        }, 250);
+        knightHoverGaps.set(board, gap);
+      }
+      if (gap.expired) target = source;
+    } else {
+      clearKnightHoverGap(board);
+    }
+    const preview = createPreviewPosition(position, source, target);
+    return preview ? {
+      position: preview,
+      source,
+      target,
+      legal: true,
+      basePosition: position,
+      blackOrientation,
+      isHoverPreview: true
+    } : null;
+  }
+
+  function getInteractionPreview(board, x = lastPointerPosition?.x, y = lastPointerPosition?.y) {
+    const dragPreview = getDragPreviewState(board);
+    if (dragPreview) {
+      clearKnightHoverGap(board);
+      hoveredMoveTargets.delete(board);
+      return dragPreview;
+    }
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const parsed = readBoard(board);
+    const preview = parsed ? getSelectedMovePreview(board, parsed.position, parsed.blackOrientation, x, y) : null;
+    if (preview) hoveredMoveTargets.set(board, { source: preview.source, target: preview.target });
+    else {
+      clearKnightHoverGap(board);
+      hoveredMoveTargets.delete(board);
+    }
+    return preview;
   }
 
   function render() {
@@ -489,19 +605,16 @@
         clearThreatBackground(board);
         continue;
       }
+      const preview = getInteractionPreview(board);
       if (pieceInteractionActive) {
-        if (activePieceDrag?.board === board) {
-          const preview = getDragPreview(board);
-          if (preview) renderPosition(board, preview.position, preview.blackOrientation);
-        }
+        if (preview) renderPosition(board, preview.position, preview.blackOrientation);
         continue;
       }
       if (waitForPieceMoves(board)) continue;
 
       const parsed = readBoard(board);
       if (!parsed) continue;
-      const preview = getSelectedMovePreview(board, parsed.position, parsed.blackOrientation);
-      renderPosition(board, preview || parsed.position, parsed.blackOrientation);
+      renderPosition(board, preview?.position ?? parsed.position, preview?.blackOrientation ?? parsed.blackOrientation);
     }
   }
 
@@ -636,6 +749,6 @@
     getBoardBaseColor,
     getOpacityColor,
     getThreatPixels,
-    getInteractionPreview: getDragPreviewState
+    getInteractionPreview
   };
 })();
