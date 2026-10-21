@@ -55,9 +55,13 @@
             <label class="field" data-loop-pause><span>Timing (Pause)</span><input type="range" min="0" max="5000" step="10" data-setting="pieceBounceTiming"><output data-value-for="pieceBounceTiming"></output></label>
             <label class="field"><span>Drehdauer</span><input type="range" min="200" max="1500" step="10" data-setting="pieceBounceDuration"><output data-value-for="pieceBounceDuration"></output></label>
             <label class="field"><span>Wippdauer</span><input type="range" min="200" max="1500" step="10" data-setting="pieceBounceWiggleDuration"><output data-value-for="pieceBounceWiggleDuration"></output></label>
+          </div>
+          <h3 class="control-group-label">Animationen</h3>
+          <div class="control-grid range-grid">
             <label class="switch-field"><span><strong>Lichess-Geschwindigkeit</strong><small>Nutzt die Zuggeschwindigkeit von Lichess.</small></span><input type="checkbox" data-setting="moveAnimationLichessSpeed" role="switch"></label>
             <label class="field" data-own-speed><span>Zugdauer</span><input type="range" min="0" max="500" step="10" data-setting="moveAnimationDuration"><output data-value-for="moveAnimationDuration"></output></label>
-            <label class="field"><span>Vorschau: Deckkraft am Startfeld</span><input type="range" min="0" max="1" step="0.01" data-setting="movePreviewOriginOpacity"><output data-value-for="movePreviewOriginOpacity"></output></label>
+            <label class="field field-wide"><span>Vorschau: Deckkraft am Ursprungsfeld</span><input type="range" min="0" max="1" step="0.01" data-setting="movePreviewOriginOpacity"><output data-value-for="movePreviewOriginOpacity"></output></label>
+            <label class="field field-wide"><span>Vorschau: Korridorbreite (% der Feldbreite)</span><input type="range" min="0" max="200" step="5" data-setting="movePreviewCorridorWidthPercent"><output data-value-for="movePreviewCorridorWidthPercent"></output></label>
             <label class="switch-field"><span><strong>Zeit/Distanz</strong><small>Erhöht die Grundzeit pro Feld um den eingestellten Anteil.</small></span><input type="checkbox" data-setting="moveAnimationTimeDistance" role="switch"></label>
             <label class="field" data-distance-factor hidden><span>Faktor Zeit/Distanz</span><input type="range" min="0" max="1" step="0.05" data-setting="moveAnimationDistanceFactor"><output data-value-for="moveAnimationDistanceFactor"></output></label>
           </div>

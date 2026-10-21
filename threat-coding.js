@@ -551,7 +551,7 @@
     const isPrevious = candidate => previous && candidate.square.row === previous.row && candidate.square.col === previous.col;
 
     let corridor = null;
-    const corridorRadius = 0.3;
+    const corridorRadius = settings.movePreviewCorridorWidthPercent / 200;
     for (let firstIndex = 0; firstIndex < candidates.length; firstIndex++) {
       for (let secondIndex = firstIndex + 1; secondIndex < candidates.length; secondIndex++) {
         const first = candidates[firstIndex];

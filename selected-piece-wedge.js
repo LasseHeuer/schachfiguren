@@ -88,9 +88,41 @@
 
       const preview = globalThis.LichessThreatCoding?.getInteractionPreview(board, event.clientX, event.clientY);
       if (preview?.isHoverPreview) {
+        const rect = board.getBoundingClientRect();
+        const now = performance.now();
+        const sourceKey = `${preview.source.row},${preview.source.col}`;
+        const previous = entry.previewPointerMotion;
+        const x = (event.clientX - rect.left) * 8 / rect.width;
+        const y = (event.clientY - rect.top) * 8 / rect.height;
+        const elapsed = previous ? now - previous.time : 0;
         const targetKey = `${preview.source.row},${preview.source.col}:${preview.target.row},${preview.target.col}`;
-        if (!entry.previewPieceSvg || entry.previewTargetKey !== targetKey) scheduleRender(board);
+        const heldTargetKey = previous && elapsed < 90 && previous.sourceKey === sourceKey
+          ? previous.heldTargetKey
+          : entry.previewTargetKey ?? targetKey;
+        const waitingForTargetChange = heldTargetKey === targetKey;
+        if (elapsed > 0 && elapsed < 90 && previous.sourceKey === sourceKey) {
+          const vx = (x - previous.x) / elapsed;
+          const vy = (y - previous.y) / elapsed;
+          const speed = Math.hypot(vx, vy);
+          const previousSpeed = Math.hypot(previous.vx, previous.vy);
+          const consistent = speed > 0.00015 && previousSpeed > 0
+            && (vx * previous.vx + vy * previous.vy) / (speed * previousSpeed) > 0.85
+            && speed / previousSpeed > 0.4 && speed / previousSpeed < 2.5;
+          const samples = consistent ? previous.samples + 1 : 0;
+          entry.previewPointerMotion = {
+            x, y, time: now, sourceKey, samples, smooth: samples >= 2 && !waitingForTargetChange,
+            vx: consistent ? previous.vx * 0.4 + vx * 0.6 : vx,
+            vy: consistent ? previous.vy * 0.4 + vy * 0.6 : vy
+          };
+        } else {
+          entry.previewPointerMotion = { x, y, time: now, sourceKey, samples: 0, smooth: false, vx: 0, vy: 0 };
+        }
+        // After a pause, movement inside the same field must not restart lookahead.
+        entry.previewPointerMotion.heldTargetKey = waitingForTargetChange ? targetKey : null;
+        if (!entry.previewPieceSvg || entry.previewTargetKey !== targetKey
+          || (entry.previewPointerMotion.smooth && !entry.previewAnimation?.tracking)) scheduleRender(board);
       } else if (preview || entry.previewPieceSvg) {
+        entry.previewPointerMotion = null;
         scheduleRender(board);
       }
     }
@@ -1831,6 +1863,7 @@
     entry.previewOpacity = 0;
     entry.previewTargetKey = null;
     entry.previewSourceKey = null;
+    entry.previewPointerMotion = null;
     if (!entry.previewPieceSvg) return;
     entry.previewPieceSvg.remove();
     entry.previewPieceSvg = null;
@@ -1859,6 +1892,47 @@
   function getMovePreviewState(entry, now = performance.now()) {
     const animation = entry.previewAnimation;
     if (!animation) return { ...entry.previewTranslation, opacity: entry.previewOpacity };
+    if (animation.tracking) {
+      let target = animation.to;
+      const motion = entry.previewPointerMotion;
+      const age = motion ? Math.max(0, now - motion.time) : Infinity;
+      if (motion?.smooth && age < 90) {
+        // Predict only along a connection to a neighbouring legal move field.
+        const speed = Math.hypot(motion.vx, motion.vy);
+        const lookAhead = Math.min(60, 0.65 / speed) * (1 - age / 90);
+        const predicted = {
+          x: motion.x - animation.source.col - 0.5 + motion.vx * lookAhead,
+          y: motion.y - animation.source.row - 0.5 + motion.vy * lookAhead
+        };
+        let closest = Infinity;
+        for (const destination of animation.destinations) {
+          const dx = destination.x - animation.to.x;
+          const dy = destination.y - animation.to.y;
+          const distance = Math.hypot(dx, dy);
+          if (!distance || distance > 1.5 || (dx * motion.vx + dy * motion.vy) / (distance * speed) < 0.85) continue;
+          const progress = Math.max(0, Math.min(1,
+            ((predicted.x - animation.to.x) * dx + (predicted.y - animation.to.y) * dy) / (distance * distance)));
+          const candidate = { x: animation.to.x + dx * progress, y: animation.to.y + dy * progress };
+          const error = Math.hypot(predicted.x - candidate.x, predicted.y - candidate.y);
+          if (error < closest && error < 0.6) {
+            target = candidate;
+            closest = error;
+          }
+        }
+      }
+      // A critically damped response preserves velocity across field changes.
+      const elapsed = Math.max(0, now - animation.lastTime);
+      const response = 0.035;
+      const decay = Math.exp(-response * elapsed);
+      const state = { opacity: 1 - (1 - entry.previewOpacity) * decay };
+      for (const axis of ["x", "y"]) {
+        const offset = entry.previewTranslation[axis] - target[axis];
+        const momentum = animation.velocity[axis] + response * offset;
+        state[axis] = target[axis] + (offset + momentum * elapsed) * decay;
+        state[`v${axis}`] = (animation.velocity[axis] - response * momentum * elapsed) * decay;
+      }
+      return state;
+    }
     const progress = Math.min(1, (now - animation.startedAt) / animation.duration);
     const eased = getMovePreviewEasedProgress(progress);
     return {
@@ -1872,6 +1946,8 @@
     const targetKey = `${preview.source.row},${preview.source.col}:${preview.target.row},${preview.target.col}`;
     const sourceKey = `${sourceSquare.row},${sourceSquare.col}`;
     const to = { x: targetSquare.col - sourceSquare.col, y: targetSquare.row - sourceSquare.row };
+    const tracking = entry.previewPointerMotion?.smooth
+      && performance.now() - entry.previewPointerMotion.time < 90;
     if (entry.previewSourceKey !== sourceKey) {
       if (entry.previewAnimationFrame) cancelAnimationFrame(entry.previewAnimationFrame);
       entry.previewAnimationFrame = 0;
@@ -1882,6 +1958,17 @@
       entry.previewSourceKey = sourceKey;
       entry.previewPieceGroup.setAttribute("transform", "translate(0 0)");
       entry.previewPieceGroup.setAttribute("opacity", "0");
+    }
+    const destinations = tracking || entry.previewAnimation?.tracking
+      ? [...board.querySelectorAll(":scope > square.move-dest, :scope > square.premove-dest")]
+        .map(square => getScreenSquare(square, board)).filter(Boolean)
+        .map(square => ({ x: square.col - sourceSquare.col, y: square.row - sourceSquare.row }))
+      : [];
+    if (entry.previewAnimation?.tracking && !settings.disableAnimations) {
+      entry.previewAnimation.to = to;
+      entry.previewAnimation.destinations = destinations;
+      entry.previewTargetKey = targetKey;
+      return;
     }
     if (entry.previewTargetKey === targetKey) {
       const currentAnimation = entry.previewAnimation;
@@ -1900,11 +1987,12 @@
         entry.previewOpacity = 1;
         return;
       }
-      if (alreadyAtTarget || animationAlreadyTargets) return;
+      if (!tracking && (alreadyAtTarget || animationAlreadyTargets)) return;
     }
 
     const now = performance.now();
     const from = getMovePreviewState(entry, now);
+    const previous = getMovePreviewState(entry, now - 1);
     if (entry.previewAnimationFrame) cancelAnimationFrame(entry.previewAnimationFrame);
     entry.previewAnimationFrame = 0;
     entry.previewAnimation = null;
@@ -1920,7 +2008,7 @@
     const baseDuration = settings.moveAnimationLichessSpeed ? 250 : settings.moveAnimationDuration;
     const distanceFactor = settings.moveAnimationTimeDistance ? settings.moveAnimationDistanceFactor : 0;
     const duration = baseDuration + travel * distanceFactor * baseDuration;
-    if (!settings.enabled || settings.disableAnimations || duration <= 0 || remaining < 0.005) {
+    if (!settings.enabled || settings.disableAnimations || duration <= 0 || (!tracking && remaining < 0.005)) {
       entry.previewPieceGroup.setAttribute("transform", `translate(${to.x} ${to.y})`);
       entry.previewTranslation = to;
       entry.previewOpacity = 1;
@@ -1929,23 +2017,36 @@
     }
 
     entry.previewAnimation = { from, to, startedAt: now, duration };
+    if (tracking) {
+      Object.assign(entry.previewAnimation, {
+        tracking: true, lastTime: now, source: sourceSquare,
+        velocity: { x: from.x - previous.x, y: from.y - previous.y },
+        destinations
+      });
+    }
     const animate = timestamp => {
       const animation = entry.previewAnimation;
       if (!animation) return;
       const progress = Math.min(1, (timestamp - animation.startedAt) / animation.duration);
-      const eased = getMovePreviewEasedProgress(progress);
-      const current = {
-        x: animation.from.x + (animation.to.x - animation.from.x) * eased,
-        y: animation.from.y + (animation.to.y - animation.from.y) * eased,
-        opacity: animation.from.opacity + (1 - animation.from.opacity) * eased
-      };
+      const current = getMovePreviewState(entry, timestamp);
+      if (animation.tracking) {
+        animation.velocity = { x: current.vx, y: current.vy };
+        animation.lastTime = timestamp;
+      }
       entry.previewPieceGroup.setAttribute("transform", `translate(${current.x} ${current.y})`);
       entry.previewPieceGroup.setAttribute("opacity", String(current.opacity));
       entry.previewTranslation = current;
       entry.previewOpacity = current.opacity;
-      if (progress >= 1) {
+      const settled = animation.tracking
+        ? (!entry.previewPointerMotion?.smooth || timestamp - entry.previewPointerMotion.time >= 90)
+          && Math.hypot(current.x - animation.to.x, current.y - animation.to.y) < 0.001
+          && Math.hypot(current.vx, current.vy) < 0.0001 && current.opacity > 0.999
+        : progress >= 1;
+      if (settled) {
         entry.previewTranslation = animation.to;
         entry.previewOpacity = 1;
+        entry.previewPieceGroup.setAttribute("transform", `translate(${animation.to.x} ${animation.to.y})`);
+        entry.previewPieceGroup.setAttribute("opacity", "1");
         entry.previewAnimation = null;
         entry.previewAnimationFrame = 0;
         return;

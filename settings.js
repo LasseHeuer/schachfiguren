@@ -78,6 +78,7 @@
     moveAnimationLichessSpeed: false,
     moveAnimationDuration: 200,
     movePreviewOriginOpacity: 0.25,
+    movePreviewCorridorWidthPercent: 100,
     moveAnimationTimeDistance: true,
     moveAnimationDistanceFactor: 0.15,
     moveAnimationCurve: [0.34793622153145926, -1.1229950096562262, 0.3128621464683896, -102.4430381342235],
@@ -228,6 +229,7 @@
     pieceBounceWiggleDuration: [200, 1500],
     moveAnimationDuration: [0, 500],
     movePreviewOriginOpacity: [0, 1],
+    movePreviewCorridorWidthPercent: [0, 200],
     moveAnimationDistanceFactor: [0, 1]
   };
 

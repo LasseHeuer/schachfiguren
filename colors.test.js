@@ -64,6 +64,18 @@ test("all previous defaults and saved custom colors retain their appearance", ()
   }
 });
 
+test("hover preview corridor width and origin opacity retain saved values and valid limits", () => {
+  assert.equal(settings.normalize().movePreviewCorridorWidthPercent, 100);
+  for (const [saved, expected] of [[0, 0], [60, 60], [150, 150], [-5, 0], [250, 200], ["invalid", 100]]) {
+    const normalized = settings.normalize({ movePreviewCorridorWidthPercent: saved });
+    assert.equal(normalized.movePreviewCorridorWidthPercent, expected);
+    assert.equal(settings.normalize(normalized).movePreviewCorridorWidthPercent, expected);
+  }
+  for (const opacity of [0, 0.25, 1]) {
+    assert.equal(settings.normalize({ movePreviewOriginOpacity: opacity }).movePreviewOriginOpacity, opacity);
+  }
+});
+
 test("OKLCH percentages, hue normalization and alpha survive conversion", () => {
   const color = colors.parse("oklch(50% 25% -30deg / 50%)");
   assert.deepEqual(color, { l: 0.5, c: 0.1, h: 330, alpha: 0.5 });
