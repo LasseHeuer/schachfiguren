@@ -3,8 +3,8 @@
     enabled: true,
     pieceSet: "system_eckig",
     complexPawn: true,
-    boardLightLight: "#dedae6",
-    boardDarkLight: "#d6dbd5",
+    boardLightLight: "oklch(0.8950392819 0.0167676465 301.1914565362)",
+    boardDarkLight: "oklch(0.885873322 0.0097293256 140.5143546829)",
     monochromeBoard: false,
     squareOutline: false,
     boardScalePercent: 83,
@@ -19,11 +19,11 @@
     zenClockActiveEndSizePercent: 8,
     zenClockActiveEndBlendPercent: 25,
     zenClockShowTimeOnlyWhenLow: false,
-    lastMoveLight: "#dae0d7",
+    lastMoveLight: "oklch(0.8995751716 0.0137046779 134.9026614921)",
     lastMoveLineWidth: 16,
-    selectedLight: "#ffffff",
-    checkSquareLight: "#e57373",
-    engineArrowLight: "#4a4a4a",
+    selectedLight: "oklch(1 0 0)",
+    checkSquareLight: "oklch(0.6875468257 0.1419550249 21.4565765629)",
+    engineArrowLight: "oklch(0.409120004 0 0)",
     engineArrowOutlineEnabled: false,
     engineArrowOpacity: 100,
     engineArrowOutlineWidthPercent: 3,
@@ -32,22 +32,22 @@
     engineArrowStartOffsetPercent: 20,
     engineArrowEndOffsetPercent: 20,
     soundSettings: {},
-    hoverMixLight: "#d4d2d2",
-    boardLightDark: "#424240",
-    boardDarkDark: "#3e3d40",
-    lastMoveDark: "#2f2d30",
-    selectedDark: "#252823",
-    checkSquareDark: "#8c3434",
-    engineArrowDark: "#000000",
-    hoverMixDark: "#282727",
+    hoverMixLight: "oklch(0.8653569657 0.0022022331 17.2009230703)",
+    boardLightDark: "oklch(0.3783961162 0.0033433084 106.558233694)",
+    boardDarkDark: "oklch(0.3621051109 0.0052543068 301.259408164)",
+    lastMoveDark: "oklch(0.300397087 0.0060154475 314.7294762347)",
+    selectedDark: "oklch(0.2719585799 0.0100275903 132.64018331)",
+    checkSquareDark: "oklch(0.4502720372 0.1203487855 23.2354759329)",
+    engineArrowDark: "oklch(0 0 0)",
+    hoverMixDark: "oklch(0.2737978582 0.0014714673 17.2471480169)",
     markLastMove: true,
     idleMixPercent: 50,
     hoverMixPercent: 70,
     hoverDesaturation: 60,
     moveDotSize: 5,
     squareMoveDots: true,
-    whitePieceColor: "#d1521d",
-    blackPieceColor: "#2ba4d1",
+    whitePieceColor: "oklch(0.5997409301 0.1721887956 40.1845294695)",
+    blackPieceColor: "oklch(0.6742384272 0.1206555753 228.5101815779)",
     analysisGraphColors: true,
     showPlayTimeInHours: true,
     analysisEnabled: true,
@@ -56,12 +56,14 @@
     threatOpponentSeeThrough: 0.25,
     threatMoveDepth: 3,
     threatDepthFactor: 0.2,
+    threatPieceValueInfluencePercent: 100,
     threatMaxMixPercent: 30,
+    threatBlendMode: "oklab",
     threatGradientPercent: 0,
     threatColoringMode: "opacity",
-    onlineIndicatorDark: "#7c9e4f",
-    buttonBackgroundDark: "#333332",
-    buttonBackgroundLight: "#bdbdbd",
+    onlineIndicatorDark: "oklch(0.6554420197 0.1136350274 128.3610368503)",
+    buttonBackgroundDark: "oklch(0.3207267548 0.0017439976 106.4974103352)",
+    buttonBackgroundLight: "oklch(0.7983723788 0 0)",
     clockSize: 90,
     menuScalePercent: 90,
     pieceBounceEnabled: true,
@@ -75,6 +77,7 @@
     pieceBounceWiggleCurve: [0.22225404921032132, -6.491205018140321, 0.5963776452200753, -92.8899650019563],
     moveAnimationLichessSpeed: false,
     moveAnimationDuration: 200,
+    movePreviewOriginOpacity: 0.25,
     moveAnimationTimeDistance: true,
     moveAnimationDistanceFactor: 0.15,
     moveAnimationCurve: [0.34793622153145926, -1.1229950096562262, 0.3128621464683896, -102.4430381342235],
@@ -97,8 +100,8 @@
     threatCountLabelsEnabled: true,
     threatCountOffsetRadius: 0.35,
     threatCountTextOutlineEnabled: false,
-    threatPinnedOutlineDark: "#383838",
-    threatPinnedOutlineLight: "#f0f0f0",
+    threatPinnedOutlineDark: "oklch(0.3406970569 0 0)",
+    threatPinnedOutlineLight: "oklch(0.9551400503 0 0)",
     threatPinnedOutlineWidth: 1.5,
     threatPinnedPieceBrightness: 27,
     threatPinnedPieceDesaturation: 38,
@@ -153,6 +156,7 @@
     disableAnimations: false,
     threatenedPieceOutlineWidthPx: 1.5
   });
+  const colors = Object.keys(defaults).filter(key => /Color|Light|Dark/.test(key) && typeof defaults[key] === "string");
 
   const ranges = {
     boardTopGapPercent: [0, 30],
@@ -215,6 +219,7 @@
     threatOpponentSeeThrough: [0, 1],
     threatMoveDepth: [1, 5],
     threatDepthFactor: [0, 1],
+    threatPieceValueInfluencePercent: [0, 100],
     threatMaxMixPercent: [0, 100],
     threatGradientPercent: [0, 100],
     pieceBounceWiggleAngle: [1, 30],
@@ -222,9 +227,9 @@
     pieceBounceDuration: [200, 1500],
     pieceBounceWiggleDuration: [200, 1500],
     moveAnimationDuration: [0, 500],
+    movePreviewOriginOpacity: [0, 1],
     moveAnimationDistanceFactor: [0, 1]
   };
-  const colors = Object.keys(defaults).filter(key => /Color|Light|Dark/.test(key) && typeof defaults[key] === "string");
 
   function normalize(values = {}) {
     const result = { ...defaults, ...values };
@@ -286,6 +291,9 @@
     if (!["rotate-wiggle", "wiggle-only"].includes(result.pieceBounceStyle)) {
       result.pieceBounceStyle = defaults.pieceBounceStyle;
     }
+    if (!["oklab", "normal", "multiply", "screen", "overlay", "soft-light", "hard-light", "darken", "lighten", "difference"].includes(result.threatBlendMode)) {
+      result.threatBlendMode = defaults.threatBlendMode;
+    }
     if (!["all", "waterfall"].includes(result.wedgePotentialStrategy)) {
       result.wedgePotentialStrategy = defaults.wedgePotentialStrategy;
     }
@@ -306,6 +314,7 @@
       result[key] = Number(result[key].toFixed(2));
     }
     result.threatMoveDepth = Math.round(result.threatMoveDepth);
+    result.threatPieceValueInfluencePercent = Math.round(result.threatPieceValueInfluencePercent);
     result.wedgePotentialCutoffValue = Math.round(result.wedgePotentialCutoffValue);
     result.wedgePotentialPerPieceCount = Math.round(result.wedgePotentialPerPieceCount);
     result.threatMaxMixPercent = Math.round(result.threatMaxMixPercent);
@@ -353,7 +362,8 @@
     }
 
     for (const key of colors) {
-      if (!/^#[0-9a-f]{6}$/i.test(result[key])) result[key] = defaults[key];
+      const color = globalThis.LichessColors.parse(result[key]);
+      result[key] = color && color.alpha === 1 ? globalThis.LichessColors.format(color) : defaults[key];
     }
 
     for (const key of [

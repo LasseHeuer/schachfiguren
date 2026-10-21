@@ -7,6 +7,8 @@
   let settings = null;
   let documentObserver = null;
 
+  document.addEventListener("lfs-hover-preview-change", event => scheduleRender(event.detail));
+
   function isInside(row, col) {
     return row >= 0 && row < 8 && col >= 0 && col < 8;
   }
@@ -31,8 +33,8 @@
   }
 
   function getLogicalSquare(element, board, blackOrientation) {
-    const key = (element.classList.contains("anim") ? element.dataset.lfsMoveKey : null)?.toLowerCase()
-      || element.dataset.key?.toLowerCase();
+    const key = (globalThis.LichessMoveAnimation?.getDestinationKey(element)
+      ?? element.dataset.lfsMoveKey ?? element.dataset.key)?.toLowerCase();
     if (key && /^[a-h][1-8]$/.test(key)) {
       return { row: 8 - Number(key[1]), col: key.charCodeAt(0) - 97 };
     }
@@ -46,10 +48,11 @@
     const position = Array.from({ length: 8 }, () => Array(8).fill(""));
     const kings = [];
     let complete = true;
+    const preview = globalThis.LichessThreatCoding?.getInteractionPreview(board);
 
     for (const element of board.querySelectorAll(":scope > piece")) {
-      if (element.classList.contains("ghost") || element.classList.contains("fading")
-        || element.classList.contains("dragging") || element.classList.contains("anim")) {
+      if (element.classList.contains("ghost") || element.classList.contains("fading")) continue;
+      if (!preview && element.classList.contains("dragging")) {
         complete = false;
         continue;
       }
@@ -59,7 +62,14 @@
         complete = false;
         continue;
       }
-      const square = getLogicalSquare(element, board, blackOrientation);
+      if (preview && type !== "king") continue;
+      let square;
+      if (preview) {
+        const row = preview.position.findIndex(rank => rank.includes(`${side}K`));
+        square = row < 0 ? null : { row, col: preview.position[row].indexOf(`${side}K`) };
+      } else {
+        square = getLogicalSquare(element, board, blackOrientation);
+      }
       const positioned = square && isInside(square.row, square.col);
       if (type === "king") {
         kings.push({
@@ -73,6 +83,7 @@
         complete = false;
         continue;
       }
+      if (preview) continue;
       if (position[square.row][square.col]) {
         complete = false;
         continue;
@@ -80,7 +91,7 @@
       position[square.row][square.col] = side + pieceCodes[type];
     }
 
-    return { position, kings, blackOrientation, complete };
+    return { position: preview?.position ?? position, kings, blackOrientation, complete };
   }
 
   function attacksSquare(position, piece, source, target) {
@@ -165,16 +176,45 @@
     paths.push(`M${edges[x]} ${edges[y]}H${edges[x + 1]}V${edges[y + 1]}H${edges[x]}Z`);
   }
 
+  function fillOverlay(svg, position, king, blackOrientation) {
+    const paths = [];
+    const orientationSign = blackOrientation ? -1 : 1;
+    for (let rowOffset = -1; rowOffset <= 1; rowOffset++) {
+      for (let colOffset = -1; colOffset <= 1; colOffset++) {
+        if (!rowOffset && !colOffset) continue;
+        const target = { row: king.row + rowOffset, col: king.col + colOffset };
+        appendCell(paths, rowOffset * orientationSign, colOffset * orientationSign, getDestinationState(position, king, target));
+      }
+    }
+    svg.replaceChildren();
+    if (paths.length) svg.append(createSvgElement("path", {
+      d: paths.join(""),
+      fill: king.color === "w" ? settings.whitePieceColor : settings.blackPieceColor,
+      "fill-rule": "nonzero",
+      "shape-rendering": "crispEdges"
+    }));
+  }
+
+  function renderPreview(group, preview) {
+    group.querySelector(":scope > svg.lfs-king-preview-fields")?.remove();
+    if (!settings?.enabled || !settings.kingMovementFieldsEnabled) return;
+    const piece = preview.position[preview.target.row][preview.target.col];
+    if (piece?.[1] !== "K") return;
+    const source = logicalToScreen(preview.source, preview.blackOrientation);
+    const svg = createSvgElement("svg", {
+      x: source.col, y: source.row, width: 1, height: 1,
+      viewBox: "0 0 1 1", "aria-hidden": "true", "pointer-events": "none"
+    });
+    svg.classList.add("lfs-king-preview-fields");
+    fillOverlay(svg, preview.position, { ...preview.target, color: piece[0] }, preview.blackOrientation);
+    group.append(svg);
+  }
+
   function renderBoard(board, entry) {
     if (!settings?.enabled || !settings.kingMovementFieldsEnabled || !board.closest(".is2d")) {
       removeOverlays(entry);
       return;
     }
-    if (board.querySelector(":scope > piece.dragging, :scope > piece.king.ghost, :scope > piece.king.fading")) {
-      removeOverlays(entry);
-      return;
-    }
-
     const parsed = readPosition(board);
     if (!parsed) return;
     if (!parsed.complete) {
@@ -202,33 +242,7 @@
         king.element.append(svg);
       }
       king.element.setAttribute("data-lfs-king-movement-fields", "");
-      svg.replaceChildren();
-      const positioned = Number.isInteger(king.row) && Number.isInteger(king.col);
-      const screenKing = positioned ? logicalToScreen(king, parsed.blackOrientation) : null;
-      const playerColor = king.color === "w" ? settings.whitePieceColor : settings.blackPieceColor;
-      const paths = [];
-      for (let rowOffset = -1; rowOffset <= 1; rowOffset++) {
-        for (let colOffset = -1; colOffset <= 1; colOffset++) {
-          if (!rowOffset && !colOffset) {
-            continue;
-          }
-          const target = positioned ? { row: king.row + rowOffset, col: king.col + colOffset } : null;
-          const state = parsed.complete && target ? getDestinationState(parsed.position, king, target) : "unknown";
-          const screenTarget = target ? logicalToScreen(target, parsed.blackOrientation) : null;
-          const orientationSign = parsed.blackOrientation ? -1 : 1;
-          const screenRowOffset = screenTarget ? screenTarget.row - screenKing.row : rowOffset * orientationSign;
-          const screenColOffset = screenTarget ? screenTarget.col - screenKing.col : colOffset * orientationSign;
-          appendCell(paths, screenRowOffset, screenColOffset, state);
-        }
-      }
-      if (paths.length) {
-        svg.append(createSvgElement("path", {
-          d: paths.join(""),
-          fill: playerColor,
-          "fill-rule": "nonzero",
-          "shape-rendering": "crispEdges"
-        }));
-      }
+      fillOverlay(svg, parsed.position, king, parsed.blackOrientation);
     }
   }
 
@@ -244,11 +258,12 @@
   function isRelevantMutation(mutation) {
     if (mutation.type === "attributes") {
       if (mutation.target.matches("cg-board, .cg-wrap")) return mutation.attributeName === "class";
+      if (mutation.target.matches("square")) return true;
       if (!mutation.target.matches("piece")) return false;
       return !(mutation.attributeName === "style" && mutation.target.matches(".anim, .dragging"));
     }
     return [...mutation.addedNodes, ...mutation.removedNodes].some(node =>
-      node.nodeType === Node.ELEMENT_NODE && (node.matches("piece") || node.querySelector("piece"))
+      node.nodeType === Node.ELEMENT_NODE && (node.matches("piece, square") || node.querySelector("piece, square"))
     );
   }
 
@@ -310,5 +325,5 @@
     initialize();
   }
 
-  globalThis.LichessKingMovementFields = { update };
+  globalThis.LichessKingMovementFields = { update, renderPreview };
 })();

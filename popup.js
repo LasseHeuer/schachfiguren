@@ -1,5 +1,6 @@
 (() => {
   const controls = [...document.querySelectorAll("[data-setting]")];
+  const colors = globalThis.LichessColors;
   const soundCatalog = globalThis.LichessSoundCatalog;
   const soundSettingsKey = "soundSettings";
   const soundFilesKey = "lfsCustomSoundFiles";
@@ -20,12 +21,15 @@
   const colorPickerValue = document.getElementById("color-picker-value");
   const colorPickerSv = document.getElementById("color-picker-sv");
   const colorPickerSvThumb = document.getElementById("color-picker-sv-thumb");
+  const colorPickerCanvas = document.getElementById("color-picker-cl-canvas");
   const colorInputs = controls.filter(control => control.type === "color");
   const colorPickerRanges = [colorPickerHue, colorPickerSaturation, colorPickerValue];
   const rangeTimers = new Map();
   let currentSettings = { ...globalThis.LichessSettings.defaults };
   let activeCurveKey = "pieceBounceCurve";
   let activeColorInput;
+  let pickerColor;
+  let fieldHue;
   let bounceCurveEditor = null;
   let currentSoundSettings = {};
   let customSoundNames = [];
@@ -72,7 +76,7 @@
       return control.value;
     }
     if (control.dataset.setting.endsWith("Px")) return `${control.value} px`;
-    if (control.dataset.setting === "wedgeOpacity") return `${Math.round(Number(control.value) * 100)}%`;
+    if (["wedgeOpacity", "movePreviewOriginOpacity"].includes(control.dataset.setting)) return `${Math.round(Number(control.value) * 100)}%`;
     if (control.dataset.setting === "moveAnimationDuration") return `${control.value} ms`;
     if (control.dataset.setting === "moveAnimationDistanceFactor") return `${Number(control.value).toFixed(2)}x`;
     if (control.dataset.setting === "zenClockBlinkFrequency") return `${Number(control.value).toFixed(1)} Hz`;
@@ -89,79 +93,77 @@
     return `${control.value}%`;
   }
 
-  function hexToHsv(hex) {
-    const match = /^#([0-9a-f]{6})$/i.exec(hex);
-    if (!match) return [0, 0, 100];
-    const [red, green, blue] = match[1].match(/../g).map(channel => parseInt(channel, 16) / 255);
-    const max = Math.max(red, green, blue);
-    const min = Math.min(red, green, blue);
-    const delta = max - min;
-    let hue = 0;
-
-    if (delta) {
-      if (max === red) hue = 60 * (((green - blue) / delta) % 6);
-      else if (max === green) hue = 60 * ((blue - red) / delta + 2);
-      else hue = 60 * ((red - green) / delta + 4);
-      if (hue < 0) hue += 360;
+  function renderColorField(hue) {
+    const rect = colorPickerSv.getBoundingClientRect();
+    const scale = Math.min(window.devicePixelRatio || 1, 2);
+    const width = Math.max(2, Math.round(rect.width * scale));
+    const height = Math.max(2, Math.round(rect.height * scale));
+    if (fieldHue === hue && colorPickerCanvas.width === width && colorPickerCanvas.height === height) return;
+    fieldHue = hue;
+    colorPickerCanvas.width = width;
+    colorPickerCanvas.height = height;
+    const context = colorPickerCanvas.getContext("2d");
+    const image = context.createImageData(width, height);
+    for (let y = 0; y < height; y++) {
+      const row = colors.toGamut({ l: 1 - y / (height - 1), c: 0.4, h: hue, alpha: 1 });
+      for (let x = 0; x < width; x++) {
+        // Use the entire available gamut at each lightness, without clipped plateaus.
+        const rgb = colors.toRgb({ ...row, c: x / (width - 1) * row.c });
+        const offset = (y * width + x) * 4;
+        image.data[offset] = rgb[0];
+        image.data[offset + 1] = rgb[1];
+        image.data[offset + 2] = rgb[2];
+        image.data[offset + 3] = 255;
+      }
     }
-
-    return [hue, max ? delta / max * 100 : 0, max * 100];
+    context.putImageData(image, 0, 0);
   }
 
-  function hsvToHex(hue, saturation, value) {
-    const normalizedHue = ((hue % 360) + 360) % 360 / 60;
-    const sat = saturation / 100;
-    const val = value / 100;
-    const chroma = val * sat;
-    const second = chroma * (1 - Math.abs(normalizedHue % 2 - 1));
-    const offset = val - chroma;
-    const channels = normalizedHue < 1 ? [chroma, second, 0]
-      : normalizedHue < 2 ? [second, chroma, 0]
-        : normalizedHue < 3 ? [0, chroma, second]
-          : normalizedHue < 4 ? [0, second, chroma]
-            : normalizedHue < 5 ? [second, 0, chroma]
-              : [chroma, 0, second];
-    return `#${channels.map(channel => Math.round((channel + offset) * 255).toString(16).padStart(2, "0")).join("")}`;
-  }
-
-  function renderColorPicker(hue, saturation, value, color) {
+  function renderColorPicker(color = colors.format(pickerColor)) {
+    const { h, c, l } = pickerColor;
+    colorPickerHue.value = String(h);
+    colorPickerValue.value = String(l * 100);
     colorPickerPreview.value = color;
-    colorPickerPreview.textContent = color;
-    colorPickerPreview.style.backgroundColor = color;
-    colorPickerPreview.style.color = value < 55 ? "#fff" : "#202620";
-    colorPickerSv.style.backgroundColor = hsvToHex(hue, 100, 100);
-    colorPickerSvThumb.style.left = `${saturation}%`;
-    colorPickerSvThumb.style.top = `${100 - value}%`;
-    document.getElementById("color-picker-hue-value").value = `${Math.round(hue)} deg`;
-    document.getElementById("color-picker-saturation-value").value = `${Math.round(saturation)}%`;
-    document.getElementById("color-picker-value-value").value = `${Math.round(value)}%`;
-    colorPickerHue.style.setProperty("--picker-track", "linear-gradient(90deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)");
-    colorPickerSaturation.style.setProperty("--picker-track", `linear-gradient(90deg, ${hsvToHex(hue, 0, value)}, ${hsvToHex(hue, 100, value)})`);
-    colorPickerValue.style.setProperty("--picker-track", `linear-gradient(90deg, #000, ${hsvToHex(hue, saturation, 100)})`);
+    colorPickerPreview.textContent = `oklch(${l.toFixed(3)} ${c.toFixed(3)} ${h.toFixed(1)})`;
+    colorPickerPreview.title = color;
+    colorPickerPreview.style.backgroundColor = colors.format(colors.toGamut(pickerColor));
+    colorPickerPreview.style.color = l < 0.6 ? "oklch(1 0 0)" : colors.toOklch("#202620");
+    const maxChroma = colors.toGamut({ ...pickerColor, c: 0.4 }).c;
+    colorPickerSaturation.max = String(Math.max(0.0001, maxChroma));
+    colorPickerSaturation.value = String(c);
+    colorPickerSvThumb.style.left = `${maxChroma > 0.000001 ? Math.min(c / maxChroma, 1) * 100 : 0}%`;
+    colorPickerSvThumb.style.top = `${(1 - l) * 100}%`;
+    document.getElementById("color-picker-hue-value").value = `${h.toFixed(1)}`;
+    document.getElementById("color-picker-saturation-value").value = c.toFixed(4);
+    document.getElementById("color-picker-value-value").value = `${(l * 100).toFixed(2)}%`;
+    for (const [control, channel, maximum] of [[colorPickerHue, "h", 360], [colorPickerSaturation, "c", maxChroma], [colorPickerValue, "l", 1]]) {
+      const count = channel === "h" ? 36 : channel === "c" ? 1 : 16;
+      const stops = Array.from({ length: count + 1 }, (_, index) => {
+        const sample = colors.toGamut({ ...(channel === "h" ? { l: 0.72, c: 0.12, h, alpha: 1 } : pickerColor), alpha: 1, [channel]: index / count * maximum });
+        return `${colors.format(sample)} ${index / count * 100}%`;
+      });
+      control.style.setProperty("--picker-track", `linear-gradient(90deg in oklch, ${stops.join(", ")})`);
+    }
+    renderColorField(h);
   }
 
   function showColorPicker(control) {
     activeColorInput = control;
     colorPickerTitle.textContent = control.closest("label")?.querySelector("span")?.textContent.trim() || "Farbe";
-    const [hue, saturation, value] = hexToHsv(control.value);
-    colorPickerHue.value = String(Math.round(hue) % 360);
-    colorPickerSaturation.value = String(Math.round(saturation));
-    colorPickerValue.value = String(Math.round(value));
-    renderColorPicker(hue, saturation, value, control.value);
+    const color = currentSettings[control.dataset.setting];
+    pickerColor = colors.parse(color);
     colorPicker.hidden = false;
-    colorPicker.scrollIntoView({ block: "nearest" });
+    renderColorPicker(color);
   }
 
   function updateColorFromPicker() {
     if (!activeColorInput) return;
-    const hue = Number(colorPickerHue.value);
-    const saturation = Number(colorPickerSaturation.value);
-    const value = Number(colorPickerValue.value);
-    const color = hsvToHex(hue, saturation, value);
-    renderColorPicker(hue, saturation, value, color);
-    if (activeColorInput.value === color) return;
-    activeColorInput.value = color;
-    activeColorInput.dispatchEvent(new Event("input", { bubbles: true }));
+    pickerColor = colors.toGamut(pickerColor);
+    const color = colors.format(pickerColor);
+    renderColorPicker(color);
+    if (currentSettings[activeColorInput.dataset.setting] === color) return;
+    activeColorInput.value = colors.toHex(pickerColor);
+    saveControl(activeColorInput, color);
   }
 
   function hideColorPicker() {
@@ -173,17 +175,18 @@
   function updateColorFromSv(event) {
     if (!svDrag || event.pointerId !== svDrag.pointerId) return;
     const rect = colorPickerSv.getBoundingClientRect();
-    let saturation;
-    let value;
+    let fraction;
+    let lightness;
     if (svDrag.shiftKey) {
-      saturation = svDrag.saturation + (event.clientX - svDrag.x) / rect.width * 25;
-      value = svDrag.value - (event.clientY - svDrag.y) / rect.height * 25;
+      if (event.clientX === svDrag.x && event.clientY === svDrag.y) return;
+      fraction = svDrag.fraction + (event.clientX - svDrag.x) / rect.width * 0.25;
+      lightness = svDrag.lightness - (event.clientY - svDrag.y) / rect.height * 0.25;
     } else {
-      saturation = (event.clientX - rect.left) / rect.width * 100;
-      value = (rect.bottom - event.clientY) / rect.height * 100;
+      fraction = (event.clientX - rect.left) / rect.width;
+      lightness = (rect.bottom - event.clientY) / rect.height;
     }
-    colorPickerSaturation.value = String(Math.max(0, Math.min(100, Math.round(saturation))));
-    colorPickerValue.value = String(Math.max(0, Math.min(100, Math.round(value))));
+    const row = colors.toGamut({ ...pickerColor, c: 0.4, l: Math.max(0, Math.min(1, lightness)) });
+    pickerColor = { ...row, c: Math.max(0, Math.min(1, fraction)) * row.c };
     updateColorFromPicker();
   }
 
@@ -194,6 +197,7 @@
     for (const control of controls) {
       const value = settings[control.dataset.setting];
       if (control.type === "checkbox") control.checked = value;
+      else if (control.type === "color") control.value = colors.toHex(colors.toGamut(colors.parse(value)));
       else control.value = value;
       updateOutput(control);
     }
@@ -202,10 +206,11 @@
     bounceCurveEditor?.updatePreviewPieces();
   }
 
-  function saveControl(control) {
+  function saveControl(control, color) {
     const value = control.type === "checkbox" ? control.checked
       : control.type === "range" ? Number(control.value)
-        : control.value;
+        : control.type === "color" ? colors.toOklch(color ?? control.value)
+          : control.value;
     currentSettings[control.dataset.setting] = value;
     syncDuplicateControls(control);
     chrome.storage.local.set({ [control.dataset.setting]: value }, () => {
@@ -572,7 +577,7 @@
   soundFolderInput.addEventListener("change", importSoundFolder);
 
   for (const input of colorInputs) {
-    input.title = "Eigenen Farbpicker mit Farbton, Saettigung und Helligkeit oeffnen";
+    input.title = "OKLCH-Farbpicker mit Farbton, Chroma und Helligkeit oeffnen";
     input.addEventListener("click", event => {
       event.preventDefault();
       event.stopPropagation();
@@ -580,7 +585,12 @@
     });
   }
   for (const control of colorPickerRanges) {
-    control.addEventListener("input", updateColorFromPicker);
+    control.addEventListener("input", () => {
+      if (!activeColorInput) return;
+      const channel = control === colorPickerHue ? "h" : control === colorPickerSaturation ? "c" : "l";
+      pickerColor = { ...pickerColor, [channel]: Number(control.value) / (channel === "l" ? 100 : 1) };
+      updateColorFromPicker();
+    });
   }
   colorPickerSv.addEventListener("pointerdown", event => {
     if (event.button !== 0) return;
@@ -589,8 +599,8 @@
       pointerId: event.pointerId,
       x: event.clientX,
       y: event.clientY,
-      saturation: Number(colorPickerSaturation.value),
-      value: Number(colorPickerValue.value),
+      fraction: Number.parseFloat(colorPickerSvThumb.style.left) / 100,
+      lightness: pickerColor.l,
       shiftKey: event.shiftKey
     };
     colorPickerSv.setPointerCapture(event.pointerId);
@@ -603,7 +613,19 @@
     svDrag = undefined;
   });
   colorPickerSv.addEventListener("pointercancel", () => { svDrag = undefined; });
+  colorPickerSv.addEventListener("keydown", event => {
+    if (!activeColorInput || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+    event.preventDefault();
+    const step = event.shiftKey ? 0.0025 : 0.01;
+    const fraction = Number.parseFloat(colorPickerSvThumb.style.left) / 100;
+    const row = colors.toGamut({ ...pickerColor, c: 0.4, l: Math.max(0, Math.min(1, pickerColor.l + (event.key === "ArrowUp" ? step : event.key === "ArrowDown" ? -step : 0))) });
+    pickerColor = { ...row, c: Math.max(0, Math.min(1, fraction + (event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0))) * row.c };
+    updateColorFromPicker();
+  });
   document.getElementById("close-color-picker").addEventListener("click", hideColorPicker);
+  window.addEventListener("resize", () => {
+    if (!colorPicker.hidden) renderColorPicker();
+  });
   document.addEventListener("pointerdown", event => {
     if (!colorPicker.hidden && !colorPicker.contains(event.target) && !colorInputs.includes(event.target)) hideColorPicker();
   });

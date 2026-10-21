@@ -130,7 +130,7 @@
       const assetUrl = getPieceAssetUrl?.();
       if (!assetUrl) return;
       for (const piece of previewPieces) {
-        piece.style.backgroundColor = "#e4eee5";
+        piece.style.backgroundColor = "oklch(0.9390807428 0.0160029803 148.4019644176)";
         piece.style.webkitMask = `url("${assetUrl}") center / contain no-repeat`;
         piece.style.mask = `url("${assetUrl}") center / contain no-repeat`;
       }

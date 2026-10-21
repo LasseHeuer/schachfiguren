@@ -1,32 +1,32 @@
 html {
   --lfs-mix-percent: 0%;
   --lfs-hover-desaturation: 0%;
-  --lfs-hover-mix-color: #808080;
+  --lfs-hover-mix-color: oklch(0.599870801707118 0.000000022359582 89.875563066600);
   --lfs-move-dot-size: 10%;
   --lfs-square-move-dot-size: calc(var(--lfs-move-dot-size) * 1.4142);
-  --lfs-white-piece-color: #d1521d;
-  --lfs-black-piece-color: #2ba4d1;
+  --lfs-white-piece-color: oklch(0.599740930068773 0.172188795606971 40.184529469491);
+  --lfs-black-piece-color: oklch(0.674238427247811 0.120655575344413 228.510181577896);
   background-color: var(--c-bg-page) !important;
 }
 
 html.light {
-  --lfs-engine-arrow-color: var(--lfs-engine-arrow-light, #15781b);
-  --lfs-board-light-active: var(--lfs-board-light-light, #e9e8e8);
-  --lfs-board-dark-active: var(--lfs-board-dark-light, #d6ddd3);
-  --lfs-last-move-color: var(--lfs-last-move-light, #dae0d7);
-  --lfs-selected-square-color: var(--lfs-selected-light, #ffffff);
-  --lfs-check-square-color: var(--lfs-check-light, #e57373);
-  --lfs-hover-mix-color: var(--lfs-hover-mix-light, #d4d2d2);
+  --lfs-engine-arrow-color: var(--lfs-engine-arrow-light, oklch(0.500159011992414 0.154359110842529 143.446846366196));
+  --lfs-board-light-active: var(--lfs-board-light-light, oklch(0.931771275027537 0.001079741737538 17.179127131600));
+  --lfs-board-dark-active: var(--lfs-board-dark-light, oklch(0.889369210212465 0.015441664254116 136.085135168608));
+  --lfs-last-move-color: var(--lfs-last-move-light, oklch(0.899575171577826 0.013704677926575 134.902661492060));
+  --lfs-selected-square-color: var(--lfs-selected-light, oklch(0.999999993473546 0.000000037273996 89.875563095902));
+  --lfs-check-square-color: var(--lfs-check-light, oklch(0.687546825729105 0.141955024920225 21.456576562938));
+  --lfs-hover-mix-color: var(--lfs-hover-mix-light, oklch(0.865356965687609 0.002202233145200 17.200923070259));
 }
 
 html:not(.light) {
-  --lfs-engine-arrow-color: var(--lfs-engine-arrow-dark, #80b64c);
-  --lfs-board-light-active: var(--lfs-board-light-dark, #454b3d);
-  --lfs-board-dark-active: var(--lfs-board-dark-dark, #433e4c);
-  --lfs-last-move-color: var(--lfs-last-move-dark, #2d2b2b);
-  --lfs-selected-square-color: var(--lfs-selected-dark, #252823);
-  --lfs-check-square-color: var(--lfs-check-dark, #8c3434);
-  --lfs-hover-mix-color: var(--lfs-hover-mix-dark, #282727);
+  --lfs-engine-arrow-color: var(--lfs-engine-arrow-dark, oklch(0.715763415381370 0.148903202447606 131.784712664961));
+  --lfs-board-light-active: var(--lfs-board-light-dark, oklch(0.402865111336688 0.024101051706464 126.369117320751));
+  --lfs-board-dark-active: var(--lfs-board-dark-dark, oklch(0.374333149454170 0.024456008727707 301.504533708507));
+  --lfs-last-move-color: var(--lfs-last-move-dark, oklch(0.291178940257418 0.002908317873507 17.323614671502));
+  --lfs-selected-square-color: var(--lfs-selected-dark, oklch(0.271958579915841 0.010027590302030 132.640183310038));
+  --lfs-check-square-color: var(--lfs-check-dark, oklch(0.450272037237114 0.120348785495185 23.235475932859));
+  --lfs-hover-mix-color: var(--lfs-hover-mix-dark, oklch(0.273797858213924 0.001471467317541 17.247148016878));
 }
 
 html:not([data-lfs-disabled]) {
@@ -70,8 +70,8 @@ html:not([data-lfs-disabled])[data-lfs-remove-gradients] body *:not(cg-board):no
 }
 
 html:not([data-lfs-disabled]) body .cmn-toggle label::after {
-  background-color: var(--c-bg-page, #fff) !important;
-  border: 1px solid color-mix(in srgb, currentColor 35%, transparent) !important;
+  background-color: var(--c-bg-page, oklch(0.999999993473546 0.000000037273996 89.875563095902)) !important;
+  border: 1px solid color-mix(in srgb, currentColor 35%, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0)) !important;
   box-sizing: border-box;
 }
 
@@ -91,7 +91,7 @@ html:not([data-lfs-disabled])::after {
   position: fixed;
   inset: 0;
   z-index: 2147483645;
-  background-color: color-mix(in srgb, transparent, var(--lfs-hover-mix-color) var(--lfs-mix-percent));
+  background-color: color-mix(in srgb, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0), var(--lfs-hover-mix-color) var(--lfs-mix-percent));
   backdrop-filter: none;
   transition: background-color 150ms ease, backdrop-filter 150ms ease;
   pointer-events: none;
@@ -144,11 +144,11 @@ html:not([data-lfs-disabled])::before {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background: var(--c-bg-page) linear-gradient(to bottom, var(--c-body-gradient), var(--c-bg-page) 116px) no-repeat;
+  background: var(--c-bg-page) linear-gradient(to bottom in srgb, var(--c-body-gradient), var(--c-bg-page) 116px) no-repeat;
 }
 
 html:not([data-lfs-disabled]) body {
-  background: transparent !important;
+  background: oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) !important;
 }
 
 html:not([data-lfs-disabled]) [data-lfs-playlist-hidden] {
@@ -175,8 +175,8 @@ html[data-lfs-blunder-training="active"] :is(.analyse__moves, .analyse__controls
 .lfs-playlist-card {
   box-sizing: border-box;
   padding: 0.75rem;
-  background: var(--c-bg-box, #fff);
-  color: var(--c-font, #333);
+  background: var(--c-bg-box, oklch(0.999999993473546 0.000000037273996 89.875563095902));
+  color: var(--c-font, oklch(0.321092509068037 0.000000011968401 89.875562741511));
 }
 
 .lfs-playlist-card h2 {
@@ -192,9 +192,9 @@ html[data-lfs-blunder-training="active"] :is(.analyse__moves, .analyse__controls
   box-sizing: border-box;
   min-height: 2.15rem;
   padding: 0.4rem 0.7rem;
-  border: 1px solid var(--c-border, #aaa);
-  background: var(--c-bg-high, #eee);
-  color: var(--c-font, #333);
+  border: 1px solid var(--c-border, oklch(0.738018666131950 0.000000027508905 89.875562537916));
+  background: var(--c-bg-high, oklch(0.949119254399155 0.000000035377467 89.875562714212));
+  color: var(--c-font, oklch(0.321092509068037 0.000000011968401 89.875562741511));
   font: inherit;
   text-align: center;
   cursor: pointer;
@@ -220,20 +220,20 @@ html[data-lfs-blunder-training="active"] :is(.analyse__moves, .analyse__controls
 }
 
 .lfs-playlist-primary {
-  border-color: var(--c-primary, #629924);
-  background: var(--c-primary, #629924);
-  color: var(--c-primary-over, #fff);
+  border-color: var(--c-primary, oklch(0.621819458576841 0.155684874547398 131.916927625873));
+  background: var(--c-primary, oklch(0.621819458576841 0.155684874547398 131.916927625873));
+  color: var(--c-primary-over, oklch(0.999999993473546 0.000000037273996 89.875563095902));
 }
 
 .lfs-playlist-quiet {
-  border-color: transparent;
-  background: transparent;
-  color: var(--c-font-dim, #777);
+  border-color: oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0);
+  background: oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0);
+  color: var(--c-font-dim, oklch(0.569262399668685 0.000000021218684 89.875563251835));
 }
 
 .lfs-playlist-quiet:hover {
-  background: var(--c-bg-high, #eee);
-  color: var(--c-font, #333);
+  background: var(--c-bg-high, oklch(0.949119254399155 0.000000035377467 89.875562714212));
+  color: var(--c-font, oklch(0.321092509068037 0.000000011968401 89.875562741511));
 }
 
 .lfs-playlist-list {
@@ -259,18 +259,18 @@ html[data-lfs-blunder-training="active"] :is(.analyse__moves, .analyse__controls
 }
 
 .lfs-playlist-item-status {
-  color: var(--c-font-dim, #777);
+  color: var(--c-font-dim, oklch(0.569262399668685 0.000000021218684 89.875563251835));
   font-size: 0.75rem;
   text-align: right;
   white-space: nowrap;
 }
 
 .lfs-playlist-item-status[data-ready="true"] {
-  color: var(--c-primary, #629924);
+  color: var(--c-primary, oklch(0.621819458576841 0.155684874547398 131.916927625873));
 }
 
 .lfs-playlist-item-score {
-  color: var(--c-font-dim, #777);
+  color: var(--c-font-dim, oklch(0.569262399668685 0.000000021218684 89.875563251835));
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -307,10 +307,10 @@ main.lobby:has(> .lfs-playlist-page) {
   max-width: 46rem;
   margin: 0 auto;
   padding: clamp(1rem, 2.5vw, 1.5rem);
-  border: 1px solid color-mix(in srgb, var(--c-font, #333) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c-font, oklch(0.321092509068037 0.000000011968401 89.875562741511)) 10%, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0));
   border-radius: 8px;
-  background: var(--c-bg-box, #fff);
-  color: var(--c-font, #333);
+  background: var(--c-bg-box, oklch(0.999999993473546 0.000000037273996 89.875563095902));
+  color: var(--c-font, oklch(0.321092509068037 0.000000011968401 89.875562741511));
 }
 
 .lfs-playlist-page-header,
@@ -348,13 +348,13 @@ main.lobby:has(> .lfs-playlist-page) {
 }
 
 .lfs-playlist-score small {
-  color: var(--c-font-dim, #777);
+  color: var(--c-font-dim, oklch(0.569262399668685 0.000000021218684 89.875563251835));
   font-size: 0.65rem;
 }
 
 .lfs-playlist-page-summary {
   margin: 0.4rem 0 1rem;
-  color: var(--c-font-dim, #777);
+  color: var(--c-font-dim, oklch(0.569262399668685 0.000000021218684 89.875563251835));
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
 }
@@ -363,10 +363,10 @@ main.lobby:has(> .lfs-playlist-page) {
   max-height: min(52dvh, 28rem);
   margin: 1rem 0 0;
   padding: 0;
-  border-top: 1px solid color-mix(in srgb, var(--c-font, #333) 10%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--c-font, oklch(0.321092509068037 0.000000011968401 89.875562741511)) 10%, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0));
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-color: var(--c-border, #aaa) transparent;
+  scrollbar-color: var(--c-border, oklch(0.738018666131950 0.000000027508905 89.875562537916)) oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0);
   scrollbar-width: thin;
   scrollbar-gutter: stable;
 }
@@ -375,11 +375,11 @@ main.lobby:has(> .lfs-playlist-page) {
   min-height: 2.75rem;
   box-sizing: border-box;
   padding: 0.4rem 0.25rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--c-font, #333) 7%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--c-font, oklch(0.321092509068037 0.000000011968401 89.875562741511)) 7%, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0));
 }
 
 .lfs-playlist-page .lfs-playlist-list li:hover {
-  background: color-mix(in srgb, var(--c-font, #333) 4%, transparent);
+  background: color-mix(in srgb, var(--c-font, oklch(0.321092509068037 0.000000011968401 89.875562741511)) 4%, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0));
 }
 
 .lfs-playlist-page .lfs-playlist-list a {
@@ -396,14 +396,14 @@ main.lobby:has(> .lfs-playlist-page) {
   min-height: 2rem;
   padding: 0;
   border: 0;
-  background: transparent;
-  color: var(--c-font-dim, #777);
+  background: oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0);
+  color: var(--c-font-dim, oklch(0.569262399668685 0.000000021218684 89.875563251835));
   font-size: 1.15rem;
 }
 
 .lfs-playlist-page .lfs-playlist-remove:hover {
-  background: color-mix(in srgb, var(--c-bad, #c33) 10%, transparent);
-  color: var(--c-bad, #c33);
+  background: color-mix(in srgb, var(--c-bad, oklch(0.559395904062834 0.189961039848284 25.862511090201)) 10%, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0));
+  color: var(--c-bad, oklch(0.559395904062834 0.189961039848284 25.862511090201));
 }
 
 .lfs-playlist-page-actions {
@@ -426,7 +426,7 @@ main.lobby:has(> .lfs-playlist-page) {
 
 .lfs-playlist-empty {
   margin: 0.5rem 0 0;
-  color: var(--c-font-dim, #777);
+  color: var(--c-font-dim, oklch(0.569262399668685 0.000000021218684 89.875563251835));
 }
 
 .lfs-playlist-toolbar h3 {
@@ -446,17 +446,17 @@ main.lobby:has(> .lfs-playlist-page) {
   justify-content: center;
   gap: 0.2rem;
   min-height: 2.5rem;
-  border-color: transparent;
+  border-color: oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0);
   font-size: 0.85rem;
 }
 
 .lfs-review-button[data-grade="4"] {
-  background: color-mix(in srgb, var(--c-primary, #629924) 12%, var(--c-bg-box, #fff));
-  color: var(--c-primary, #629924);
+  background: color-mix(in srgb, var(--c-primary, oklch(0.621819458576841 0.155684874547398 131.916927625873)) 12%, var(--c-bg-box, oklch(0.999999993473546 0.000000037273996 89.875563095902)));
+  color: var(--c-primary, oklch(0.621819458576841 0.155684874547398 131.916927625873));
 }
 
 .lfs-review-button[data-grade="1"] {
-  color: var(--c-font-dim, #777);
+  color: var(--c-font-dim, oklch(0.569262399668685 0.000000021218684 89.875563251835));
 }
 
 .lfs-review-button small {
@@ -466,7 +466,7 @@ main.lobby:has(> .lfs-playlist-page) {
 .lfs-review-saved {
   margin: 0;
   padding: 0.65rem;
-  background: var(--c-bg-high, #eee);
+  background: var(--c-bg-high, oklch(0.949119254399155 0.000000035377467 89.875562714212));
 }
 
 #lfs-puzzle-playlist-toolbar {
@@ -477,8 +477,8 @@ main.lobby:has(> .lfs-playlist-page) {
   margin: 0;
   padding: 0.6rem 0;
   border: 0;
-  background: transparent;
-  color: var(--c-font, #333);
+  background: oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0);
+  color: var(--c-font, oklch(0.321092509068037 0.000000011968401 89.875562741511));
 }
 
 .puzzle__session > #lfs-puzzle-playlist-toolbar {
@@ -497,7 +497,7 @@ main.lobby:has(> .lfs-playlist-page) {
 }
 
 :is(.lfs-playlist-page, .lfs-playlist-toolbar) :is(button, a, ol):focus-visible {
-  outline: 2px solid var(--c-primary, #629924);
+  outline: 2px solid var(--c-primary, oklch(0.621819458576841 0.155684874547398 131.916927625873));
   outline-offset: 2px;
 }
 
@@ -689,7 +689,7 @@ html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock[hidden] {
 
 html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-time {
   display: block !important;
-  color: var(--c-font, #222) !important;
+  color: var(--c-font, oklch(0.251964748219976 0.000000009391733 89.875563765988)) !important;
   font: 600 var(--lfs-zen-clock-font-size) / 1.1 system-ui, sans-serif !important;
   font-variant-numeric: tabular-nums !important;
   white-space: nowrap !important;
@@ -705,7 +705,7 @@ html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-bar {
   width: 100% !important;
   height: var(--lfs-zen-clock-line-thickness) !important;
   overflow: hidden !important;
-  background: transparent !important;
+  background: oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) !important;
   border: 0 !important;
   outline: 0 !important;
   box-shadow: none !important;
@@ -716,14 +716,14 @@ html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-fill {
   display: block !important;
   height: 100% !important;
   transition: none !important;
-  background: var(--lfs-zen-clock-player-color, var(--lfs-white-piece-color, #d1521d)) !important;
+  background: var(--lfs-zen-clock-player-color, var(--lfs-white-piece-color, oklch(0.599740930068773 0.172188795606971 40.184529469491))) !important;
   border: 0 !important;
   outline: 0 !important;
   box-shadow: none !important;
 }
 
 html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock[data-player-color="black"] .lfs-zen-clock-fill {
-  --lfs-zen-clock-player-color: var(--lfs-black-piece-color, #2ba4d1);
+  --lfs-zen-clock-player-color: var(--lfs-black-piece-color, oklch(0.674238427247811 0.120655575344413 228.510181577896));
 }
 
 html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock[data-critical] .lfs-zen-clock-fill::before {
@@ -731,7 +731,7 @@ html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock[data-critical] .lf
   inset: 0 !important;
   z-index: 1 !important;
   display: block !important;
-  background: #fff !important;
+  background: oklch(0.999999993473546 0.000000037273996 89.875563095902) !important;
   content: "" !important;
   animation: lfs-zen-clock-pulse var(--lfs-zen-clock-blink-duration, 0.5s) linear infinite !important;
 }
@@ -743,17 +743,17 @@ html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock[data-running] .lfs
   bottom: 0 !important;
   display: block !important;
   width: min(var(--lfs-zen-clock-end-size, 48px), 100%) !important;
-  background: var(--lfs-zen-clock-player-color, #d1521d) !important;
+  background: var(--lfs-zen-clock-player-color, oklch(0.599740930068773 0.172188795606971 40.184529469491)) !important;
 }
 
 html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock[data-running] .lfs-zen-clock-active-end::after {
   position: absolute !important;
   inset: 0 !important;
   display: block !important;
-  background: linear-gradient(90deg,
-    transparent 0%,
-    #fff calc(100% - var(--lfs-zen-clock-end-blend, 25%)),
-    #fff 100%) !important;
+  background: linear-gradient(90deg in srgb,
+    oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) 0%,
+    oklch(0.999999993473546 0.000000037273996 89.875563095902) calc(100% - var(--lfs-zen-clock-end-blend, 25%)),
+    oklch(0.999999993473546 0.000000037273996 89.875563095902) 100%) !important;
   content: "" !important;
   animation: lfs-zen-clock-pulse var(--lfs-zen-clock-blink-duration, 0.5s) linear infinite !important;
 }
@@ -801,7 +801,7 @@ html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"] {
   border: 0 !important;
   border-radius: 0 !important;
   appearance: none !important;
-  background: transparent !important;
+  background: oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) !important;
   cursor: ew-resize !important;
   pointer-events: auto !important;
 }
@@ -809,7 +809,7 @@ html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"] {
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-webkit-slider-runnable-track {
   height: 3px;
   border-radius: 3px;
-  background: linear-gradient(to right, var(--c-primary, #629a62) var(--lfs-pv-progress, 0%), var(--c-border, #aaa) var(--lfs-pv-progress, 0%));
+  background: linear-gradient(to right in srgb, var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760)) var(--lfs-pv-progress, 0%), var(--c-border, oklch(0.738018666131950 0.000000027508905 89.875562537916)) var(--lfs-pv-progress, 0%));
 }
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-webkit-slider-thumb {
@@ -817,33 +817,33 @@ html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::
   height: 12px;
   margin-top: -4.5px;
   appearance: none;
-  border: 2px solid var(--c-primary, #629a62);
+  border: 2px solid var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760));
   border-radius: 50%;
-  background: var(--c-bg-box, #fff);
+  background: var(--c-bg-box, oklch(0.999999993473546 0.000000037273996 89.875563095902));
 }
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-moz-range-track {
   height: 3px;
   border-radius: 3px;
-  background: var(--c-border, #aaa);
+  background: var(--c-border, oklch(0.738018666131950 0.000000027508905 89.875562537916));
 }
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-moz-range-progress {
   height: 3px;
   border-radius: 3px;
-  background: var(--c-primary, #629a62);
+  background: var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760));
 }
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-moz-range-thumb {
   width: 8px;
   height: 8px;
-  border: 2px solid var(--c-primary, #629a62);
+  border: 2px solid var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760));
   border-radius: 50%;
-  background: var(--c-bg-box, #fff);
+  background: var(--c-bg-box, oklch(0.999999993473546 0.000000037273996 89.875563095902));
 }
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]:focus-visible {
-  outline: 2px solid var(--c-primary, #629a62) !important;
+  outline: 2px solid var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760)) !important;
   outline-offset: 2px !important;
 }
 
@@ -922,21 +922,21 @@ html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board::before {
   opacity: 1 !important;
   background-color: var(--lfs-board-dark) !important;
   background-image:
-    linear-gradient(45deg, var(--lfs-board-light) 25%, transparent 25%, transparent 75%, var(--lfs-board-light) 75%),
-    linear-gradient(45deg, var(--lfs-board-light) 25%, transparent 25%, transparent 75%, var(--lfs-board-light) 75%) !important;
+    linear-gradient(45deg in srgb, var(--lfs-board-light) 25%, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) 25%, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) 75%, var(--lfs-board-light) 75%),
+    linear-gradient(45deg in srgb, var(--lfs-board-light) 25%, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) 25%, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) 75%, var(--lfs-board-light) 75%) !important;
   background-position: 0 0, 16.666667% 16.666667% !important;
   background-repeat: repeat, repeat !important;
   background-size: 25% 25% !important;
 }
 
 html.light:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board::before {
-  --lfs-board-light: var(--lfs-board-light-light, #e9e8e8);
-  --lfs-board-dark: var(--lfs-board-dark-light, #d6ddd3);
+  --lfs-board-light: var(--lfs-board-light-light, oklch(0.931771275027537 0.001079741737538 17.179127131600));
+  --lfs-board-dark: var(--lfs-board-dark-light, oklch(0.889369210212465 0.015441664254116 136.085135168608));
 }
 
 html:not(.light):not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board::before {
-  --lfs-board-light: var(--lfs-board-light-dark, #454b3d);
-  --lfs-board-dark: var(--lfs-board-dark-dark, #433e4c);
+  --lfs-board-light: var(--lfs-board-light-dark, oklch(0.402865111336688 0.024101051706464 126.369117320751));
+  --lfs-board-dark: var(--lfs-board-dark-dark, oklch(0.374333149454170 0.024456008727707 301.504533708507));
 }
 
 html:not([data-lfs-disabled])[data-lfs-square-outline] body cg-board::after {
@@ -946,10 +946,10 @@ html:not([data-lfs-disabled])[data-lfs-square-outline] body cg-board::after {
   z-index: 1 !important;
   pointer-events: none !important;
   background-image:
-    linear-gradient(to right, color-mix(in srgb, var(--lfs-board-dark-active, #333) 65%, var(--c-font, #111) 35%) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in srgb, var(--lfs-board-dark-active, #333) 65%, var(--c-font, #111) 35%) 1px, transparent 1px),
-    linear-gradient(to right, transparent calc(100% - 1px), color-mix(in srgb, var(--lfs-board-dark-active, #333) 65%, var(--c-font, #111) 35%) calc(100% - 1px)),
-    linear-gradient(to bottom, transparent calc(100% - 1px), color-mix(in srgb, var(--lfs-board-dark-active, #333) 65%, var(--c-font, #111) 35%) calc(100% - 1px)) !important;
+    linear-gradient(to right in srgb, color-mix(in srgb, var(--lfs-board-dark-active, oklch(0.321092509068037 0.000000011968401 89.875562741511)) 65%, var(--c-font, oklch(0.177637771917226 0.000000006621270 89.875562823975)) 35%) 1px, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) 1px),
+    linear-gradient(to bottom in srgb, color-mix(in srgb, var(--lfs-board-dark-active, oklch(0.321092509068037 0.000000011968401 89.875562741511)) 65%, var(--c-font, oklch(0.177637771917226 0.000000006621270 89.875562823975)) 35%) 1px, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) 1px),
+    linear-gradient(to right in srgb, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) calc(100% - 1px), color-mix(in srgb, var(--lfs-board-dark-active, oklch(0.321092509068037 0.000000011968401 89.875562741511)) 65%, var(--c-font, oklch(0.177637771917226 0.000000006621270 89.875562823975)) 35%) calc(100% - 1px)),
+    linear-gradient(to bottom in srgb, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) calc(100% - 1px), color-mix(in srgb, var(--lfs-board-dark-active, oklch(0.321092509068037 0.000000011968401 89.875562741511)) 65%, var(--c-font, oklch(0.177637771917226 0.000000006621270 89.875562823975)) 35%) calc(100% - 1px)) !important;
   background-position: 0 0 !important;
   background-size: 100% 100%, 100% 100%, 12.5% 100%, 100% 12.5% !important;
   background-repeat: no-repeat, no-repeat, repeat-x, repeat-y !important;
@@ -983,7 +983,7 @@ html:not([data-lfs-disabled]) #lfs-pv-preview > svg.lfs-last-move-line {
 }
 
 html:not([data-lfs-disabled]) .is2d cg-board > piece[data-lfs-move-preview-origin] {
-  opacity: 0.25 !important;
+  opacity: var(--lfs-move-preview-origin-opacity, 0.25) !important;
 }
 
 html:not([data-lfs-disabled]) .is2d cg-board > piece[data-lfs-move-preview-hidden] {
@@ -1024,14 +1024,14 @@ html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square.se
 html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square.move-dest:not(.oc),
 html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square.premove-dest:not(.oc) {
   background: radial-gradient(
-    var(--lfs-active-move-dot-color, var(--lfs-selected-square-color)) 0 var(--lfs-move-dot-size),
-    transparent calc(var(--lfs-move-dot-size) + 1%)
+    in srgb, var(--lfs-active-move-dot-color, var(--lfs-selected-square-color)) 0 var(--lfs-move-dot-size),
+    oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) calc(var(--lfs-move-dot-size) + 1%)
   ) !important;
 }
 
 html:not([data-lfs-disabled])[data-lfs-square-move-dots] body[data-board] .is2d .cg-wrap cg-board square.move-dest:not(.oc),
 html:not([data-lfs-disabled])[data-lfs-square-move-dots] body[data-board] .is2d .cg-wrap cg-board square.premove-dest:not(.oc) {
-  background: linear-gradient(var(--lfs-active-move-dot-color, var(--lfs-selected-square-color)), var(--lfs-active-move-dot-color, var(--lfs-selected-square-color))) center /
+  background: linear-gradient(in srgb, var(--lfs-active-move-dot-color, var(--lfs-selected-square-color)), var(--lfs-active-move-dot-color, var(--lfs-selected-square-color))) center /
     var(--lfs-square-move-dot-size) var(--lfs-square-move-dot-size) no-repeat !important;
 }
 
@@ -1134,7 +1134,7 @@ html:not([data-lfs-disabled]) .bot-game:has(.cg-wrap.orientation-black) .materia
 
 html:not([data-lfs-disabled]) .eval-gauge {
   background: linear-gradient(
-    to bottom,
+    to bottom in srgb,
     var(--lfs-black-piece-color) var(--eval-percent, 50%),
     var(--lfs-white-piece-color) var(--eval-percent, 50%)
   ) !important;
@@ -1461,8 +1461,8 @@ html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap cg-board piece
   transform: none !important;
   border: 0 !important;
   border-radius: 0 !important;
-  background: var(--c-bg-page, #fff) !important;
-  color: var(--c-font, #222) !important;
+  background: var(--c-bg-page, oklch(0.999999993473546 0.000000037273996 89.875563095902)) !important;
+  color: var(--c-font, oklch(0.251964748219976 0.000000009391733 89.875563765988)) !important;
   box-shadow: none !important;
   font: 12px/1.3 system-ui, sans-serif !important;
   pointer-events: auto !important;
@@ -1481,20 +1481,20 @@ html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap cg-board piece
   place-items: center !important;
   border: 0 !important;
   border-radius: 0 !important;
-  background: var(--c-bg-high, #eee) !important;
-  color: var(--c-font, #222) !important;
+  background: var(--c-bg-high, oklch(0.949119254399155 0.000000035377467 89.875562714212)) !important;
+  color: var(--c-font, oklch(0.251964748219976 0.000000009391733 89.875563765988)) !important;
   font: 700 12px/1.3 system-ui, sans-serif !important;
   cursor: pointer !important;
 }
 
 #lfs-zen-toggle:hover,
 #lfs-zen-toggle[aria-pressed="true"] {
-  background: #777 !important;
-  color: #fff !important;
+  background: oklch(0.569262399668685 0.000000021218684 89.875563251835) !important;
+  color: oklch(0.999999993473546 0.000000037273996 89.875563095902) !important;
 }
 
 #lfs-zen-toggle:focus-visible {
-  outline: 2px solid var(--c-primary, #788878) !important;
+  outline: 2px solid var(--c-primary, oklch(0.609000216706680 0.030232122404753 145.192036797732)) !important;
   outline-offset: 2px !important;
 }
 
@@ -1516,7 +1516,7 @@ html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap cg-board piece
   gap: 8px !important;
   min-height: 32px !important;
   padding: 4px 8px !important;
-  background: var(--c-bg-high, #eee) !important;
+  background: var(--c-bg-high, oklch(0.949119254399155 0.000000035377467 89.875562714212)) !important;
   cursor: pointer !important;
 }
 
@@ -1527,7 +1527,7 @@ html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap cg-board piece
   appearance: none !important;
   border: 0 !important;
   border-radius: 0 !important;
-  background: transparent !important;
+  background: oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) !important;
   font-weight: 700 !important;
   text-align: left !important;
   cursor: pointer !important;
@@ -1542,11 +1542,11 @@ html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap cg-board piece
 }
 
 #lfs-analysis-toolbar .lfs-analysis-toolbar-title:hover {
-  background: transparent !important;
+  background: oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) !important;
 }
 
 #lfs-analysis-toolbar .lfs-analysis-toolbar-feature:hover {
-  background: var(--c-bg-high, #eee) !important;
+  background: var(--c-bg-high, oklch(0.949119254399155 0.000000035377467 89.875562714212)) !important;
 }
 
 #lfs-analysis-toolbar .lfs-analysis-toolbar-features {
@@ -1571,7 +1571,7 @@ html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap cg-board piece
 #lfs-analysis-toolbar .lfs-analysis-toolbar-child {
   margin-left: 12px !important;
   padding-left: 10px !important;
-  border-left: 2px solid var(--c-border, #ccc) !important;
+  border-left: 2px solid var(--c-border, oklch(0.845222250297019 0.000000031504810 89.875563295709)) !important;
 }
 
 #lfs-analysis-toolbar .lfs-analysis-toolbar-feature[hidden] {
@@ -1587,9 +1587,9 @@ html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap cg-board piece
   margin: 0 !important;
   appearance: none !important;
   -webkit-appearance: none !important;
-  border: 1px solid #b7c0b5 !important;
+  border: 1px solid oklch(0.797591862797637 0.018196030216499 140.018555671977) !important;
   border-radius: 999px !important;
-  background: #d5dbd2 !important;
+  background: oklch(0.884277538663369 0.013763278519766 134.904317396937) !important;
   cursor: pointer !important;
   transition: background 150ms ease, border-color 150ms ease !important;
 }
@@ -1601,14 +1601,14 @@ html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap cg-board piece
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #fff;
+  background: oklch(0.999999993473546 0.000000037273996 89.875563095902);
   content: "";
   transition: transform 150ms ease;
 }
 
 #lfs-analysis-toolbar input[type="checkbox"][role="switch"]:checked {
-  border-color: #788878 !important;
-  background: #788878 !important;
+  border-color: oklch(0.609000216706680 0.030232122404753 145.192036797732) !important;
+  background: oklch(0.609000216706680 0.030232122404753 145.192036797732) !important;
 }
 
 #lfs-analysis-toolbar input[type="checkbox"][role="switch"]:checked::before {
@@ -1616,28 +1616,28 @@ html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap cg-board piece
 }
 
 #lfs-analysis-toolbar input[type="checkbox"][role="switch"]:focus-visible {
-  outline: 2px solid #788878 !important;
+  outline: 2px solid oklch(0.609000216706680 0.030232122404753 145.192036797732) !important;
   outline-offset: 2px !important;
 }
 
 html:not(.light) #lfs-analysis-toolbar input[type="checkbox"][role="switch"] {
-  border-color: #626a5f !important;
-  background: #4c534a !important;
+  border-color: oklch(0.513944842698746 0.019631451569825 137.079995272771) !important;
+  background: oklch(0.433016443632780 0.017065845499227 138.729761972294) !important;
 }
 
 html:not(.light) #lfs-analysis-toolbar input[type="checkbox"][role="switch"]::before {
-  background: #e8ebe5;
+  background: oklch(0.936100978969995 0.008599557212774 128.563126550315);
 }
 
 html:not(.light) #lfs-analysis-toolbar input[type="checkbox"][role="switch"]:checked {
-  border-color: #99a595 !important;
-  background: #99a595 !important;
+  border-color: oklch(0.707728002934565 0.026573333033400 137.828362074748) !important;
+  background: oklch(0.707728002934565 0.026573333033400 137.828362074748) !important;
 }
 
 html:not(.light) #lfs-analysis-toolbar input[type="checkbox"][role="switch"]:checked::before {
-  background: #262b25;
+  background: oklch(0.281943876569167 0.012914584972824 140.461329473568);
 }
 
 html:not(.light) #lfs-analysis-toolbar input[type="checkbox"][role="switch"]:focus-visible {
-  outline-color: #99a595 !important;
+  outline-color: oklch(0.707728002934565 0.026573333033400 137.828362074748) !important;
 }

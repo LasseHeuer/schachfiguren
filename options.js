@@ -19,6 +19,7 @@
     for (const control of controls) {
       const value = settings[control.dataset.setting];
       if (control.type === "checkbox") control.checked = value;
+      else if (control.type === "color") control.value = globalThis.LichessColors.toHex(value);
       else control.value = value;
       updateOutput(control);
     }
@@ -39,7 +40,7 @@
       output.value = `${control.value} px`;
       return;
     }
-    if (control.dataset.setting === "wedgeOpacity") {
+    if (["wedgeOpacity", "movePreviewOriginOpacity"].includes(control.dataset.setting)) {
       output.value = `${Math.round(Number(control.value) * 100)}%`;
       return;
     }
@@ -73,6 +74,7 @@
   function saveControl(control) {
     const value = control.type === "checkbox" ? control.checked
       : control.type === "range" ? Number(control.value)
+        : control.type === "color" ? globalThis.LichessColors.toOklch(control.value)
         : control.value;
     currentSettings[control.dataset.setting] = value;
     chrome.storage.local.set({ [control.dataset.setting]: value }, () => {

@@ -921,6 +921,7 @@
       "--lfs-hover-desaturation-setting": `${settings.hoverDesaturation}%`,
       "--lfs-board-top-gap": `${settings.boardTopGapPercent}vh`,
       "--lfs-move-dot-size": `${settings.moveDotSize}%`,
+      "--lfs-move-preview-origin-opacity": settings.movePreviewOriginOpacity,
       "--lfs-white-piece-color": settings.whitePieceColor,
       "--lfs-black-piece-color": settings.blackPieceColor,
       "--lfs-board-light-light": settings.boardLightLight,

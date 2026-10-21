@@ -46,6 +46,7 @@
         </div>
         <div class="range-grid">
           <label class="range-setting" data-depends-on="!moveAnimationLichessSpeed"><span>Zugdauer</span><output data-value-for="moveAnimationDuration"></output><input type="range" min="0" max="500" step="10" data-setting="moveAnimationDuration"></label>
+          <label class="range-setting"><span>Vorschau: Deckkraft am Startfeld</span><output data-value-for="movePreviewOriginOpacity"></output><input type="range" min="0" max="1" step="0.01" data-setting="movePreviewOriginOpacity"></label>
           <label class="switch-setting"><span><strong>Zeit/Distanz</strong><small>Erhöht die Grundzeit pro Feld um den eingestellten Anteil.</small></span><input type="checkbox" data-setting="moveAnimationTimeDistance" role="switch"></label>
           <label class="range-setting" data-depends-on="moveAnimationTimeDistance"><span>Faktor Zeit/Distanz</span><output data-value-for="moveAnimationDistanceFactor"></output><input type="range" min="0" max="1" step="0.05" data-setting="moveAnimationDistanceFactor"></label>
         </div>
@@ -105,11 +106,13 @@
 
       <section class="panel threat-panel" id="panel-bedrohungen" role="tabpanel" aria-labelledby="tab-bedrohungen" data-panel="bedrohungen" hidden>
         <label class="switch-setting threat-toggle"><span><strong>Bedrohungsfarben aktivieren</strong><small>Mischt Spielerfarbe in die bestehenden Brettfarben ein.</small></span><input type="checkbox" data-setting="threatColoringEnabled" role="switch"></label>
+        <label class="select-setting" data-depends-on="threatColoringEnabled"><span>Mischmodus</span><select data-setting="threatBlendMode"><option value="oklab">Wahrnehmungsnah (Oklab)</option><option value="normal">Normal</option><option value="multiply">Multiplizieren</option><option value="screen">Negativ multiplizieren</option><option value="overlay">Overlay</option><option value="soft-light">Weiches Licht</option><option value="hard-light">Hartes Licht</option><option value="darken">Abdunkeln</option><option value="lighten">Aufhellen</option><option value="difference">Differenz</option></select></label>
         <div class="range-grid threat-range-grid" data-depends-on="threatColoringEnabled">
           <label class="range-setting"><span>Durch eigene Figuren sehen</span><output data-value-for="threatOwnSeeThrough"></output><input type="range" min="0" max="1" step="0.01" data-setting="threatOwnSeeThrough"></label>
           <label class="range-setting"><span>Durch Gegner sehen</span><output data-value-for="threatOpponentSeeThrough"></output><input type="range" min="0" max="1" step="0.01" data-setting="threatOpponentSeeThrough"></label>
           <label class="range-setting"><span>Zugtiefe</span><output data-value-for="threatMoveDepth"></output><input type="range" min="1" max="5" step="1" data-setting="threatMoveDepth"></label>
           <label class="range-setting"><span>Tiefenfaktor</span><output data-value-for="threatDepthFactor"></output><input type="range" min="0" max="1" step="0.01" data-setting="threatDepthFactor"></label>
+          <label class="range-setting" title="0 %: alle Figuren zaehlen gleich. 100 %: Kontrolle zaehlt umgekehrt zum Figurenwert (Bauer 1, Springer/Laeufer 3, Turm 5, Dame 9, Koenig 100)."><span>Einfluss Figurenwert</span><output data-value-for="threatPieceValueInfluencePercent"></output><input type="range" min="0" max="100" step="1" data-setting="threatPieceValueInfluencePercent"></label>
           <label class="range-setting"><span>Maximale Mischung bei ±5</span><output data-value-for="threatMaxMixPercent"></output><input type="range" min="0" max="100" step="1" data-setting="threatMaxMixPercent"></label>
           <label class="range-setting"><span>Verlauf</span><output data-value-for="threatGradientPercent"></output><input type="range" min="0" max="100" step="1" data-setting="threatGradientPercent"></label>
         </div>
@@ -288,17 +291,18 @@
       </section>
 
       <section class="color-picker" id="color-picker" aria-labelledby="color-picker-title" hidden>
-        <header class="color-picker-header"><strong id="color-picker-title">Farbe</strong><button id="close-color-picker" type="button">Schliessen</button></header>
-        <output class="color-preview" id="color-picker-preview">#ffffff</output>
-        <div class="sv-field" id="color-picker-sv" role="group" aria-label="Saettigung und Helligkeit"><span class="sv-field-thumb" id="color-picker-sv-thumb"></span></div>
-        <label class="picker-range"><span>Farbton (Hue)<output id="color-picker-hue-value"></output></span><input id="color-picker-hue" type="range" min="0" max="359" step="1"></label>
-        <label class="picker-range"><span>Saettigung (Saturation)<output id="color-picker-saturation-value"></output></span><input id="color-picker-saturation" type="range" min="0" max="100" step="1"></label>
-        <label class="picker-range"><span>Helligkeit (Value)<output id="color-picker-value-value"></output></span><input id="color-picker-value" type="range" min="0" max="100" step="1"></label>
-        <small class="picker-hint">Shift beim Ziehen: viermal langsamere Einstellung</small>
+        <header class="color-picker-header"><strong id="color-picker-title">Farbe</strong><button id="close-color-picker" type="button" aria-label="Farbauswahl schliessen"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button></header>
+        <output class="color-preview" id="color-picker-preview">oklch(1 0 0)</output>
+        <div class="sv-field" id="color-picker-sv" role="group" tabindex="0" aria-label="Farbstaerke horizontal, Helligkeit vertikal. Pfeiltasten zum Anpassen, Shift fuer feine Schritte."><canvas id="color-picker-cl-canvas" width="256" height="128" aria-hidden="true"></canvas><span class="sv-field-thumb" id="color-picker-sv-thumb"></span></div>
+        <label class="picker-range"><span>Farbton</span><input id="color-picker-hue" type="range" min="0" max="360" step="0.1"><output id="color-picker-hue-value"></output></label>
+        <label class="picker-range"><span>Chroma</span><input id="color-picker-saturation" type="range" min="0" max="0.4" step="0.0001"><output id="color-picker-saturation-value"></output></label>
+        <label class="picker-range"><span>Helligkeit</span><input id="color-picker-value" type="range" min="0" max="100" step="0.01"><output id="color-picker-value-value"></output></label>
+        <small class="picker-hint">OKLCH / Shift: fein</small>
       </section>
 
       <footer class="footer"><span id="save-status" role="status" aria-live="polite">Automatisch gespeichert</span><div class="footer-actions"><button id="export-settings" type="button">Export</button><button id="copy-settings" type="button">Zwischenablage</button><button id="reset-settings" type="button">Zuruecksetzen</button></div></footer>
     </main>
+    <script src="colors.js"></script>
     <script src="settings.js"></script>
     <script src="sound-catalog.js"></script>
     <script src="bezier-editor.js"></script>

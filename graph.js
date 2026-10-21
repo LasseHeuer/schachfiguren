@@ -9,7 +9,7 @@
     const isLight = theme === "system"
       ? window.matchMedia("(prefers-color-scheme: light)").matches
       : theme ? theme.includes("light") : window.matchMedia("(prefers-color-scheme: light)").matches;
-    return isLight ? "#000000" : "#ffffff";
+    return isLight ? "oklch(0 0 0)" : "oklch(1 0 0)";
   };
   const prototype = CanvasRenderingContext2D.prototype;
   const strokeDescriptor = Object.getOwnPropertyDescriptor(prototype, "strokeStyle");
@@ -36,11 +36,14 @@
 
     const rootStyle = getComputedStyle(document.documentElement);
     const selected = isWhite || whiteClockFill
-      ? rootStyle.getPropertyValue("--lfs-white-piece-color").trim() || "#d1521d"
-      : rootStyle.getPropertyValue("--lfs-black-piece-color").trim() || "#2ba4d1";
+      ? rootStyle.getPropertyValue("--lfs-white-piece-color").trim() || "oklch(0.5997409301 0.1721887956 40.1845294695)"
+      : rootStyle.getPropertyValue("--lfs-black-piece-color").trim() || "oklch(0.6742384272 0.1206555753 228.5101815779)";
     if (alpha === "1") return selected;
-    const channels = selected.match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i);
-    return channels ? `rgba(${channels.slice(1).map(channel => parseInt(channel, 16)).join(",")},${alpha})` : selected;
+    const target = globalThis.LichessColors.parse(selected);
+    const opacity = alpha.endsWith("%") ? Number(alpha.slice(0, -1)) / 100 : Number(alpha);
+    return target && Number.isFinite(opacity)
+      ? globalThis.LichessColors.format({ ...target, alpha: target.alpha * Math.max(0, Math.min(1, opacity)) })
+      : selected;
   };
 
   Object.defineProperty(CanvasRenderingContext2D.prototype, "fillStyle", {

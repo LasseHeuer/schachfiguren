@@ -21,12 +21,12 @@
     {
       "matches": ["https://lichess.org/*"],
       "css": ["extension.css"],
-      "js": ["settings.js", "sound-catalog.js", "board-overlay.js", "last-move-line.js", "threat-coding.js", "king-movement-fields.js", "piece-bounce.js", "move-animation.js", "selected-piece-wedge.js", "puzzle-scheduler.js", "puzzle-playlist.js", "blunder-list.js", "content.js"],
+      "js": ["colors.js", "settings.js", "sound-catalog.js", "board-overlay.js", "last-move-line.js", "threat-coding.js", "king-movement-fields.js", "piece-bounce.js", "move-animation.js", "selected-piece-wedge.js", "puzzle-scheduler.js", "puzzle-playlist.js", "blunder-list.js", "content.js"],
       "run_at": "document_start"
     },
     {
       "matches": ["https://lichess.org/*"],
-      "js": ["graph.js", "move-animation-main.js", "sounds-main.js", "blunder-training-main.js"],
+      "js": ["colors.js", "graph.js", "move-animation-main.js", "sounds-main.js", "blunder-training-main.js"],
       "run_at": "document_start",
       "world": "MAIN"
     }

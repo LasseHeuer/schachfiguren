@@ -8,8 +8,25 @@
   };
   const pieceTypeNames = ["pawn", "knight", "bishop", "rook", "queen", "king"];
   const pieceCodes = { pawn: "P", knight: "N", bishop: "B", rook: "R", queen: "Q", king: "K" };
+  const pieceValues = { P: 1, N: 3, B: 3, R: 5, Q: 9, K: 100 };
   const boardSelector = "body[data-board] .cg-wrap cg-board, .mini-game cg-board";
   const selectedSquareSelector = "body[data-board] .cg-wrap cg-board > square.selected, .mini-game cg-board > square.selected";
+  // Standard blend functions operate on encoded sRGB channels in [0, 1].
+  const rgbBlendModes = Object.freeze({
+    normal: (base, tint) => tint,
+    multiply: (base, tint) => base * tint,
+    screen: (base, tint) => base + tint - base * tint,
+    overlay: (base, tint) => base <= 0.5 ? 2 * base * tint : 1 - 2 * (1 - base) * (1 - tint),
+    "soft-light": (base, tint) => {
+      if (tint <= 0.5) return base - (1 - 2 * tint) * base * (1 - base);
+      const curve = base <= 0.25 ? ((16 * base - 12) * base + 4) * base : Math.sqrt(base);
+      return base + (2 * tint - 1) * (curve - base);
+    },
+    "hard-light": (base, tint) => tint <= 0.5 ? 2 * base * tint : 1 - 2 * (1 - base) * (1 - tint),
+    darken: (base, tint) => Math.min(base, tint),
+    lighten: (base, tint) => Math.max(base, tint),
+    difference: (base, tint) => Math.abs(base - tint)
+  });
 
   let settings = null;
   const observedBoards = new Map();
@@ -78,10 +95,13 @@
 
   function calculateThreatMap(board, options) {
     const result = Array.from({ length: 8 }, () => Array(8).fill(0));
+    const totalThreats = Array.from({ length: 8 }, () => Array(8).fill(0));
+    const weightedTotalThreats = Array.from({ length: 8 }, () => Array(8).fill(0));
     const maxDepth = Math.max(1, Math.min(5, Math.round(Number(options.threatMoveDepth) || 1)));
     const depthFactor = Math.max(0, Math.min(1, Number(options.threatDepthFactor) || 0));
     const ownSeeThrough = Math.max(0, Math.min(1, Number(options.threatOwnSeeThrough) || 0));
     const opponentSeeThrough = Math.max(0, Math.min(1, Number(options.threatOpponentSeeThrough) || 0));
+    const pieceValueInfluence = Math.max(0, Math.min(100, Number(options.threatPieceValueInfluencePercent ?? 100) || 0)) / 100;
 
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
@@ -89,6 +109,8 @@
         if (!piece) continue;
 
         const sign = piece[0] === "w" ? 1 : -1;
+        // Cheaper pieces exert safer control because exchanging them costs less.
+        const pieceWeight = 1 - pieceValueInfluence + pieceValueInfluence / pieceValues[piece[1]];
         const pieceThreats = Array.from({ length: 8 }, () => Array(8).fill(0));
         const visited = Array.from({ length: 8 }, () => Array(8).fill(null));
         const queue = [];
@@ -137,25 +159,35 @@
 
         for (let targetRow = 0; targetRow < 8; targetRow++) {
           for (let targetCol = 0; targetCol < 8; targetCol++) {
-            result[targetRow][targetCol] += pieceThreats[targetRow][targetCol];
+            const threat = pieceThreats[targetRow][targetCol];
+            result[targetRow][targetCol] += threat * pieceWeight;
+            totalThreats[targetRow][targetCol] += Math.abs(threat);
+            weightedTotalThreats[targetRow][targetCol] += Math.abs(threat) * pieceWeight;
           }
         }
       }
     }
 
-    for (const row of result) {
-      for (let col = 0; col < row.length; col++) row[col] = Math.max(-5, Math.min(5, row[col]));
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        // Weight the balance between players without fading uncontested control.
+        if (pieceValueInfluence > 0 && weightedTotalThreats[row][col] > 0) {
+          result[row][col] *= totalThreats[row][col] / weightedTotalThreats[row][col];
+        }
+        result[row][col] = Math.max(-5, Math.min(5, result[row][col]));
+      }
     }
     return result;
   }
 
   function parseHexColor(hex) {
-    const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
-    return match ? [parseInt(match[1], 16), parseInt(match[2], 16), parseInt(match[3], 16)] : [255, 255, 255];
+    const channels = globalThis.LichessColors.toRgb(hex);
+    // Remove conversion noise from legacy RGB8 colors without quantizing picker colors.
+    return channels ? channels.map(channel => Math.abs(channel - Math.round(channel)) < 0.001 ? Math.round(channel) : channel) : [255, 255, 255];
   }
 
   function toRgbString(rgb) {
-    return `rgb(${rgb.map(channel => Math.round(channel)).join(", ")})`;
+    return globalThis.LichessColors.format(globalThis.LichessColors.fromRgb(rgb));
   }
 
   function getBoardBaseColor(row, col, options) {
@@ -169,11 +201,33 @@
   function getOpacityRgb(value, options, baseColor) {
     const normalized = Math.max(-5, Math.min(5, Number(value) || 0));
     const base = Array.isArray(baseColor) ? baseColor : parseHexColor(baseColor);
-    if (normalized === 0) return base.map(channel => Math.round(channel));
-    const tint = parseHexColor(normalized > 0 ? options.whitePieceColor : options.blackPieceColor);
     const maxMix = Math.max(0, Math.min(100, Number(options.threatMaxMixPercent) || 0)) / 100;
     const amount = Math.min(Math.abs(normalized) / 5, 1) * maxMix;
-    return base.map((channel, index) => Math.round(channel + ((tint[index] - channel) * amount)));
+    if (amount === 0) return base;
+    const tintRgb = parseHexColor(normalized > 0 ? options.whitePieceColor : options.blackPieceColor);
+    const blend = Object.hasOwn(rgbBlendModes, options.threatBlendMode) ? rgbBlendModes[options.threatBlendMode] : null;
+    if (blend) {
+      return base.map((channel, index) => {
+        const background = Math.max(0, Math.min(1, channel / 255));
+        const tint = Math.max(0, Math.min(1, tintRgb[index] / 255));
+        return (background + (blend(background, tint) - background) * amount) * 255;
+      });
+    }
+    const colors = globalThis.LichessColors;
+    const background = colors.fromRgb(base);
+    const tint = colors.fromRgb(tintRgb);
+    const baseHue = background.h * Math.PI / 180;
+    const tintHue = tint.h * Math.PI / 180;
+    const a = background.c * Math.cos(baseHue) * (1 - amount) + tint.c * Math.cos(tintHue) * amount;
+    const b = background.c * Math.sin(baseHue) * (1 - amount) + tint.c * Math.sin(tintHue) * amount;
+    // Oklab mixing preserves the same light/dark separation for either player hue.
+    // Reduce chroma rather than clip RGB channels, which would change that lightness.
+    return colors.toRgb(colors.toGamut({
+      l: background.l + (tint.l - background.l) * amount,
+      c: Math.hypot(a, b),
+      h: (Math.atan2(b, a) * 180 / Math.PI + 360) % 360,
+      alpha: 1
+    }));
   }
 
   function getOpacityColor(value, options, baseColor) {
@@ -191,7 +245,8 @@
   }
 
   function getLogicalSquare(element, board, blackOrientation) {
-    const key = element.dataset.key?.toLowerCase();
+    const key = (globalThis.LichessMoveAnimation?.getDestinationKey(element)
+      ?? element.getAttribute("data-lfs-move-key") ?? element.dataset.key)?.toLowerCase();
     if (key && /^[a-h][1-8]$/.test(key)) {
       return { row: 8 - Number(key[1]), col: key.charCodeAt(0) - 97 };
     }
@@ -262,7 +317,7 @@
     let pieceCount = 0;
 
     for (const element of board.querySelectorAll(":scope > piece")) {
-      if (element.classList.contains("ghost")) continue;
+      if (element.classList.contains("ghost") || element.classList.contains("fading")) continue;
       const side = element.classList.contains("white") ? "w" : element.classList.contains("black") ? "b" : "";
       const type = pieceTypeNames.find(name => element.classList.contains(name));
       const square = getLogicalSquare(element, board, blackOrientation);
@@ -424,7 +479,7 @@
           const x = ((col / 7) * 100).toFixed(6);
           const y = ((row / 7) * 100).toFixed(6);
           const color = toRgbString(colors[row][col]);
-          layers.push(`linear-gradient(${color}, ${color})`);
+          layers.push(`linear-gradient(in srgb, ${color}, ${color})`);
           positions.push(`${x}% ${y}%`);
         }
       }
@@ -582,7 +637,11 @@
       hoveredMoveTargets.delete(board);
       return dragPreview;
     }
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      clearKnightHoverGap(board);
+      hoveredMoveTargets.delete(board);
+      return null;
+    }
     const parsed = readBoard(board);
     const preview = parsed ? getSelectedMovePreview(board, parsed.position, parsed.blackOrientation, x, y) : null;
     if (preview) hoveredMoveTargets.set(board, { source: preview.source, target: preview.target });
@@ -642,8 +701,8 @@
     }
     return [...mutation.addedNodes, ...mutation.removedNodes].some(node =>
       node.nodeType === Node.ELEMENT_NODE && (
-        node.matches("piece, square.move-dest, square.premove-dest") ||
-        node.querySelector("piece, square.move-dest, square.premove-dest")
+        node.matches("piece, square.selected, square.move-dest, square.premove-dest") ||
+        node.querySelector("piece, square.selected, square.move-dest, square.premove-dest")
       )
     );
   }
@@ -654,6 +713,7 @@
       if (currentBoards.has(board)) continue;
       observers.board.disconnect();
       observers.orientation?.disconnect();
+      clearKnightHoverGap(board);
       clearThreatBackground(board);
       observedBoards.delete(board);
     }
@@ -661,12 +721,12 @@
     for (const board of boards) {
       if (observedBoards.has(board)) continue;
       const boardObserver = new MutationObserver(mutations => {
-        if (!mutations.some(isRelevantBoardMutation) || board.querySelector(":scope > piece.anim")) return;
+        if (!mutations.some(isRelevantBoardMutation)) return;
         scheduleRender(board);
       });
       boardObserver.observe(board, {
         attributes: true,
-        attributeFilter: ["class", "data-key", "style"],
+        attributeFilter: ["class", "data-key", "data-lfs-move-key", "style"],
         childList: true,
         subtree: true
       });
@@ -683,6 +743,7 @@
 
   function initialize() {
     if (!interactionListenersAdded) {
+      document.addEventListener("lfs-hover-preview-change", event => scheduleRender(event.detail));
       document.addEventListener("pointerdown", event => {
         lastPointerPosition = { x: event.clientX, y: event.clientY };
         if (event.button !== 0 || typeof event.target?.closest !== "function") return;
@@ -693,6 +754,11 @@
           ? getLogicalSquareAtPoint(board, event.clientX, event.clientY, parsed.blackOrientation)
           : null;
         if (!parsed || !source || !parsed.position[source.row][source.col]) return;
+        const selectedElement = board.querySelector(":scope > square.selected");
+        const selected = selectedElement && getLogicalSquare(selectedElement, board, parsed.blackOrientation);
+        // A capture click confirms the selected piece instead of starting a drag of its victim.
+        if (selected && (selected.row !== source.row || selected.col !== source.col)
+          && getAllowedDestinations(board, parsed.blackOrientation).has(`${source.row},${source.col}`)) return;
         pieceInteractionActive = true;
         activePieceDrag = { board, position: parsed.position, source, clientX: event.clientX, clientY: event.clientY };
       }, true);
@@ -701,20 +767,21 @@
         if (pieceInteractionActive && activePieceDrag) {
           activePieceDrag.clientX = event.clientX;
           activePieceDrag.clientY = event.clientY;
-          scheduleRender(activePieceDrag.board);
+          document.dispatchEvent(new CustomEvent("lfs-hover-preview-change", { detail: activePieceDrag.board }));
           return;
         }
-        if (settings?.enabled && settings.threatColoringEnabled) {
+        if (settings?.enabled) {
           const selected = document.querySelector(selectedSquareSelector);
-          if (selected) scheduleRender(selected.parentElement);
+          if (selected) document.dispatchEvent(new CustomEvent("lfs-hover-preview-change", { detail: selected.parentElement }));
         }
       }, true);
-      const finishPieceInteraction = () => {
-        if (!pieceInteractionActive) return;
-        const board = activePieceDrag?.board;
+      const finishPieceInteraction = event => {
         pieceInteractionActive = false;
         activePieceDrag = null;
-        scheduleRender(board);
+        if (event.type === "blur" || event.type === "pointercancel") lastPointerPosition = null;
+        for (const board of observedBoards.keys()) {
+          document.dispatchEvent(new CustomEvent("lfs-hover-preview-change", { detail: board }));
+        }
       };
       document.addEventListener("pointerup", finishPieceInteraction, true);
       document.addEventListener("pointercancel", finishPieceInteraction, true);

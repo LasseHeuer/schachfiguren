@@ -118,7 +118,8 @@
   }
 
   function getPieceScreenSquare(element, board, blackOrientation) {
-    const moveKey = element.getAttribute("data-lfs-move-key")?.toLowerCase();
+    const moveKey = (globalThis.LichessMoveAnimation?.getDestinationKey(element)
+      ?? element.getAttribute("data-lfs-move-key"))?.toLowerCase();
     const match = /^([a-h])([1-8])$/.exec(moveKey ?? "");
     if (match) {
       return logicalToScreen({ row: 8 - Number(match[2]), col: match[1].charCodeAt(0) - 97 }, blackOrientation);
@@ -392,7 +393,7 @@
       - getBestExchangeGain(capture.position, target, victim.color, blackOrientation);
   }
 
-  function getBestCaptureGainOutsideSquare(position, color, excludedTarget, threshold, blackOrientation) {
+  function getBestCaptureGainOutsideSquare(position, previousPosition, color, excludedTarget, threshold, blackOrientation) {
     let bestGain = 0;
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
@@ -400,7 +401,10 @@
         const victim = position[row][col];
         if (!victim || victim.color === color || victim.type === "king"
           || pieceValues[victim.type] + pieceValues.queen - pieceValues.pawn <= bestGain) continue;
-        const gain = getBestExchangeGain(position, { row, col }, color, blackOrientation);
+        const target = { row, col };
+        // Existing capture opportunities are not a consequence of this exchange.
+        const gain = getBestExchangeGain(position, target, color, blackOrientation)
+          - getBestExchangeGain(previousPosition, target, color, blackOrientation);
         if (gain > bestGain) bestGain = gain;
         if (bestGain > threshold) return bestGain;
       }
@@ -426,6 +430,7 @@
         if (gain <= 0) continue;
         const counterCaptureGain = getBestCaptureGainOutsideSquare(
           capture.position,
+          position,
           victim.color,
           target,
           gain,
@@ -674,9 +679,8 @@
       if (checkedTargets.has(targetKey)) continue;
       checkedTargets.add(targetKey);
 
-      const nextPosition = position.map(row => row.slice());
-      nextPosition[source.row][source.col] = null;
-      nextPosition[target.row][target.col] = piece;
+      const nextPosition = createMovePreview(position, source, target, blackOrientation);
+      if (!nextPosition) continue;
       const outline = getOverloadedPieces(nextPosition, blackOrientation, shouldFilterHatchedThreats())
         .find(candidate => candidate.target.row === target.row && candidate.target.col === target.col);
       if (!outline) continue;
@@ -746,9 +750,8 @@
     for (const destination of destinations) {
       const destinationPiece = position[destination.row][destination.col];
       if (destinationPiece?.color === piece.color || destinationPiece?.type === "king") continue;
-      const simulated = position.map(row => [...row]);
-      simulated[selected.row][selected.col] = null;
-      simulated[destination.row][destination.col] = piece;
+      const simulated = createMovePreview(position, selected, destination, blackOrientation);
+      if (!simulated) continue;
       const attacks = getAttackedPieces(simulated, destination, blackOrientation)
         .filter(target => {
           const targetPiece = simulated[target.row][target.col];
@@ -925,10 +928,14 @@
   }
 
   function mixWithWhite(hex, weight) {
-    const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
-    if (!match) return "#ffffff";
-    const channels = match.slice(1).map(channel => Number.parseInt(channel, 16));
-    return `#${channels.map(channel => Math.round(channel * weight + 255 * (1 - weight)).toString(16).padStart(2, "0")).join("")}`;
+    const channels = globalThis.LichessColors.toRgb(hex);
+    if (!channels) return "oklch(1 0 0)";
+    const mixed = channels.map(channel => {
+      // Preserve RGB8 rounding at half steps after the OKLCH round trip.
+      const value = Math.abs(channel - Math.round(channel)) < 0.001 ? Math.round(channel) : channel;
+      return Math.round(value * weight + 255 * (1 - weight));
+    });
+    return globalThis.LichessColors.format(globalThis.LichessColors.fromRgb(mixed));
   }
 
   function createOverlay() {
@@ -1815,7 +1822,7 @@
     }
     for (const piece of board.querySelectorAll(":scope > piece[data-lfs-move-preview-origin], :scope > piece[data-lfs-move-preview-hidden]")) {
       piece.removeAttribute("data-lfs-move-preview-origin");
-      piece.removeAttribute("data-lfs-move-preview-hidden");
+      if (!piece.classList.contains("fading")) piece.removeAttribute("data-lfs-move-preview-hidden");
     }
     if (entry.previewAnimationFrame) cancelAnimationFrame(entry.previewAnimationFrame);
     entry.previewAnimationFrame = 0;
@@ -1909,7 +1916,7 @@
 
     // Same duration formula as the normal move animation (move-animation.js).
     const remaining = Math.hypot(to.x - from.x, to.y - from.y);
-    const travel = settings.moveAnimationTimeDistance ? Math.hypot(to.x, to.y) : 1;
+    const travel = settings.moveAnimationTimeDistance ? remaining : 1;
     const baseDuration = settings.moveAnimationLichessSpeed ? 250 : settings.moveAnimationDuration;
     const distanceFactor = settings.moveAnimationTimeDistance ? settings.moveAnimationDistanceFactor : 0;
     const duration = baseDuration + travel * distanceFactor * baseDuration;
@@ -1954,7 +1961,7 @@
     }
     for (const piece of board.querySelectorAll(":scope > piece[data-lfs-move-preview-origin], :scope > piece[data-lfs-move-preview-hidden]")) {
       piece.removeAttribute("data-lfs-move-preview-origin");
-      piece.removeAttribute("data-lfs-move-preview-hidden");
+      if (!piece.classList.contains("fading")) piece.removeAttribute("data-lfs-move-preview-hidden");
     }
     if (!preview?.isHoverPreview || !preview.legal) {
       clearMovePreviewPiece(board, entry);
@@ -1999,6 +2006,7 @@
 
     const sourceSquare = logicalToScreen(preview.source, blackOrientation);
     const targetSquare = logicalToScreen(preview.target, blackOrientation);
+    entry.previewPieceSvg.setAttribute("data-lfs-preview-target", `${preview.target.row},${preview.target.col}`);
     for (const square of board.querySelectorAll(":scope > square.move-dest, :scope > square.premove-dest")) {
       const screen = getScreenSquare(square, board);
       if (screen?.row === targetSquare.row && screen.col === targetSquare.col) {
@@ -2049,6 +2057,16 @@
       }
       entry.previewPieceSvg.append(image);
     }
+    globalThis.LichessKingMovementFields?.renderPreview(entry.previewPieceGroup, preview);
+    entry.previewPieceGroup.querySelector(":scope > g[data-lfs-preview-threat]")?.remove();
+    const previewThreat = entry.centerSvg?.querySelector(":scope > [data-lfs-hover-preview-outline]");
+    if (previewThreat) {
+      const group = document.createElementNS(svgNamespace, "g");
+      group.setAttribute("data-lfs-preview-threat", "");
+      group.setAttribute("transform", `translate(${sourceSquare.col - targetSquare.col} ${sourceSquare.row - targetSquare.row})`);
+      group.append(previewThreat);
+      entry.previewPieceGroup.append(group);
+    }
     setMovePreviewTarget(board, entry, preview, sourceSquare, targetSquare);
     globalThis.LichessBoardOverlay.place(board, entry.previewPieceSvg, "above-pieces");
     const lineOverlay = [...board.children].find(child => child === entry.arcSvg || child === entry.centerSvg);
@@ -2092,7 +2110,7 @@
     );
 
     // While dragging, wedges are based on the piece's original square so they stay visible for all destinations, not only the hovered one.
-    const wedgeParsed = dragPreview
+    const wedgeParsed = dragPreview && !dragPreview.isHoverPreview
       ? readDragPreview({ ...dragPreview, position: dragPreview.basePosition, legal: false })
       : parsed;
     const wedgeSelectedPiece = wedgeParsed.selected && wedgeParsed.position[wedgeParsed.selected.row]?.[wedgeParsed.selected.col];
@@ -2138,6 +2156,7 @@
     const animatedSquares = new Set();
     if (settings.defenseCirclesEnabled && !dragPreview) {
       for (const piece of board.querySelectorAll(":scope > piece.anim")) {
+        if (globalThis.LichessMoveAnimation?.isInstantMove(piece)) continue;
         const square = getPieceScreenSquare(piece, board, parsed.blackOrientation);
         if (square) animatedSquares.add(`${square.row},${square.col}`);
       }
@@ -2170,7 +2189,10 @@
       const centerOutlines = settings.threatCenterOutlineEnabled
          ? getOverloadedPieces(parsed.position, parsed.blackOrientation, shouldFilterHatchedThreats()).map(outline => {
         const piece = parsed.position[outline.target.row][outline.target.col];
-        return { ...outline, piece: { ...piece, element: findPieceElement(board, outline.target, dragPreview, parsed.blackOrientation) } };
+        const previewTarget = movePreview?.isHoverPreview && logicalToScreen(movePreview.target, parsed.blackOrientation);
+        const hoverPreview = previewTarget?.row === outline.target.row && previewTarget?.col === outline.target.col;
+        return { ...outline, piece: { ...piece, hoverPreview,
+          element: hoverPreview ? null : findPieceElement(board, outline.target, dragPreview, parsed.blackOrientation) } };
       })
       : [];
     const moveOutlinePreviews = updateMoveOutlinePreviews(
@@ -2180,13 +2202,16 @@
       wedgeSelectedPiece,
       wedgeParsed.blackOrientation
     );
-    const moveOutlineTargets = new Set(moveOutlinePreviews.map(({ target }) => `${target.row},${target.col}`));
+    const hoveredTarget = movePreview?.isHoverPreview && logicalToScreen(movePreview.target, parsed.blackOrientation);
+    const otherMoveOutlinePreviews = moveOutlinePreviews.filter(({ target }) =>
+      !hoveredTarget || target.row !== hoveredTarget.row || target.col !== hoveredTarget.col);
+    const moveOutlineTargets = new Set(otherMoveOutlinePreviews.map(({ target }) => `${target.row},${target.col}`));
     renderThreatArcs(
       board,
       entry,
       displayThreats,
       displayDefenseSegments,
-      [...centerOutlines.filter(({ target }) => !moveOutlineTargets.has(`${target.row},${target.col}`)), ...moveOutlinePreviews],
+      [...centerOutlines.filter(({ target }) => !moveOutlineTargets.has(`${target.row},${target.col}`)), ...otherMoveOutlinePreviews],
       settings.threatAttackDisplayMode,
       settings.threatDefenseDisplayMode
     );
@@ -2237,6 +2262,7 @@
       const gradientId = `${filterId}-gradient-${index}`;
       const gradient = document.createElementNS(svgNamespace, "linearGradient");
       gradient.id = gradientId;
+      gradient.setAttribute("color-interpolation", "sRGB");
       gradient.setAttribute("gradientUnits", "userSpaceOnUse");
       gradient.setAttribute("x1", String(source.x));
       gradient.setAttribute("y1", String(source.y));
@@ -2440,6 +2466,13 @@
       image.setAttribute("pointer-events", "none");
       if (moveOutlinePreview) image.setAttribute("data-lfs-move-outline-preview", `${target.row},${target.col}`);
       image._lfsPieceElement = piece.element;
+      if (piece.hoverPreview) {
+        image.setAttribute("data-lfs-hover-preview-outline", "");
+        const blackOrientation = Boolean(board.closest(".cg-wrap")?.classList.contains("orientation-black"));
+        if (isPieceRotated(piece.color, blackOrientation)) {
+          image.setAttribute("transform", `rotate(180 ${target.col + 0.5} ${target.row + 0.5})`);
+        }
+      }
 
       if (settings.threatCenterOutlineStyle === "hatching") {
         const boardIndex = [...observedBoards.keys()].indexOf(board);
@@ -2472,6 +2505,7 @@
         hatch.setAttribute("opacity", "1");
         hatch.setAttribute("pointer-events", "none");
         if (moveOutlinePreview) hatch.setAttribute("data-lfs-move-outline-preview", `${target.row},${target.col}`);
+        if (piece.hoverPreview) hatch.setAttribute("data-lfs-hover-preview-outline", "");
         outlines.push(hatch);
         continue;
       }
