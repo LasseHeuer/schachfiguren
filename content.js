@@ -428,8 +428,11 @@
     const remaining = reading === null ? null : running
       ? Math.max(0, progress.remaining - (now - progress.timestamp) / 1000)
       : reading;
+    const criticalThreshold = clockTime
+      ? clockTime.maximum * settings.zenClockWarningThresholdPercent / 100
+      : 10;
     row.toggleAttribute("data-running", running);
-    row.toggleAttribute("data-critical", remaining !== null && remaining <= 10);
+    row.toggleAttribute("data-critical", remaining !== null && remaining <= criticalThreshold);
     const showTime = !settings.zenClockShowTimeOnlyWhenLow || remaining !== null && remaining <= 10;
     time.hidden = !showTime;
     if (showTime && time.textContent !== nextText) time.textContent = nextText;
