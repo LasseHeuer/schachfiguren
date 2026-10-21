@@ -337,6 +337,7 @@
     board.style.removeProperty("--lfs-threat-background");
     board.style.removeProperty("--lfs-threat-background-position");
     board.style.removeProperty("--lfs-threat-background-size");
+    board.style.removeProperty("--lfs-threat-gap-background");
   }
 
   function getThreatImage(cacheKey, colors, transitionPercent) {
@@ -459,16 +460,43 @@
     return pixels;
   }
 
+  function getThreatGapColor(colors, row, col) {
+    const neighbors = [];
+    for (const r of [row - 1, row]) {
+      for (const c of [col - 1, col]) {
+        if (isInside(r, c)) neighbors.push(colors[r][c]);
+      }
+    }
+    return [0, 1, 2].map(channel => neighbors.reduce((sum, color) => sum + color[channel], 0) / neighbors.length);
+  }
+
   function renderPosition(board, position, blackOrientation) {
     const threatMap = calculateThreatMap(position, settings);
     const colors = Array.from({ length: 8 }, () => Array(8));
+    const bevelEnabled = settings.boardBevelEnabled && settings.boardBevelPercent > 0;
+    const gapColors = bevelEnabled ? Array.from({ length: 8 }, () => Array(8)) : null;
+    const gapBase = bevelEnabled ? parseHexColor(document.documentElement.classList.contains("light") ? settings.boardGapLight : settings.boardGapDark) : null;
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
         const screenRow = blackOrientation ? 7 - row : row;
         const screenCol = blackOrientation ? 7 - col : col;
         const baseColor = getBoardBaseColor(row, col, settings);
         colors[screenRow][screenCol] = getOpacityRgb(threatMap[row][col], settings, baseColor);
+        if (gapColors) gapColors[screenRow][screenCol] = getOpacityRgb(threatMap[row][col], settings, gapBase);
       }
+    }
+    if (gapColors) {
+      const patches = [];
+      for (let row = 0; row <= 8; row++) {
+        for (let col = 0; col <= 8; col++) {
+          const color = toRgbString(getThreatGapColor(gapColors, row, col));
+          patches.push(`<rect x="${col - 0.5}" y="${row - 0.5}" width="1" height="1" fill="${color}"/>`);
+        }
+      }
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8">${patches.join("")}</svg>`;
+      board.style.setProperty("--lfs-threat-gap-background", `url("data:image/svg+xml,${encodeURIComponent(svg)}")`);
+    } else {
+      board.style.removeProperty("--lfs-threat-gap-background");
     }
     const cacheKey = `${settings.threatGradientPercent}:${JSON.stringify(colors)}`;
     if (settings.threatGradientPercent === 0) {
@@ -816,6 +844,7 @@
     getBoardBaseColor,
     getOpacityColor,
     getThreatPixels,
+    getThreatGapColor,
     getInteractionPreview
   };
 })();

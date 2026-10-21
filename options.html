@@ -62,6 +62,7 @@
             <label class="field" data-own-speed><span>Zugdauer</span><input type="range" min="0" max="500" step="10" data-setting="moveAnimationDuration"><output data-value-for="moveAnimationDuration"></output></label>
             <label class="field field-wide"><span>Vorschau: Deckkraft am Ursprungsfeld</span><input type="range" min="0" max="1" step="0.01" data-setting="movePreviewOriginOpacity"><output data-value-for="movePreviewOriginOpacity"></output></label>
             <label class="field field-wide"><span>Vorschau: Korridorbreite (% der Feldbreite)</span><input type="range" min="0" max="200" step="5" data-setting="movePreviewCorridorWidthPercent"><output data-value-for="movePreviewCorridorWidthPercent"></output></label>
+            <label class="field field-wide"><span>Vorschau: Vorausahnung</span><small>0 %: von Feld zu Feld. Niedrige Werte warten länger auf eine gleichmäßige Mausbewegung. 100 %: wie bisher.</small><input type="range" min="0" max="100" step="1" data-setting="movePreviewAnticipationPercent"><output data-value-for="movePreviewAnticipationPercent"></output></label>
             <label class="switch-field"><span><strong>Zeit/Distanz</strong><small>Erhöht die Grundzeit pro Feld um den eingestellten Anteil.</small></span><input type="checkbox" data-setting="moveAnimationTimeDistance" role="switch"></label>
             <label class="field" data-distance-factor hidden><span>Faktor Zeit/Distanz</span><input type="range" min="0" max="1" step="0.05" data-setting="moveAnimationDistanceFactor"><output data-value-for="moveAnimationDistanceFactor"></output></label>
           </div>
@@ -81,16 +82,20 @@
           <div class="theme-grid">
             <fieldset class="theme-panel"><legend>Helles Design</legend>
               <label class="color-field"><span>Helles Feld</span><input type="color" data-setting="boardLightLight"></label>
+              <label class="color-field"><span>Zwischenraum</span><input type="color" data-setting="boardGapLight"></label>
               <label class="color-field"><span>Dunkles Feld</span><input type="color" data-setting="boardDarkLight"></label>
             </fieldset>
             <fieldset class="theme-panel"><legend>Dunkles Design</legend>
               <label class="color-field"><span>Helles Feld</span><input type="color" data-setting="boardLightDark"></label>
+              <label class="color-field"><span>Zwischenraum</span><input type="color" data-setting="boardGapDark"></label>
               <label class="color-field"><span>Dunkles Feld</span><input type="color" data-setting="boardDarkDark"></label>
             </fieldset>
           </div>
           <div class="control-grid compact-grid">
             <label class="switch-field"><span><strong>Einfarbig</strong><small>Alle Felder in der helleren Themenfarbe anzeigen.</small></span><input type="checkbox" data-setting="monochromeBoard" role="switch"></label>
             <label class="switch-field"><span><strong>Felderoutline</strong><small>Jedes Feld mit der dunkleren Themenfarbe umranden.</small></span><input type="checkbox" data-setting="squareOutline" role="switch"></label>
+            <label class="switch-field"><span><strong>Feldecken abschraegen</strong><small>Rauten zwischen den Feldern anzeigen.</small></span><input type="checkbox" data-setting="boardBevelEnabled" role="switch"></label>
+            <label class="field"><span>Abschraegung</span><input type="range" min="0" max="100" step="1" data-setting="boardBevelPercent" title="0%: eckig; 100%: bis zur Kantenmitte"><output data-value-for="boardBevelPercent"></output></label>
           </div>
         </section>
 
@@ -198,6 +203,7 @@
           <div class="control-grid">
             <label class="field"><span>Ansicht</span><select data-setting="threatCenterOutlineStyle"><option value="outline">Figurenoutline</option><option value="hatching">Schraffur (eine Richtung)</option></select></label>
             <label class="switch-field" data-center-outline-mode="hatching"><span><strong>Schraffur nur bei haltbarem Schlag</strong><small>Bewertet Rückschläge auf dem Zielfeld und gewinnbringende Gegenschläge auf andere Felder.</small></span><input type="checkbox" data-setting="threatCenterHatchExchangeFilterEnabled" role="switch"></label>
+            <label class="switch-field" data-center-outline-mode="hatching"><span><strong>Nur durch ausgewählte Figur bedroht</strong><small>Schraffiert nur gegnerische Figuren, die das ausgewählte Stück angreifen kann.</small></span><input type="checkbox" data-setting="threatCenterHatchOnlySelectedCanCapture" role="switch"></label>
             <label class="field" data-center-outline-mode="outline"><span>Breite der Outline in Prozent</span><input type="range" min="0" max="20" step="0.5" data-setting="threatCenterOutlineWidthPercent"><output data-value-for="threatCenterOutlineWidthPercent"></output></label>
             <label class="field" data-center-outline-mode="hatching"><span>Linienabstand in Prozent der Feldbreite</span><input type="range" min="0.5" max="40" step="0.5" data-setting="threatCenterHatchSpacingPercent"><output data-value-for="threatCenterHatchSpacingPercent"></output></label>
             <label class="field" data-center-outline-mode="hatching"><span>Liniendicke in Prozent der Feldbreite</span><input type="range" min="0.25" max="20" step="0.25" data-setting="threatCenterHatchThicknessPercent"><output data-value-for="threatCenterHatchThicknessPercent"></output></label>

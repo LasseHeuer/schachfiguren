@@ -4,9 +4,12 @@
     pieceSet: "system_eckig",
     complexPawn: true,
     boardLightLight: "oklch(0.8950392819 0.0167676465 301.1914565362)",
+    boardGapLight: "oklch(0.845 0 0)",
     boardDarkLight: "oklch(0.885873322 0.0097293256 140.5143546829)",
     monochromeBoard: false,
     squareOutline: false,
+    boardBevelEnabled: false,
+    boardBevelPercent: 30,
     boardScalePercent: 83,
     boardVerticalOffset: 0,
     boardTopGapPercent: 0,
@@ -34,6 +37,7 @@
     soundSettings: {},
     hoverMixLight: "oklch(0.8653569657 0.0022022331 17.2009230703)",
     boardLightDark: "oklch(0.3783961162 0.0033433084 106.558233694)",
+    boardGapDark: "oklch(0.32 0 0)",
     boardDarkDark: "oklch(0.3621051109 0.0052543068 301.259408164)",
     lastMoveDark: "oklch(0.300397087 0.0060154475 314.7294762347)",
     selectedDark: "oklch(0.2719585799 0.0100275903 132.64018331)",
@@ -79,6 +83,7 @@
     moveAnimationDuration: 200,
     movePreviewOriginOpacity: 0.25,
     movePreviewCorridorWidthPercent: 100,
+    movePreviewAnticipationPercent: 100,
     moveAnimationTimeDistance: true,
     moveAnimationDistanceFactor: 0.15,
     moveAnimationCurve: [0.34793622153145926, -1.1229950096562262, 0.3128621464683896, -102.4430381342235],
@@ -143,6 +148,7 @@
     threatCenterOutlineEnabled: true,
     threatCenterOutlineStyle: "hatching",
     threatCenterHatchExchangeFilterEnabled: true,
+    threatCenterHatchOnlySelectedCanCapture: false,
     threatCenterOutlineWidthPercent: 5,
     threatCenterOutlineOpacity: 100,
     threatCenterHatchSpacingPercent: 11,
@@ -160,6 +166,7 @@
   const colors = Object.keys(defaults).filter(key => /Color|Light|Dark/.test(key) && typeof defaults[key] === "string");
 
   const ranges = {
+    boardBevelPercent: [0, 100],
     boardTopGapPercent: [0, 30],
     zenBoardUpPercent: [0, 30],
     zenClockFontSizePx: [16, 80],
@@ -230,6 +237,7 @@
     moveAnimationDuration: [0, 500],
     movePreviewOriginOpacity: [0, 1],
     movePreviewCorridorWidthPercent: [0, 200],
+    movePreviewAnticipationPercent: [0, 100],
     moveAnimationDistanceFactor: [0, 1]
   };
 
@@ -384,6 +392,7 @@
       "disableAnimations",
       "monochromeBoard",
       "squareOutline",
+      "boardBevelEnabled",
       "threatColoringEnabled",
       "pieceBounceEnabled",
       "pieceBounceLoop",
@@ -399,6 +408,7 @@
       "threatenedPieceOutlineEnabled",
       "threatCenterOutlineEnabled",
       "threatCenterHatchExchangeFilterEnabled",
+      "threatCenterHatchOnlySelectedCanCapture",
       "moveAnimationLichessSpeed",
       "moveAnimationTimeDistance",
       "complexPawn",

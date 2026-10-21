@@ -49,6 +49,7 @@
           <label class="range-setting" data-depends-on="!moveAnimationLichessSpeed"><span>Zugdauer</span><output data-value-for="moveAnimationDuration"></output><input type="range" min="0" max="500" step="10" data-setting="moveAnimationDuration"></label>
           <label class="range-setting range-wide"><span>Vorschau: Deckkraft am Ursprungsfeld</span><output data-value-for="movePreviewOriginOpacity"></output><input type="range" min="0" max="1" step="0.01" data-setting="movePreviewOriginOpacity"></label>
           <label class="range-setting range-wide"><span>Vorschau: Korridorbreite (% der Feldbreite)</span><output data-value-for="movePreviewCorridorWidthPercent"></output><input type="range" min="0" max="200" step="5" data-setting="movePreviewCorridorWidthPercent"></label>
+          <label class="range-setting range-wide" title="0 %: von Feld zu Feld. Niedrige Werte warten länger auf eine gleichmäßige Mausbewegung. 100 %: wie bisher."><span>Vorschau: Vorausahnung</span><output data-value-for="movePreviewAnticipationPercent"></output><input type="range" min="0" max="100" step="1" data-setting="movePreviewAnticipationPercent"></label>
           <label class="switch-setting"><span><strong>Zeit/Distanz</strong><small>Erhöht die Grundzeit pro Feld um den eingestellten Anteil.</small></span><input type="checkbox" data-setting="moveAnimationTimeDistance" role="switch"></label>
           <label class="range-setting" data-depends-on="moveAnimationTimeDistance"><span>Faktor Zeit/Distanz</span><output data-value-for="moveAnimationDistanceFactor"></output><input type="range" min="0" max="1" step="0.05" data-setting="moveAnimationDistanceFactor"></label>
         </div>
@@ -67,17 +68,21 @@
         <div class="theme-grid">
           <fieldset class="theme"><legend>Hell</legend>
             <label class="color-row"><span>Helles Feld</span><input type="color" data-setting="boardLightLight"></label>
+            <label class="color-row"><span>Zwischenraum</span><input type="color" data-setting="boardGapLight"></label>
             <label class="color-row"><span>Dunkles Feld</span><input type="color" data-setting="boardDarkLight"></label>
           </fieldset>
           <fieldset class="theme"><legend>Dunkel</legend>
             <label class="color-row"><span>Helles Feld</span><input type="color" data-setting="boardLightDark"></label>
+            <label class="color-row"><span>Zwischenraum</span><input type="color" data-setting="boardGapDark"></label>
             <label class="color-row"><span>Dunkles Feld</span><input type="color" data-setting="boardDarkDark"></label>
           </fieldset>
         </div>
         <div class="switch-list">
           <label class="switch-setting"><span>Einfarbig</span><input type="checkbox" data-setting="monochromeBoard" role="switch"></label>
           <label class="switch-setting"><span>Felderoutline</span><input type="checkbox" data-setting="squareOutline" role="switch"></label>
+          <label class="switch-setting"><span>Feldecken abschraegen</span><input type="checkbox" data-setting="boardBevelEnabled" role="switch"></label>
         </div>
+        <label class="range-setting" data-depends-on="boardBevelEnabled"><span>Abschraegung</span><output data-value-for="boardBevelPercent"></output><input type="range" min="0" max="100" step="1" data-setting="boardBevelPercent" title="0%: eckig; 100%: bis zur Kantenmitte"></label>
       </section>
 
       <section class="panel" id="panel-zuege" role="tabpanel" aria-labelledby="tab-zuege" data-panel="zuege" hidden>
@@ -213,6 +218,7 @@
           <label class="switch-setting"><span><strong>Figurenkontur im Zentrum</strong><small>Markiert Figuren, die mehr angegriffen als verteidigt werden.</small></span><input type="checkbox" data-setting="threatCenterOutlineEnabled" role="switch"></label>
           <label class="select-setting" data-depends-on="threatCenterOutlineEnabled"><span>Ansicht</span><select data-setting="threatCenterOutlineStyle"><option value="outline">Figurenoutline</option><option value="hatching">Schraffur (eine Richtung)</option></select></label>
           <label class="switch-setting" data-depends-on="threatCenterOutlineEnabled threatCenterOutlineStyle=hatching"><span><strong>Schraffur nur bei haltbarem Schlag</strong><small>Berücksichtigt Rückschläge auf dem Zielfeld und gewinnbringende Gegenschläge auf andere Felder.</small></span><input type="checkbox" data-setting="threatCenterHatchExchangeFilterEnabled" role="switch"></label>
+          <label class="switch-setting" data-depends-on="threatCenterOutlineEnabled threatCenterOutlineStyle=hatching"><span><strong>Nur durch ausgewählte Figur bedroht</strong><small>Schraffiert nur gegnerische Figuren, die das ausgewählte Stück angreifen kann.</small></span><input type="checkbox" data-setting="threatCenterHatchOnlySelectedCanCapture" role="switch"></label>
           <div class="range-grid" data-depends-on="threatCenterOutlineEnabled">
             <label class="range-setting" data-depends-on="threatCenterOutlineEnabled threatCenterOutlineStyle=outline"><span>Breite der Outline in Prozent</span><output data-value-for="threatCenterOutlineWidthPercent"></output><input type="range" min="0" max="20" step="0.5" data-setting="threatCenterOutlineWidthPercent"></label>
             <label class="range-setting" data-depends-on="threatCenterOutlineEnabled threatCenterOutlineStyle=hatching"><span>Linienabstand</span><output data-value-for="threatCenterHatchSpacingPercent"></output><input type="range" min="0.5" max="40" step="0.5" data-setting="threatCenterHatchSpacingPercent"></label>

@@ -17,6 +17,50 @@ const previousColors = {
   buttonBackgroundLight: "#bdbdbd", threatPinnedOutlineDark: "#383838", threatPinnedOutlineLight: "#f0f0f0"
 };
 
+test("board bevel defaults and limits preserve the existing board until enabled", () => {
+  const defaults = settings.normalize();
+  assert.equal(defaults.boardBevelEnabled, false);
+  assert.equal(defaults.boardBevelPercent, 30);
+  assert.equal(settings.normalize({ boardBevelPercent: -10 }).boardBevelPercent, 0);
+  assert.equal(settings.normalize({ boardBevelPercent: 120 }).boardBevelPercent, 100);
+  assert.equal(settings.normalize({ boardBevelEnabled: true }).boardBevelEnabled, true);
+  for (const key of ["boardGapLight", "boardGapDark"]) {
+    assert.equal(colors.parse(defaults[key]).alpha, 1);
+    assert.equal(colors.toHex(settings.normalize({ [key]: "#123456" })[key]), "#123456");
+    assert.equal(settings.normalize({ [key]: "invalid" })[key], settings.defaults[key]);
+  }
+});
+
+test("gap colors equally mix adjacent fields and only include existing edge neighbors", () => {
+  const grid = Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => [0, 0, 0]));
+  grid[0][0] = [200, 0, 0];
+  grid[0][1] = [0, 100, 0];
+  grid[1][0] = [0, 0, 80];
+  grid[1][1] = [40, 20, 0];
+  assert.deepEqual(threats.getThreatGapColor(grid, 1, 1), [60, 30, 20]);
+  assert.deepEqual(threats.getThreatGapColor(grid, 0, 1), [100, 50, 0]);
+  assert.deepEqual(threats.getThreatGapColor(grid, 1, 0), [100, 0, 40]);
+  assert.deepEqual(threats.getThreatGapColor(grid, 0, 0), [200, 0, 0]);
+  grid[7][7] = [12, 34, 56];
+  assert.deepEqual(threats.getThreatGapColor(grid, 8, 8), [12, 34, 56]);
+  const rotated = grid.map(row => [...row].reverse()).reverse();
+  assert.deepEqual(threats.getThreatGapColor(rotated, 7, 7), [60, 30, 20]);
+});
+
+test("gap mixing preserves the chosen base without threats and combines both player tints", () => {
+  for (const threatBlendMode of ["oklab", "normal", "multiply", "screen", "overlay", "soft-light", "hard-light", "darken", "lighten", "difference"]) {
+    const options = { ...settings.defaults, threatBlendMode };
+    const base = "#778899";
+    const neutral = colors.toRgb(threats.getOpacityColor(0, options, base));
+    const grid = Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => neutral));
+    assert.equal(colors.toHex(colors.fromRgb(threats.getThreatGapColor(grid, 1, 1))), base);
+    grid[0][0] = colors.toRgb(threats.getOpacityColor(5, options, base));
+    grid[0][1] = colors.toRgb(threats.getOpacityColor(-5, options, base));
+    const mixed = threats.getThreatGapColor(grid, 1, 1);
+    mixed.forEach((channel, index) => assert.ok(Math.abs(channel - (grid[0][0][index] + grid[0][1][index] + 2 * neutral[index]) / 4) < 0.000001));
+  }
+});
+
 test("sRGB primary colors match the published Oklab reference", () => {
   for (const [hex, expected] of [
     ["#ff0000", [0.62795536, 0.25768331, 29.23388519]],
@@ -74,6 +118,91 @@ test("hover preview corridor width and origin opacity retain saved values and va
   for (const opacity of [0, 0.25, 1]) {
     assert.equal(settings.normalize({ movePreviewOriginOpacity: opacity }).movePreviewOriginOpacity, opacity);
   }
+});
+
+test("hover preview anticipation preserves the existing default and clamps saved values", () => {
+  assert.equal(settings.normalize().movePreviewAnticipationPercent, 100);
+  for (const [saved, expected] of [[0, 0], [35, 35], [100, 100], [-5, 0], [150, 100], ["invalid", 100]]) {
+    const normalized = settings.normalize({ movePreviewAnticipationPercent: saved });
+    assert.equal(normalized.movePreviewAnticipationPercent, expected);
+    assert.equal(settings.normalize(normalized).movePreviewAnticipationPercent, expected);
+  }
+});
+
+test("hover anticipation waits for sustained motion and zero restores field animations", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const listeners = {};
+  let now = 0;
+  let targetCol = 1;
+  const context = vm.createContext({
+    document: { addEventListener: (name, callback) => { listeners[name] = callback; } },
+    performance: { now: () => now },
+    requestAnimationFrame: () => 1,
+    cancelAnimationFrame: () => {},
+    LichessThreatCoding: { getInteractionPreview: () => ({
+      isHoverPreview: true, source: { row: 0, col: 0 }, target: { row: 0, col: targetCol }
+    }) }
+  });
+  const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
+  vm.runInContext(source.replace("  documentObserver = new MutationObserver", `
+    globalThis.testing = { observedBoards, getMovePreviewState, setMovePreviewTarget,
+      configure(value) { settings = value; } };
+    return;
+    documentObserver = new MutationObserver`), context);
+  const api = context.testing;
+  const board = {
+    contains: () => true, querySelector: () => null, querySelectorAll: () => [],
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 800 })
+  };
+  function runMotion(percent, interval = 16) {
+    api.configure(settings.normalize({ movePreviewAnticipationPercent: percent }));
+    const entry = { previewPieceSvg: {}, previewTargetKey: "0,0:0,1" };
+    api.observedBoards.set(board, entry);
+    let firstSmooth = null;
+    for (let index = 0; index <= 30; index++) {
+      now = index * interval;
+      targetCol = index ? 2 : 1;
+      listeners.pointermove({ target: board, clientX: 75 + now * 0.5, clientY: 50 });
+      if (entry.previewPointerMotion.smooth && firstSmooth === null) firstSmooth = now;
+    }
+    return { entry, firstSmooth };
+  }
+  assert.equal(runMotion(100).firstSmooth, 48);
+  assert.equal(runMotion(50).firstSmooth, 112);
+  assert.equal(runMotion(50, 8).firstSmooth, 104);
+  assert.equal(runMotion(10).firstSmooth, 192);
+  assert.equal(runMotion(0).firstSmooth, null);
+
+  const { entry } = runMotion(50);
+  now += 16;
+  listeners.pointermove({ target: board, clientX: 50, clientY: 50 });
+  assert.equal(entry.previewPointerMotion.smooth, false);
+
+  entry.previewTranslation = { x: 1, y: 0 };
+  entry.previewOpacity = 1;
+  entry.previewAnimation = {
+    tracking: true, to: { x: 1, y: 0 }, source: { row: 0, col: 0 },
+    lastTime: now - 16, velocity: { x: 0, y: 0 }, destinations: [{ x: 2, y: 0 }]
+  };
+  entry.previewPointerMotion = { smooth: true, time: now, x: 1.9, y: 0.5, vx: 0.01, vy: 0 };
+  api.configure(settings.normalize());
+  const original = api.getMovePreviewState(entry, now);
+  assert.ok(Math.abs(original.x - (2 - 1.56 * Math.exp(-0.56))) < 1e-12);
+  api.configure(settings.normalize({ movePreviewAnticipationPercent: 50 }));
+  assert.ok(api.getMovePreviewState(entry, now).x < original.x);
+
+  api.configure(settings.normalize({ movePreviewAnticipationPercent: 0 }));
+  entry.previewTranslation = { x: 0.5, y: 0 };
+  entry.previewSourceKey = "0,0";
+  entry.previewTargetKey = "0,0:0,1";
+  entry.previewPieceGroup = { setAttribute: () => {} };
+  api.setMovePreviewTarget(board, entry,
+    { source: { row: 0, col: 0 }, target: { row: 0, col: 1 } },
+    { row: 0, col: 0 }, { row: 0, col: 1 });
+  assert.equal(entry.previewAnimation?.tracking, undefined);
+  assert.ok(entry.previewAnimation.duration >= 200 && entry.previewAnimation.duration <= 230);
 });
 
 test("OKLCH percentages, hue normalization and alpha survive conversion", () => {

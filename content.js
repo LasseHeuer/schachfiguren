@@ -39,7 +39,8 @@
     ["kingMovementFieldsEnabled", "Königbewegungsfelder"],
     ["defenseCirclesEnabled", "Verteidigungen"],
     ["threatCenterOutlineEnabled", "Figurenkontur"],
-    ["threatCenterHatchExchangeFilterEnabled", "Nur haltbare Schraffur", "threatCenterOutlineEnabled"]
+    ["threatCenterHatchExchangeFilterEnabled", "Nur haltbare Schraffur", "threatCenterOutlineEnabled"],
+    ["threatCenterHatchOnlySelectedCanCapture", "Nur durch ausgewählte Figur bedroht", "threatCenterOutlineEnabled"]
   ];
   let settings = { ...defaults };
   let analysisToolbar;
@@ -897,6 +898,7 @@
     root.dataset.lfsEngineArrowEndOffset = settings.engineArrowEndOffsetPercent;
     root.toggleAttribute("data-lfs-monochrome-board", settings.monochromeBoard);
     root.toggleAttribute("data-lfs-square-outline", settings.squareOutline);
+    root.toggleAttribute("data-lfs-board-bevel", settings.boardBevelEnabled && settings.boardBevelPercent > 0);
     root.toggleAttribute("data-lfs-rund-comic", settings.pieceSet === "rund_comic");
     const analysisSettings = settings.analysisEnabled ? settings : {
       ...settings,
@@ -915,7 +917,13 @@
 
     globalThis.LichessSelectedPieceWedge?.update(analysisSettings);
 
+    // 100% bevel reaches halfway along each edge of a square.
+    const bevel = settings.boardBevelPercent / 2;
+    const bevelPoints = `${bevel},0 ${100 - bevel},0 100,${bevel} 100,${100 - bevel} ${100 - bevel},100 ${bevel},100 0,${100 - bevel} 0,${bevel}`;
+    const bevelMask = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><polygon points="${bevelPoints}" fill="white"/></svg>`;
     const variables = {
+      "--lfs-board-bevel-mask": `url("data:image/svg+xml,${encodeURIComponent(bevelMask)}")`,
+      "--lfs-board-bevel-clip": `polygon(${bevelPoints.split(" ").map(point => point.split(",").map(value => `${value}%`).join(" ")).join(", ")})`,
       "--lfs-idle-mix-percent": `${settings.idleMixPercent}%`,
       "--lfs-hover-mix-percent": `${settings.hoverMixPercent}%`,
       "--lfs-hover-desaturation-setting": `${settings.hoverDesaturation}%`,
@@ -925,8 +933,10 @@
       "--lfs-white-piece-color": settings.whitePieceColor,
       "--lfs-black-piece-color": settings.blackPieceColor,
       "--lfs-board-light-light": settings.boardLightLight,
+      "--lfs-board-gap-light": settings.boardGapLight,
       "--lfs-board-dark-light": settings.boardDarkLight,
       "--lfs-board-light-dark": settings.boardLightDark,
+      "--lfs-board-gap-dark": settings.boardGapDark,
       "--lfs-board-dark-dark": settings.boardDarkDark,
       "--lfs-last-move-light": settings.lastMoveLight,
       "--lfs-selected-light": settings.selectedLight,

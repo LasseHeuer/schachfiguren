@@ -109,13 +109,18 @@
             && (vx * previous.vx + vy * previous.vy) / (speed * previousSpeed) > 0.85
             && speed / previousSpeed > 0.4 && speed / previousSpeed < 2.5;
           const samples = consistent ? previous.samples + 1 : 0;
+          const consistentSince = consistent ? previous.consistentSince : now;
+          const anticipation = settings.movePreviewAnticipationPercent / 100;
+          // Lower settings require sustained direction, independent of pointer event frequency.
+          const confirmed = now - consistentSince >= (1 - anticipation) * 180;
           entry.previewPointerMotion = {
-            x, y, time: now, sourceKey, samples, smooth: samples >= 2 && !waitingForTargetChange,
+            x, y, time: now, sourceKey, samples, consistentSince,
+            smooth: anticipation > 0 && confirmed && samples >= 2 && !waitingForTargetChange,
             vx: consistent ? previous.vx * 0.4 + vx * 0.6 : vx,
             vy: consistent ? previous.vy * 0.4 + vy * 0.6 : vy
           };
         } else {
-          entry.previewPointerMotion = { x, y, time: now, sourceKey, samples: 0, smooth: false, vx: 0, vy: 0 };
+          entry.previewPointerMotion = { x, y, time: now, sourceKey, samples: 0, consistentSince: now, smooth: false, vx: 0, vy: 0 };
         }
         // After a pause, movement inside the same field must not restart lookahead.
         entry.previewPointerMotion.heldTargetKey = waitingForTargetChange ? targetKey : null;
@@ -479,6 +484,22 @@
       && settings?.threatCenterHatchExchangeFilterEnabled;
   }
 
+  function getSelectedCaptureTargets(position, selected, blackOrientation) {
+    const piece = selected && position[selected.row]?.[selected.col];
+    if (!piece) return new Set();
+    return new Set(getAttackedPieces(position, selected, blackOrientation)
+      .filter(target => {
+        const targetPiece = position[target.row][target.col];
+        return targetPiece.color !== piece.color && targetPiece.type !== "king";
+      })
+      .map(target => `${target.row},${target.col}`));
+  }
+
+  function shouldRestrictHatchedThreatsToSelectedPiece() {
+    return settings?.threatCenterOutlineStyle === "hatching"
+      && settings?.threatCenterHatchOnlySelectedCanCapture;
+  }
+
   // Include attacks from cheaper pieces even when the target has defenders.
   function getOverloadedPieces(position, blackOrientation, filterByWinningExchange = false) {
     const counts = new Map();
@@ -699,7 +720,8 @@
       ? settings.threatCenterHatchThicknessPercent
       : settings?.threatCenterOutlineWidthPercent;
     const invisibleOutline = settings?.threatCenterOutlineStyle !== "hatching" && !settings?.threatCenterOutlineOpacity;
-    if (!settings?.threatCenterOutlineEnabled || !markWidth || invisibleOutline || !source || !piece) return [];
+    if (!settings?.threatCenterOutlineEnabled || !markWidth || invisibleOutline || !source || !piece
+      || shouldRestrictHatchedThreatsToSelectedPiece()) return [];
 
     const pieceElement = piece.element ?? getDraggingPiece(board);
     const previews = [];
@@ -1896,10 +1918,11 @@
       let target = animation.to;
       const motion = entry.previewPointerMotion;
       const age = motion ? Math.max(0, now - motion.time) : Infinity;
-      if (motion?.smooth && age < 90) {
+      const anticipation = settings.movePreviewAnticipationPercent / 100;
+      if (anticipation > 0 && motion?.smooth && age < 90) {
         // Predict only along a connection to a neighbouring legal move field.
         const speed = Math.hypot(motion.vx, motion.vy);
-        const lookAhead = Math.min(60, 0.65 / speed) * (1 - age / 90);
+        const lookAhead = Math.min(60, 0.65 / speed) * (1 - age / 90) * anticipation;
         const predicted = {
           x: motion.x - animation.source.col - 0.5 + motion.vx * lookAhead,
           y: motion.y - animation.source.row - 0.5 + motion.vy * lookAhead
@@ -1922,7 +1945,7 @@
       }
       // A critically damped response preserves velocity across field changes.
       const elapsed = Math.max(0, now - animation.lastTime);
-      const response = 0.035;
+      const response = 0.035 / (1 + (1 - anticipation) * 2);
       const decay = Math.exp(-response * elapsed);
       const state = { opacity: 1 - (1 - entry.previewOpacity) * decay };
       for (const axis of ["x", "y"]) {
@@ -1946,7 +1969,8 @@
     const targetKey = `${preview.source.row},${preview.source.col}:${preview.target.row},${preview.target.col}`;
     const sourceKey = `${sourceSquare.row},${sourceSquare.col}`;
     const to = { x: targetSquare.col - sourceSquare.col, y: targetSquare.row - sourceSquare.row };
-    const tracking = entry.previewPointerMotion?.smooth
+    const anticipationEnabled = settings.movePreviewAnticipationPercent > 0;
+    const tracking = anticipationEnabled && entry.previewPointerMotion?.smooth
       && performance.now() - entry.previewPointerMotion.time < 90;
     if (entry.previewSourceKey !== sourceKey) {
       if (entry.previewAnimationFrame) cancelAnimationFrame(entry.previewAnimationFrame);
@@ -1964,7 +1988,7 @@
         .map(square => getScreenSquare(square, board)).filter(Boolean)
         .map(square => ({ x: square.col - sourceSquare.col, y: square.row - sourceSquare.row }))
       : [];
-    if (entry.previewAnimation?.tracking && !settings.disableAnimations) {
+    if (anticipationEnabled && entry.previewAnimation?.tracking && !settings.disableAnimations) {
       entry.previewAnimation.to = to;
       entry.previewAnimation.destinations = destinations;
       entry.previewTargetKey = targetKey;
@@ -1973,6 +1997,7 @@
     if (entry.previewTargetKey === targetKey) {
       const currentAnimation = entry.previewAnimation;
       const animationAlreadyTargets = currentAnimation
+        && (anticipationEnabled || !currentAnimation.tracking)
         && Math.hypot(currentAnimation.to.x - to.x, currentAnimation.to.y - to.y) < 0.005;
       const alreadyAtTarget = !currentAnimation
         && Math.hypot(entry.previewTranslation.x - to.x, entry.previewTranslation.y - to.y) < 0.005;
@@ -2287,8 +2312,13 @@
       ...defenseSegments.filter(({ target }) => !moveDestinationLines.targetKeys.has(`${target.row},${target.col}`)),
       ...moveDestinationLines.defenseSegments
     ];
+      const selectedCaptureTargets = shouldRestrictHatchedThreatsToSelectedPiece()
+        ? getSelectedCaptureTargets(parsed.position, parsed.selected, parsed.blackOrientation)
+        : null;
       const centerOutlines = settings.threatCenterOutlineEnabled
-         ? getOverloadedPieces(parsed.position, parsed.blackOrientation, shouldFilterHatchedThreats()).map(outline => {
+         ? getOverloadedPieces(parsed.position, parsed.blackOrientation, shouldFilterHatchedThreats())
+           .filter(({ target }) => !selectedCaptureTargets || selectedCaptureTargets.has(`${target.row},${target.col}`))
+           .map(outline => {
         const piece = parsed.position[outline.target.row][outline.target.col];
         const previewTarget = movePreview?.isHoverPreview && logicalToScreen(movePreview.target, parsed.blackOrientation);
         const hoverPreview = previewTarget?.row === outline.target.row && previewTarget?.col === outline.target.col;
