@@ -13,7 +13,7 @@ const previousColors = {
   hoverMixLight: "#d4d2d2", boardLightDark: "#424240", boardDarkDark: "#3e3d40",
   lastMoveDark: "#2f2d30", selectedDark: "#252823", checkSquareDark: "#8c3434",
   engineArrowDark: "#000000", hoverMixDark: "#282727", whitePieceColor: "#d1521d",
-  blackPieceColor: "#2ba4d1", onlineIndicatorDark: "#7c9e4f", buttonBackgroundDark: "#333332",
+  blackPieceColor: "#2ba4d1", primaryButtonColor: "#3692e7", onlineIndicatorLight: "#7c9e4f", onlineIndicatorDark: "#7c9e4f", buttonBackgroundDark: "#333332",
   buttonBackgroundLight: "#bdbdbd", threatPinnedOutlineDark: "#383838", threatPinnedOutlineLight: "#f0f0f0"
 };
 

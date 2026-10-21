@@ -9,7 +9,31 @@ html {
   background-color: var(--c-bg-page) !important;
 }
 
+html:not([data-lfs-disabled]) body .button:not(.button-green):not(.button-red):not(.button-metal):not(.button-inverse):not(.button-empty):not(.button-link),
+html:not([data-lfs-disabled]) body .lfs-playlist-primary {
+  background: var(--lfs-primary-button-color, #3692e7) !important;
+}
+
+html:not([data-lfs-disabled]) body .lfs-playlist-primary {
+  border-color: var(--lfs-primary-button-color, #3692e7);
+}
+
+html:not([data-lfs-disabled]) body .button.button-metal:not(.button-empty):not(.button-inverse) {
+  background: var(--lfs-button-background-active) !important;
+}
+
+html:not([data-lfs-disabled]) body .user-link.online .line {
+  color: var(--lfs-online-indicator-active) !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > piece[data-lfs-threatened-piece] {
+  filter: drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active)) !important;
+}
+
 html.light {
+  --lfs-online-indicator-active: var(--lfs-online-indicator-light);
+  --lfs-button-background-active: var(--lfs-button-background-light);
+  --lfs-threat-pinned-outline-active: var(--lfs-threat-pinned-outline-light);
   --lfs-engine-arrow-color: var(--lfs-engine-arrow-light, oklch(0.500159011992414 0.154359110842529 143.446846366196));
   --lfs-board-light-active: var(--lfs-board-light-light, oklch(0.931771275027537 0.001079741737538 17.179127131600));
   --lfs-board-gap-active: var(--lfs-board-gap-light, oklch(0.845 0 0));
@@ -21,6 +45,9 @@ html.light {
 }
 
 html:not(.light) {
+  --lfs-online-indicator-active: var(--lfs-online-indicator-dark);
+  --lfs-button-background-active: var(--lfs-button-background-dark);
+  --lfs-threat-pinned-outline-active: var(--lfs-threat-pinned-outline-dark);
   --lfs-engine-arrow-color: var(--lfs-engine-arrow-dark, oklch(0.715763415381370 0.148903202447606 131.784712664961));
   --lfs-board-light-active: var(--lfs-board-light-dark, oklch(0.402865111336688 0.024101051706464 126.369117320751));
   --lfs-board-gap-active: var(--lfs-board-gap-dark, oklch(0.32 0 0));

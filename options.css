@@ -64,6 +64,8 @@ output { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 10
 .theme-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .theme-panel { min-width: 0; margin: 0; padding: 9px 10px; border: 0; border-radius: 7px; background: oklch(0.971550277719091 0.004097064856420 121.560436500494); }
 .theme-panel legend { padding: 0 3px; color: oklch(0.479928597967839 0.025373638603468 153.555472525237); font-size: 9px; font-weight: 700; }
+.theme-color-details summary { margin-bottom: 7px; color: oklch(0.479928597967839 0.025373638603468 153.555472525237); cursor: pointer; font-size: 9px; font-weight: 700; }
+.theme-color-details:not([open]) summary { margin-bottom: 0; }
 .color-field { display: flex; align-items: center; justify-content: space-between; gap: 9px; color: oklch(0.481876298687882 0.018060990933150 145.287957296124); font-size: 9px; }
 .color-field + .color-field { margin-top: 5px; }
 .color-field input[type="color"] { width: 50px; height: 21px; flex: 0 0 auto; }

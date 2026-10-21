@@ -66,6 +66,8 @@
     threatBlendMode: "oklab",
     threatGradientPercent: 0,
     threatColoringMode: "opacity",
+    primaryButtonColor: "oklch(0.6466575011 0.1533882023 250.107923237)",
+    onlineIndicatorLight: "oklch(0.6554420197 0.1136350274 128.3610368503)",
     onlineIndicatorDark: "oklch(0.6554420197 0.1136350274 128.3610368503)",
     buttonBackgroundDark: "oklch(0.3207267548 0.0017439976 106.4974103352)",
     buttonBackgroundLight: "oklch(0.7983723788 0 0)",

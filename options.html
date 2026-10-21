@@ -239,7 +239,24 @@
         </section>
 
         <section class="settings-card" id="analyse">
-          <div class="section-heading"><span class="section-index">07</span><div><h2>Weitere Einstellungen</h2><p>Profilanzeige und Analysegraph.</p></div></div>
+          <div class="section-heading"><span class="section-index">07</span><div><h2>Weitere Einstellungen</h2><p>Profilanzeige, Analysegraph und Seitenfarben.</p></div></div>
+          <div class="control-grid">
+            <label class="field"><span>Farbe der blauen Buttons auf Lichess</span><input type="color" data-setting="primaryButtonColor"><small>Einheitlich auf allen Lichess-Seiten.</small></label>
+          </div>
+          <div class="theme-grid">
+            <details class="theme-panel theme-color-details">
+              <summary>Hell</summary>
+              <label class="color-field"><span>Neutrale Buttons</span><input type="color" data-setting="buttonBackgroundLight"></label>
+              <label class="color-field"><span>Online-Anzeige</span><input type="color" data-setting="onlineIndicatorLight"></label>
+              <label class="color-field"><span>Kontur bedrohter Figuren</span><input type="color" data-setting="threatPinnedOutlineLight"></label>
+            </details>
+            <details class="theme-panel theme-color-details">
+              <summary>Dunkel</summary>
+              <label class="color-field"><span>Neutrale Buttons</span><input type="color" data-setting="buttonBackgroundDark"></label>
+              <label class="color-field"><span>Online-Anzeige</span><input type="color" data-setting="onlineIndicatorDark"></label>
+              <label class="color-field"><span>Kontur bedrohter Figuren</span><input type="color" data-setting="threatPinnedOutlineDark"></label>
+            </details>
+          </div>
           <label class="switch-field"><span><strong>Gesamtspielzeit nur in Stunden</strong><small>Profilzeit ohne Tagesangabe anzeigen.</small></span><input type="checkbox" data-setting="showPlayTimeInHours" role="switch"></label>
           <label class="switch-field"><span><strong>Analysegraph-Farben angleichen</strong><small>Weiss und Schwarz im Graphen mit den Figurenfarben darstellen.</small></span><input type="checkbox" data-setting="analysisGraphColors" role="switch"></label>
           <label class="switch-field"><span><strong>Engine-Pfeile als Outline</strong><small>Kontur und Schaft in der Farbe des jeweiligen Spielers.</small></span><input type="checkbox" data-setting="engineArrowOutlineEnabled" role="switch"></label>

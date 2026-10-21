@@ -252,6 +252,21 @@
       </section>
 
       <section class="panel" id="panel-mehr" role="tabpanel" aria-labelledby="tab-mehr" data-panel="mehr" hidden>
+        <label class="color-row"><span>Farbe der blauen Buttons auf Lichess</span><input type="color" data-setting="primaryButtonColor"></label>
+        <div class="theme-grid">
+          <details class="analysis-subsection theme-color-details">
+            <summary>Hell</summary>
+            <label class="color-row"><span>Neutrale Buttons</span><input type="color" data-setting="buttonBackgroundLight"></label>
+            <label class="color-row"><span>Online-Anzeige</span><input type="color" data-setting="onlineIndicatorLight"></label>
+            <label class="color-row"><span>Kontur bedrohter Figuren</span><input type="color" data-setting="threatPinnedOutlineLight"></label>
+          </details>
+          <details class="analysis-subsection theme-color-details">
+            <summary>Dunkel</summary>
+            <label class="color-row"><span>Neutrale Buttons</span><input type="color" data-setting="buttonBackgroundDark"></label>
+            <label class="color-row"><span>Online-Anzeige</span><input type="color" data-setting="onlineIndicatorDark"></label>
+            <label class="color-row"><span>Kontur bedrohter Figuren</span><input type="color" data-setting="threatPinnedOutlineDark"></label>
+          </details>
+        </div>
         <label class="switch-setting"><span>Gesamtspielzeit nur in Stunden</span><input type="checkbox" data-setting="showPlayTimeInHours" role="switch"></label>
         <label class="switch-setting"><span>Spielerfarben im Analysegraphen</span><input type="checkbox" data-setting="analysisGraphColors" role="switch"></label>
         <label class="switch-setting"><span><strong>Engine-Pfeile als Outline</strong><small>Kontur und Schaft in der Farbe des jeweiligen Spielers.</small></span><input type="checkbox" data-setting="engineArrowOutlineEnabled" role="switch"></label>
