@@ -51,6 +51,11 @@
     hoverDesaturation: 60,
     moveDotSize: 5,
     squareMoveDots: true,
+    moveIndicatorMode: "dots",
+    moveOutlineWidthPx: 2,
+    moveOutlineColor: "oklch(0.6466575011 0.1533882023 250.107923237)",
+    moveGlowOpacity: 60,
+    moveGlowRadiusPercent: 20,
     whitePieceColor: "oklch(0.5997409301 0.1721887956 40.1845294695)",
     blackPieceColor: "oklch(0.6742384272 0.1206555753 228.5101815779)",
     analysisGraphColors: true,
@@ -128,6 +133,7 @@
     wedgePotentialCutoffValue: 1,
     wedgePotentialPerPieceCount: 3,
     threatenedPieceOutlineEnabled: true,
+    threatMoveFieldDisplayMode: "both",
     threatArcRadius: 0.45,
     threatArcThickness: 0.04,
     threatArcAngleDeg: 45,
@@ -184,6 +190,9 @@
     hoverMixPercent: [0, 100],
     hoverDesaturation: [0, 100],
     moveDotSize: [5, 50],
+    moveOutlineWidthPx: [0, 10],
+    moveGlowOpacity: [0, 100],
+    moveGlowRadiusPercent: [0, 50],
     lastMoveLineWidth: [1, 100],
     engineArrowOutlineWidthPercent: [1, 10],
     engineArrowOpacity: [0, 100],
@@ -308,12 +317,18 @@
     if (!["oklab", "normal", "multiply", "screen", "overlay", "soft-light", "hard-light", "darken", "lighten", "difference"].includes(result.threatBlendMode)) {
       result.threatBlendMode = defaults.threatBlendMode;
     }
+    if (!["dots", "outline"].includes(result.moveIndicatorMode)) {
+      result.moveIndicatorMode = defaults.moveIndicatorMode;
+    }
     if (!["all", "waterfall"].includes(result.wedgePotentialStrategy)) {
       result.wedgePotentialStrategy = defaults.wedgePotentialStrategy;
     }
     if (result.threatCenterOutlineStyle === "crosshatch") result.threatCenterOutlineStyle = "hatching";
     if (!["outline", "hatching"].includes(result.threatCenterOutlineStyle)) {
       result.threatCenterOutlineStyle = defaults.threatCenterOutlineStyle;
+    }
+    if (!["both", "lines", "hatch", "none"].includes(result.threatMoveFieldDisplayMode)) {
+      result.threatMoveFieldDisplayMode = defaults.threatMoveFieldDisplayMode;
     }
     const displayModes = ["segments", "lines", "square"];
     const legacyDisplayMode = displayModes.includes(values.threatDisplayMode) ? values.threatDisplayMode : defaults.threatAttackDisplayMode;

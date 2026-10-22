@@ -59,15 +59,22 @@
         hasPatterns = true;
       }
     }
-    if (hasPatterns && settings?.threatCenterHatchSpeed > 0) {
+    if (hasPatterns && settings?.threatCenterHatchSpeed > 0 && !isPieceBouncing()) {
       hatchAnimationFrame = requestAnimationFrame(animateHatchPatterns);
     }
   }
 
+  // The hatch scroll repaints the masked overlay every frame, which competes with the hovered piece's animation.
+  // It pauses while a piece bounces and resumes without jumping over the paused time.
+  function isPieceBouncing() {
+    return Boolean(document.querySelector("piece[data-lfs-bounce-running]"));
+  }
+
   function syncHatchAnimation() {
     const hasPatterns = [...observedBoards.values()].some(entry => entry.hatchPatterns.length);
-    if (settings?.threatCenterHatchSpeed > 0 && hasPatterns) {
+    if (settings?.threatCenterHatchSpeed > 0 && hasPatterns && !isPieceBouncing()) {
       if (!hatchAnimationFrame) {
+        hatchScrollLastTime = null;
         advanceHatchScroll();
         hatchAnimationFrame = requestAnimationFrame(animateHatchPatterns);
       }
@@ -589,11 +596,6 @@
     return threats;
   }
 
-  function clearMoveOutlineMarkers(board) {
-    for (const square of board.querySelectorAll(":scope > square[data-lfs-move-outline]")) {
-      square.removeAttribute("data-lfs-move-outline");
-    }
-  }
 
   function clearMoveDestinationMarkers(board) {
     for (const square of board.querySelectorAll(":scope > square[data-lfs-contested-move-dest]")) {
@@ -643,7 +645,7 @@
       .filter(({ target }) => target);
     const positionKey = position.map(row => row.map(occupant => occupant ? `${occupant.color}${occupant.type}` : "-").join("")).join("/");
     const destinationKey = destinations.map(({ target }) => `${target.row},${target.col}`).join(";");
-    const cacheKey = `${positionKey}:${source.row},${source.col}:${blackOrientation}:${destinationKey}:${settings.threatenedPieceOutlineEnabled}:${settings.defenseCirclesEnabled}:${settings.whitePieceColor}:${settings.blackPieceColor}`;
+    const cacheKey = `${positionKey}:${source.row},${source.col}:${blackOrientation}:${destinationKey}:${settings.threatenedPieceOutlineEnabled}:${settings.defenseCirclesEnabled}:${settings.threatMoveFieldDisplayMode}:${settings.whitePieceColor}:${settings.blackPieceColor}`;
     const cached = moveDestinationPreviewCache.get(board);
     if (cached?.key === cacheKey) {
       for (const { square, target } of destinations) {
@@ -661,10 +663,10 @@
 
       const preview = createMovePreview(position, source, target, blackOrientation);
       if (!preview) continue;
-      const attackers = settings.threatenedPieceOutlineEnabled
+      const attackers = settings.threatenedPieceOutlineEnabled && showsMoveFieldLines()
         ? getThreatenedSquares(preview, blackOrientation)[piece.color].get(targetKey) ?? []
         : [];
-      const defenders = settings.defenseCirclesEnabled
+      const defenders = settings.defenseCirclesEnabled && showsMoveFieldLines()
         ? getDefenseConnections(preview, blackOrientation, true)
           .filter(connection => connection.target.row === target.row && connection.target.col === target.col)
         : [];
@@ -672,7 +674,7 @@
 
       result.targetKeys.add(targetKey);
       if (attackers.length) {
-        result.threats.push({ square: target, color: piece.color, type: preview[target.row][target.col].type, attackers, useConfiguredRadius: true });
+        result.threats.push({ square: target, color: piece.color, type: preview[target.row][target.col].type, attackers, figureBlend: 0 });
       }
       result.defenseSegments.push(...defenders.map(connection => ({
         target: connection.target,
@@ -681,7 +683,7 @@
         type: preview[target.row][target.col].type,
         sourceType: preview[connection.source.row][connection.source.col].type,
         color: connection.color === "w" ? settings.whitePieceColor : settings.blackPieceColor,
-        useConfiguredRadius: true
+        figureBlend: 0
       })));
     }
     for (const { square, target } of destinations) {
@@ -708,10 +710,25 @@
     image.style.transformBox = "fill-box";
   }
 
+  function showsMoveFieldLines() {
+    return settings?.threatMoveFieldDisplayMode === "both" || settings?.threatMoveFieldDisplayMode === "lines";
+  }
+
+  function showsMoveFieldHatch() {
+    return settings?.threatMoveFieldDisplayMode === "both" || settings?.threatMoveFieldDisplayMode === "hatch";
+  }
+
   function getDraggingPiece(board) {
     return board.querySelector(":scope > piece.dragging")
       ?? board.closest(".cg-wrap")?.querySelector(":scope > piece.dragging")
       ?? null;
+  }
+
+
+  function clearMoveOutlineMarkers(board) {
+    for (const square of board.querySelectorAll(":scope > square[data-lfs-move-outline]")) {
+      square.removeAttribute("data-lfs-move-outline");
+    }
   }
 
   function updateMoveOutlinePreviews(board, position, source, piece, blackOrientation) {
@@ -720,7 +737,7 @@
       ? settings.threatCenterHatchThicknessPercent
       : settings?.threatCenterOutlineWidthPercent;
     const invisibleOutline = settings?.threatCenterOutlineStyle !== "hatching" && !settings?.threatCenterOutlineOpacity;
-    if (!settings?.threatCenterOutlineEnabled || !markWidth || invisibleOutline || !source || !piece
+    if (!settings?.threatCenterOutlineEnabled || !showsMoveFieldHatch() || !markWidth || invisibleOutline || !source || !piece
       || shouldRestrictHatchedThreatsToSelectedPiece()) return [];
 
     const pieceElement = piece.element ?? getDraggingPiece(board);
@@ -1072,6 +1089,32 @@
   }
 
   // Segments stay outside the figure outline; if their inner edge would touch it, they move out by the margin.
+  // figureBlend 0 keeps the configured default radius, 1 applies the figure-based radius; values in between are animated.
+  const figureBlendStep = 0.2;
+
+  // Moves every field's blend one step toward 1 for the hovered empty field and toward 0 otherwise; returns true while animating.
+  function advanceFigureBlends(entry, hoverFieldKey) {
+    if (hoverFieldKey && !entry.figureBlends.has(hoverFieldKey)) entry.figureBlends.set(hoverFieldKey, 0);
+    let animating = false;
+    for (const [key, value] of entry.figureBlends) {
+      const goal = key === hoverFieldKey ? 1 : 0;
+      const next = value + Math.sign(goal - value) * Math.min(Math.abs(goal - value), figureBlendStep);
+      if (next === goal) {
+        if (goal === 0) entry.figureBlends.delete(key);
+        else entry.figureBlends.set(key, next);
+      } else {
+        entry.figureBlends.set(key, next);
+        animating = true;
+      }
+    }
+    return animating;
+  }
+
+  function blendRadius(configured, figureBased, segment) {
+    const blend = segment.figureBlend ?? 1;
+    return configured + (figureBased - configured) * blend;
+  }
+
   function getSegmentRadius(radius, figureRadius) {
     if (figureRadius === undefined || radius >= figureRadius) return radius;
     return figureRadius + settings.segmentFigureMargin;
@@ -1139,7 +1182,7 @@
     for (const segment of layeredSegments) {
       const targetKey = `${segment.target.row},${segment.target.col}`;
       const figureRadius = getMaximumFigureRadius(figureRadii, segment.type);
-      const radius = getSegmentRadius(settings.threatArcRadius, figureRadius);
+      const radius = blendRadius(settings.threatArcRadius, getSegmentRadius(settings.threatArcRadius, figureRadius), segment);
       const middleRadius = radius + settings.threatArcThickness / 2;
       // Keep a nonzero gap at least one segment thickness wide around each target.
       const visibleGapAngle = 2 * Math.asin(Math.min(1, settings.threatArcThickness / (2 * middleRadius)));
@@ -1156,7 +1199,7 @@
     for (const [index, segment] of layeredSegments.entries()) {
       const center = { x: segment.target.col + 0.5, y: segment.target.row + 0.5 };
       const figureRadius = getMaximumFigureRadius(figureRadii, segment.type);
-      const radius = getSegmentRadius(settings.threatArcRadius, figureRadius);
+      const radius = blendRadius(settings.threatArcRadius, getSegmentRadius(settings.threatArcRadius, figureRadius), segment);
       const categorySpacing = radius * settings.threatArcAngleDeg * Math.PI / 180 * settings.threatArcGapPercent / 100;
       const innerRadius = radius + segment.lane * laneSpacing + segment.categoryGapCount * categorySpacing;
       const outerRadius = innerRadius + settings.threatArcThickness;
@@ -1354,7 +1397,7 @@
           settings.threatSquareFigureMargin,
           settings.threatSquareThickness
         );
-        squareSizesByTarget.set(targetKey, Math.max(configuredHalfSize, boundingHalfSize));
+        squareSizesByTarget.set(targetKey, blendRadius(configuredHalfSize, Math.max(configuredHalfSize, boundingHalfSize), segment));
       }
     }
     const halfAngles = getSegmentHalfAngles(
@@ -1568,7 +1611,7 @@
           category: segment.category ?? "defense",
           type: segment.type,
           outline: figureRadii.get(segment.type),
-          useConfiguredRadius: segment.useConfiguredRadius,
+          figureBlend: segment.figureBlend,
           color: segment.color,
           direction,
           normal,
@@ -1587,23 +1630,19 @@
 
     function updateLineRadii(line) {
       const configuredRadius = Math.sqrt(Math.max(0, settings.threatLineRadius ** 2 - line.offset ** 2));
-      if (line.useConfiguredRadius) {
-        line.innerRadius = configuredRadius;
-      } else {
-        const usesBoundingSquare = line.type === "knight" || line.type === "queen";
-        if (usesBoundingSquare && !boundingSquareHalfSizes.has(line.type)) {
-          boundingSquareHalfSizes.set(line.type, getFigureBoundingSquareHalfSize(line.outline));
-        }
-        const collisionRadius = getLineFigureClearance(
-          line.outline,
-          line.angle,
-          line.offset,
-          settings.threatLineFigureMargin,
-          settings.threatLineThickness,
-          usesBoundingSquare ? boundingSquareHalfSizes.get(line.type) : undefined
-        );
-        line.innerRadius = Math.max(configuredRadius, collisionRadius);
+      const usesBoundingSquare = line.type === "knight" || line.type === "queen";
+      if (usesBoundingSquare && !boundingSquareHalfSizes.has(line.type)) {
+        boundingSquareHalfSizes.set(line.type, getFigureBoundingSquareHalfSize(line.outline));
       }
+      const collisionRadius = getLineFigureClearance(
+        line.outline,
+        line.angle,
+        line.offset,
+        settings.threatLineFigureMargin,
+        settings.threatLineThickness,
+        usesBoundingSquare ? boundingSquareHalfSizes.get(line.type) : undefined
+      );
+      line.innerRadius = blendRadius(configuredRadius, Math.max(configuredRadius, collisionRadius), line);
       line.outerRadius = line.innerRadius + settings.threatLineLength;
     }
 
@@ -2199,8 +2238,83 @@
     if (lineOverlay) board.insertBefore(entry.previewPieceSvg, lineOverlay);
   }
 
+  // One outline for all connected move destinations. Shared straight edges are omitted; bevel corners
+  // are kept as the connection between diagonal squares and dropped where three or four squares meet.
+  function renderMoveOutline(board, entry, selectedColor) {
+    const targets = settings?.enabled && settings.moveIndicatorMode === "outline" && board.closest(".is2d")
+      ? board.querySelectorAll(":scope > square.move-dest, :scope > square.premove-dest:not(.oc)")
+      : [];
+    const cells = targets.length
+      ? [...targets, ...board.querySelectorAll(":scope > square.selected")]
+        .map(square => getScreenSquare(square, board)).filter(Boolean)
+      : [];
+    if (!cells.length) {
+      entry.moveOutlineSvg?.remove();
+      entry.moveOutlineSvg = null;
+      return;
+    }
+
+    const set = new Set(cells.map(({ row, col }) => `${row},${col}`));
+    const has = (row, col) => set.has(`${row},${col}`);
+    const pointCount = (x, y) => [has(y - 1, x - 1), has(y - 1, x), has(y, x - 1), has(y, x)].filter(Boolean).length;
+    const bevel = settings.boardBevelEnabled ? settings.boardBevelPercent / 200 : 0;
+    const segments = [];
+    const shapes = [];
+    for (const { row, col } of cells) {
+      const x0 = col;
+      const y0 = row;
+      const x1 = col + 1;
+      const y1 = row + 1;
+      shapes.push([[x0 + bevel, y0], [x1 - bevel, y0], [x1, y0 + bevel], [x1, y1 - bevel], [x1 - bevel, y1], [x0 + bevel, y1], [x0, y1 - bevel], [x0, y0 + bevel]]);
+      if (!has(row - 1, col)) segments.push([x0 + bevel, y0, x1 - bevel, y0]);
+      if (!has(row, col + 1)) segments.push([x1, y0 + bevel, x1, y1 - bevel]);
+      if (!has(row + 1, col)) segments.push([x1 - bevel, y1, x0 + bevel, y1]);
+      if (!has(row, col - 1)) segments.push([x0, y1 - bevel, x0, y0 + bevel]);
+    }
+    // Bevel gaps (diamonds) at grid points: filled when three or four squares meet or two diagonal squares
+    // connect. Their chamfers are drawn only for the squares that are not filled, so the gap is bridged.
+    const isGapFilled = (x, y) => {
+      const count = pointCount(x, y);
+      return count >= 3 || (count === 2 && ((has(y - 1, x - 1) && has(y, x)) || (has(y - 1, x) && has(y, x - 1))));
+    };
+    for (let x = 0; bevel && x <= 8; x++) {
+      for (let y = 0; y <= 8; y++) {
+        const filled = isGapFilled(x, y);
+        if (filled) shapes.push([[x, y - bevel], [x + bevel, y], [x, y + bevel], [x - bevel, y]]);
+        const chamfers = [
+          { row: y, col: x, segment: [x, y + bevel, x + bevel, y] },
+          { row: y - 1, col: x, segment: [x + bevel, y, x, y - bevel] },
+          { row: y, col: x - 1, segment: [x - bevel, y, x, y + bevel] },
+          { row: y - 1, col: x - 1, segment: [x, y - bevel, x - bevel, y] }
+        ];
+        for (const { row, col, segment } of chamfers) {
+          if (has(row, col) !== filled) segments.push(segment);
+        }
+      }
+    }
+
+    const color = selectedColor
+      ? (selectedColor === "w" ? settings.whitePieceColor : settings.blackPieceColor)
+      : settings.moveOutlineColor;
+    const id = `lfs-move-outline-${[...observedBoards.keys()].indexOf(board)}`;
+    const d = segments.map(([x1, y1, x2, y2]) => `M${x1} ${y1}L${x2} ${y2}`).join("");
+    const clipPolygons = shapes.map(points => `<polygon points="${points.map(point => point.join(",")).join(" ")}"/>`).join("");
+    const blur = Math.max(settings.moveGlowRadiusPercent / 100, 0.001);
+    const line = `fill="none" stroke="${color}" stroke-width="${settings.moveOutlineWidthPx}" stroke-linecap="round" vector-effect="non-scaling-stroke"`;
+
+    if (!entry.moveOutlineSvg) {
+      entry.moveOutlineSvg = document.createElementNS(svgNamespace, "svg");
+      entry.moveOutlineSvg.setAttribute("viewBox", "0 0 8 8");
+      entry.moveOutlineSvg.setAttribute("aria-hidden", "true");
+    }
+    entry.moveOutlineSvg.innerHTML = `<defs><clipPath id="${id}">${clipPolygons}</clipPath>`
+      + `<filter id="${id}-glow" filterUnits="userSpaceOnUse" x="-1" y="-1" width="10" height="10"><feGaussianBlur stdDeviation="${blur}"/></filter></defs>`
+      + `<g clip-path="url(#${id})" opacity="${settings.moveGlowOpacity / 100}"><path d="${d}" ${line} filter="url(#${id}-glow)"/></g>`
+      + `<path d="${d}" ${line}/>`;
+    globalThis.LichessBoardOverlay.place(board, entry.moveOutlineSvg, "between-pieces");
+  }
+
   function renderBoard(board, entry) {
-    clearMoveOutlineMarkers(board);
     clearMoveDestinationMarkers(board);
 
     const movePreview = globalThis.LichessThreatCoding?.getInteractionPreview(board);
@@ -2213,6 +2327,7 @@
       else board.removeAttribute("data-lfs-selected-piece-color");
     }
 
+    renderMoveOutline(board, entry, selectedColor);
     if (!settings?.enabled || !board.closest(".is2d") || !parsed) {
       clearMovePreviewPiece(board, entry);
       updateThreatenedPieces(board, null, dragPreview, { w: new Map(), b: new Map() }, false, false);
@@ -2299,11 +2414,23 @@
           color: connection.color === "w" ? settings.whitePieceColor : settings.blackPieceColor
         }))
       : [];
-    const moveDestinationLines = !dragPreview
-      && parsed.selected
+    // Move field lines use the unmoved board, so they show without hovering. While dragging, the unmoved position from the drag state is used.
+    const idleParsed = dragPreview && !dragPreview.isHoverPreview ? wedgeParsed : readPosition(board);
+    const rawMoveDestinationLines = idleParsed?.selected
       && (settings.threatenedPieceOutlineEnabled || settings.defenseCirclesEnabled)
-      ? getMoveDestinationLines(board, parsed.position, parsed.selected, parsed.blackOrientation)
+      ? getMoveDestinationLines(board, idleParsed.position, idleParsed.selected, idleParsed.blackOrientation)
       : { targetKeys: new Set(), threats: [], defenseSegments: [] };
+    // An empty field under the hovered figure uses figure-based radii; the change is animated in both directions.
+    const hoverMove = movePreview?.isHoverPreview && movePreview.legal && idleParsed ? logicalToScreen(movePreview.target, idleParsed.blackOrientation) : null;
+    const hoverFieldKey = hoverMove && !idleParsed.position[hoverMove.row][hoverMove.col] ? `${hoverMove.row},${hoverMove.col}` : null;
+    const blendsAnimating = advanceFigureBlends(entry, hoverFieldKey);
+    if (blendsAnimating) scheduleRender(board);
+    const blendOf = key => entry.figureBlends.get(key) ?? 0;
+    const moveDestinationLines = {
+      targetKeys: rawMoveDestinationLines.targetKeys,
+      threats: rawMoveDestinationLines.threats.map(threat => ({ ...threat, figureBlend: blendOf(`${threat.square.row},${threat.square.col}`) })),
+      defenseSegments: rawMoveDestinationLines.defenseSegments.map(segment => ({ ...segment, figureBlend: blendOf(`${segment.target.row},${segment.target.col}`) }))
+    };
     const displayThreats = [
       ...threats.filter(({ square }) => !moveDestinationLines.targetKeys.has(`${square.row},${square.col}`)),
       ...moveDestinationLines.threats
@@ -2504,6 +2631,37 @@
     }
   }
 
+  function buildAttackSegments(threats) {
+    const attackSegments = [];
+    for (const threat of threats) {
+      const color = threat.color === "w" ? settings.blackPieceColor : settings.whitePieceColor;
+      for (const attacker of threat.attackers) {
+        attackSegments.push({
+          target: threat.square,
+          source: { row: attacker.row, col: attacker.col },
+          angle: Math.atan2(attacker.row - threat.square.row, attacker.col - threat.square.col),
+          type: threat.type,
+          sourceType: attacker.type,
+          color,
+          category: "attack",
+          figureBlend: threat.figureBlend
+        });
+      }
+    }
+    return attackSegments;
+  }
+
+  function renderThreatSegmentsInto(svg, attackSegments, defenseSegments, attackDisplayMode, defenseDisplayMode) {
+    const preparedDefenseSegments = defenseSegments.map(segment => ({ ...segment, category: "defense" }));
+    const figureRadii = getFigureRadii(settings.pieceSet);
+    if (attackDisplayMode === defenseDisplayMode) {
+      renderThreatDisplaySet(svg, [...attackSegments, ...preparedDefenseSegments], figureRadii, attackDisplayMode);
+    } else {
+      renderThreatDisplaySet(svg, attackSegments, figureRadii, attackDisplayMode);
+      renderThreatDisplaySet(svg, preparedDefenseSegments, figureRadii, defenseDisplayMode);
+    }
+  }
+
   // Attack and defense segments share one top-layer SVG while retaining their selected display modes.
   function renderThreatArcs(
     board,
@@ -2523,25 +2681,9 @@
       syncHatchAnimation();
       return;
     }
-    const attackSegments = [];
-    for (const threat of threats) {
-      const color = threat.color === "w" ? settings.blackPieceColor : settings.whitePieceColor;
-      for (const attacker of threat.attackers) {
-        attackSegments.push({
-          target: threat.square,
-          source: { row: attacker.row, col: attacker.col },
-          angle: Math.atan2(attacker.row - threat.square.row, attacker.col - threat.square.col),
-          type: threat.type,
-          sourceType: attacker.type,
-          color,
-          category: "attack",
-          useConfiguredRadius: threat.useConfiguredRadius
-        });
-      }
-    }
-    const preparedDefenseSegments = defenseSegments.map(segment => ({ ...segment, category: "defense" }));
+    const attackSegments = buildAttackSegments(threats);
 
-    if (!attackSegments.length && !preparedDefenseSegments.length) {
+    if (!attackSegments.length && !defenseSegments.length) {
       entry.arcSvg?.remove();
       entry.arcSvg = null;
     } else if (!entry.arcSvg) {
@@ -2554,13 +2696,7 @@
 
     if (entry.arcSvg) {
       entry.arcSvg.replaceChildren();
-      const figureRadii = getFigureRadii(settings.pieceSet);
-      if (attackDisplayMode === defenseDisplayMode) {
-        renderThreatDisplaySet(entry.arcSvg, [...attackSegments, ...preparedDefenseSegments], figureRadii, attackDisplayMode);
-      } else {
-        renderThreatDisplaySet(entry.arcSvg, attackSegments, figureRadii, attackDisplayMode);
-        renderThreatDisplaySet(entry.arcSvg, preparedDefenseSegments, figureRadii, defenseDisplayMode);
-      }
+      renderThreatSegmentsInto(entry.arcSvg, attackSegments, defenseSegments, attackDisplayMode, defenseDisplayMode);
     }
 
     if (!centerOutlines.length) {
@@ -2583,7 +2719,7 @@
     const outlines = [];
     const hatchPatterns = [];
     const scrollDistance = advanceHatchScroll();
-    for (const [index, { target, color, piece, moveOutlinePreview }] of centerOutlines.entries()) {
+    for (const [index, { target, color, piece }] of centerOutlines.entries()) {
       const pieceUrl = getPieceAssetUrl(piece.color, piece.type);
       const pieceColor = color === "w" ? settings.whitePieceColor : settings.blackPieceColor;
       const image = document.createElementNS(svgNamespace, "image");
@@ -2595,7 +2731,6 @@
       image.setAttribute("href", pieceUrl);
       image.setAttribute("opacity", String(settings.threatCenterOutlineOpacity / 100));
       image.setAttribute("pointer-events", "none");
-      if (moveOutlinePreview) image.setAttribute("data-lfs-move-outline-preview", `${target.row},${target.col}`);
       image._lfsPieceElement = piece.element;
       if (piece.hoverPreview) {
         image.setAttribute("data-lfs-hover-preview-outline", "");
@@ -2635,7 +2770,7 @@
         hatch.setAttribute("mask", `url(#${maskId})`);
         hatch.setAttribute("opacity", "1");
         hatch.setAttribute("pointer-events", "none");
-        if (moveOutlinePreview) hatch.setAttribute("data-lfs-move-outline-preview", `${target.row},${target.col}`);
+
         if (piece.hoverPreview) hatch.setAttribute("data-lfs-hover-preview-outline", "");
         outlines.push(hatch);
         continue;
@@ -2695,6 +2830,7 @@
       previewTargetKey: null,
       previewSourceKey: null,
       frame: 0,
+      figureBlends: new Map(),
       hatchPatterns: []
     };
     observedBoards.set(board, entry);
@@ -2752,6 +2888,7 @@
       entry.svg?.remove();
       entry.arcSvg?.remove();
       entry.centerSvg?.remove();
+      entry.moveOutlineSvg?.remove();
       clearMovePreviewPiece(board, entry);
       observedBoards.delete(board);
     }

@@ -45,6 +45,7 @@
   let settings = { ...defaults };
   let analysisToolbar;
   let analysisEnabledInput;
+  let moveFieldDisplaySelect;
   let zenToggle;
   let boardLayout;
   let zenBoard;
@@ -185,13 +186,35 @@
         featureList.append(label);
         analysisInputs.set(key, input);
         analysisRows.set(key, { label, parentKey });
+        if (key === "threatenedPieceOutlineEnabled") {
+          const modeLabel = document.createElement("label");
+          modeLabel.className = "lfs-analysis-toolbar-feature lfs-analysis-toolbar-child";
+          const modeText = document.createElement("span");
+          modeText.textContent = "Bedrohte Bewegungsfelder";
+          moveFieldDisplaySelect = document.createElement("select");
+          for (const [value, text] of [["both", "Linien und Schraffur"], ["lines", "Nur Linien"], ["hatch", "Nur Schraffur"], ["none", "Aus"]]) {
+            moveFieldDisplaySelect.append(new Option(text, value));
+          }
+          moveFieldDisplaySelect.addEventListener("change", () => {
+            const value = moveFieldDisplaySelect.value;
+            settings = normalize({ ...settings, threatMoveFieldDisplayMode: value });
+            apply(document.documentElement);
+            chrome.storage.local.set({ threatMoveFieldDisplayMode: value });
+          });
+          modeLabel.append(modeText, moveFieldDisplaySelect);
+          featureList.append(modeLabel);
+          analysisRows.set("threatMoveFieldDisplayMode", { label: modeLabel, parentKey: "threatenedPieceOutlineEnabled" });
+        }
       }
+
 
       document.documentElement.append(zenToggle, analysisToolbar);
     }
 
     analysisEnabledInput.checked = settings.analysisEnabled;
     for (const [key, input] of analysisInputs) input.checked = settings[key];
+    moveFieldDisplaySelect.value = settings.threatMoveFieldDisplayMode;
+
     for (const [key, { label, parentKey }] of analysisRows) label.hidden = Boolean(parentKey) && !settings[parentKey];
   }
 
@@ -886,6 +909,7 @@
 
     root.toggleAttribute("data-lfs-disabled", !settings.enabled);
     root.toggleAttribute("data-lfs-square-move-dots", settings.squareMoveDots);
+    root.toggleAttribute("data-lfs-move-outline-mode", settings.moveIndicatorMode === "outline");
     root.toggleAttribute("data-lfs-graph-colors-disabled", !settings.analysisGraphColors);
     root.toggleAttribute("data-lfs-remove-outlines", settings.removeOutlines);
     root.toggleAttribute("data-lfs-remove-glows", settings.removeGlows);
@@ -939,6 +963,7 @@
       "--lfs-threat-pinned-outline-light": settings.threatPinnedOutlineLight,
       "--lfs-threat-pinned-outline-dark": settings.threatPinnedOutlineDark,
       "--lfs-move-dot-size": `${settings.moveDotSize}%`,
+
       "--lfs-move-preview-origin-opacity": settings.movePreviewOriginOpacity,
       "--lfs-white-piece-color": settings.whitePieceColor,
       "--lfs-black-piece-color": settings.blackPieceColor,

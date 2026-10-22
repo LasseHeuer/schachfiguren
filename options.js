@@ -16,6 +16,7 @@
     updateLoopControls(settings.pieceBounceLoop);
     updateMoveSpeedControls(settings.moveAnimationLichessSpeed);
     updateDistanceFactorControls(settings.moveAnimationTimeDistance);
+    updateIndicatorModeControls(settings.moveIndicatorMode);
     for (const control of controls) {
       const value = settings[control.dataset.setting];
       if (control.type === "checkbox") control.checked = value;
@@ -116,6 +117,10 @@
     for (const control of document.querySelectorAll("[data-distance-factor]")) control.hidden = !enabled;
   }
 
+  function updateIndicatorModeControls(mode) {
+    for (const control of document.querySelectorAll("[data-indicator-mode]")) control.hidden = control.dataset.indicatorMode !== mode;
+  }
+
   function updateEngineArrowOutlineControls(enabled) {
     document.querySelector("[data-engine-arrow-outline-controls]").hidden = !enabled;
   }
@@ -162,6 +167,7 @@
       if (["threatAttackDisplayMode", "threatDefenseDisplayMode"].includes(control.dataset.setting)) updateThreatDisplayControls();
       if (control.dataset.setting === "threatCenterOutlineStyle") updateCenterOutlineControls();
       if (control.dataset.setting === "engineArrowOutlineEnabled") updateEngineArrowOutlineControls(control.checked);
+      if (control.dataset.setting === "moveIndicatorMode") updateIndicatorModeControls(control.value);
       if (control.dataset.setting === "enabled") {
         document.body.classList.toggle("extension-disabled", !control.checked);
       }

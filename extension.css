@@ -1087,9 +1087,19 @@ html:not([data-lfs-disabled])[data-lfs-square-move-dots] body[data-board] .is2d 
     var(--lfs-square-move-dot-size) var(--lfs-square-move-dot-size) no-repeat !important;
 }
 
+html:not([data-lfs-disabled])[data-lfs-move-outline-mode] body[data-board] .is2d .cg-wrap cg-board square.move-dest:not(.oc),
+html:not([data-lfs-disabled])[data-lfs-move-outline-mode] body[data-board] .is2d .cg-wrap cg-board square.premove-dest:not(.oc) {
+  background: none !important;
+}
+
 html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square[data-lfs-contested-move-dest] {
   background: none !important;
 }
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square[data-lfs-move-outline] {
+  background-image: none !important;
+}
+
 
 html:not([data-lfs-disabled])[data-lfs-square-move-dots] body[data-board] .is2d .cg-wrap cg-board square[data-lfs-preview-move-dest]:not(.oc),
 html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square[data-lfs-preview-move-dest]:not(.oc),
@@ -1097,9 +1107,6 @@ html:not([data-lfs-disabled]) .is2d cg-board > square[data-lfs-preview-move-dest
   background: none !important;
 }
 
-html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square[data-lfs-move-outline] {
-  background-image: none !important;
-}
 
 html:not([data-lfs-disabled]) .is2d cg-board[data-lfs-selected-piece-color="w"] {
   --lfs-active-move-dot-color: var(--lfs-white-piece-color);

@@ -100,14 +100,23 @@
             <label class="color-row"><span>Engine-Pfeile</span><input type="color" data-setting="engineArrowDark"></label>
           </fieldset>
         </div>
+        <label class="select-setting"><span>Zugmarkierung</span><select data-setting="moveIndicatorMode"><option value="dots">Bewegungsdots</option><option value="outline">Glow-Feld-Outline</option></select></label>
         <div class="range-grid single-range">
-          <label class="range-setting"><span>Groesse Bewegungsdots</span><output data-value-for="moveDotSize"></output><input type="range" min="5" max="50" step="1" data-setting="moveDotSize"></label>
+          <label class="range-setting" data-depends-on="moveIndicatorMode=dots"><span>Groesse Bewegungsdots</span><output data-value-for="moveDotSize"></output><input type="range" min="5" max="50" step="1" data-setting="moveDotSize"></label>
           <label class="range-setting" data-depends-on="markLastMove"><span>Breite der Letztzug-Linie</span><output data-value-for="lastMoveLineWidth"></output><input type="range" min="1" max="100" step="1" data-setting="lastMoveLineWidth"></label>
+        </div>
+        <div class="range-grid" data-depends-on="moveIndicatorMode=outline">
+          <label class="range-setting"><span>Linie: Dicke</span><output data-value-for="moveOutlineWidthPx"></output><input type="range" min="0" max="10" step="1" data-setting="moveOutlineWidthPx"></label>
+          <label class="range-setting"><span>Glow: Deckkraft</span><output data-value-for="moveGlowOpacity"></output><input type="range" min="0" max="100" step="1" data-setting="moveGlowOpacity"></label>
+          <label class="range-setting"><span>Glow: Radius (% Feld)</span><output data-value-for="moveGlowRadiusPercent"></output><input type="range" min="0" max="50" step="1" data-setting="moveGlowRadiusPercent"></label>
+        </div>
+        <div class="switch-list" data-depends-on="moveIndicatorMode=outline">
+          <label class="color-row"><span>Linie: Farbe</span><input type="color" data-setting="moveOutlineColor"></label>
         </div>
         <div class="switch-list">
           <label class="switch-setting"><span>Letzten Zug markieren</span><input type="checkbox" data-setting="markLastMove" role="switch"></label>
-          <label class="switch-setting"><span>Quadratische Dots</span><input type="checkbox" data-setting="squareMoveDots" role="switch"></label>
-          <label class="switch-setting"><span>Bewegungsdots in Spielerfarbe</span><input type="checkbox" data-setting="moveDotsPlayerColor" role="switch"></label>
+          <label class="switch-setting" data-depends-on="moveIndicatorMode=dots"><span>Quadratische Dots</span><input type="checkbox" data-setting="squareMoveDots" role="switch"></label>
+          <label class="switch-setting" data-depends-on="moveIndicatorMode=dots"><span>Bewegungsdots in Spielerfarbe</span><input type="checkbox" data-setting="moveDotsPlayerColor" role="switch"></label>
         </div>
       </section>
 
@@ -149,6 +158,8 @@
           <label class="switch-setting"><span><strong>Angriffsrichtungen aktivieren</strong><small>Zeigt Angriffsrichtungen am bedrohten Feld.</small></span><input type="checkbox" data-setting="threatenedPieceOutlineEnabled" role="switch"></label>
           <div data-threat-role="attack" data-depends-on="threatenedPieceOutlineEnabled">
           <label class="select-setting threat-display-select"><span>Angriffsdarstellung</span><select data-setting="threatAttackDisplayMode"><option value="segments">Kreissegmente</option><option value="lines">Linien</option><option value="square">Eckig</option></select></label>
+          <label class="select-setting" data-depends-on="threatenedPieceOutlineEnabled"><span>Bedrohte Bewegungsfelder</span><select data-setting="threatMoveFieldDisplayMode"><option value="both">Linien und Schraffur</option><option value="lines">Nur Linien</option><option value="hatch">Nur Schraffur</option><option value="none">Aus</option></select></label>
+
 
           <p class="display-setting-label" data-threat-display-label="segments">Kreissegment-Einstellungen</p>
           <div class="range-grid" data-threat-display-group="segments">
