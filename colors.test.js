@@ -129,6 +129,66 @@ test("hover preview anticipation preserves the existing default and clamps saved
   }
 });
 
+test("defense highlight settings have stable defaults and clamp saved values", () => {
+  const defaults = settings.normalize();
+  assert.equal(defaults.defenseHighlightEnabled, true);
+  assert.equal(defaults.defenseHighlightDepth, 3);
+  assert.equal(defaults.defenseHighlightWaveIntervalMs, 160);
+  assert.equal(defaults.defenseHighlightDurationMs, 700);
+  assert.equal(defaults.defenseHighlightWaveDecayPercent, 10);
+  assert.equal(defaults.defenseHighlightWhiteMixPercent, 65);
+  assert.equal(defaults.defensePreviewThresholdMs, 350);
+  const normalized = settings.normalize({
+    defenseHighlightEnabled: true,
+    defenseHighlightDepth: 20,
+    defenseHighlightWaveIntervalMs: -5,
+    defenseHighlightDurationMs: 2050,
+    defenseHighlightWaveDecayPercent: 90,
+    defenseHighlightWhiteMixPercent: 120,
+    defensePreviewThresholdMs: "invalid"
+  });
+  assert.equal(normalized.defenseHighlightEnabled, true);
+  assert.equal(normalized.defenseHighlightDepth, 6);
+  assert.equal(normalized.defenseHighlightWaveIntervalMs, 0);
+  assert.equal(normalized.defenseHighlightDurationMs, 2000);
+  assert.equal(normalized.defenseHighlightWaveDecayPercent, 50);
+  assert.equal(normalized.defenseHighlightWhiteMixPercent, 100);
+  assert.equal(normalized.defensePreviewThresholdMs, 350);
+});
+
+test("defense cascade visits direct defenders before their defenders without cycles", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const context = vm.createContext({ document: { addEventListener: () => {} } });
+  const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
+  vm.runInContext(source.replace("  documentObserver = new MutationObserver", `
+    globalThis.testing = { getDefenseCascadeLayers, getDefenseHighlightMix, isNewDefensePreviewTarget };
+    return;
+    documentObserver = new MutationObserver`), context);
+  const position = Array.from({ length: 8 }, () => Array(8).fill(null));
+  position[4][4] = { color: "w", type: "pawn" };
+  position[2][5] = { color: "w", type: "knight" };
+  position[7][5] = { color: "w", type: "rook" };
+  position[5][7] = { color: "w", type: "bishop" };
+  const layers = context.testing.getDefenseCascadeLayers(position, { row: 4, col: 4 }, false, 6);
+  assert.deepEqual(Array.from(layers, layer => Array.from(layer, square => [square.row, square.col])), [
+    [[4, 4]], [[2, 5]], [[7, 5]]
+  ]);
+  const directOnly = context.testing.getDefenseCascadeLayers(position, { row: 4, col: 4 }, false, 1);
+  assert.deepEqual(Array.from(directOnly, layer => layer.length), [1, 1]);
+  assert.ok(Math.abs(context.testing.getDefenseHighlightMix(0.5, 0, 80, 25) - 0.8) < 1e-12);
+  assert.ok(Math.abs(context.testing.getDefenseHighlightMix(0.5, 1, 80, 25) - 0.6) < 1e-12);
+  const previewEntry = { defensePreviewLastTargetKey: null };
+  assert.equal(context.testing.isNewDefensePreviewTarget(previewEntry, "A"), true);
+  assert.equal(context.testing.isNewDefensePreviewTarget(previewEntry, "A"), false);
+  assert.equal(context.testing.isNewDefensePreviewTarget(previewEntry, "B"), true);
+  assert.equal(context.testing.isNewDefensePreviewTarget(previewEntry, "A"), true);
+  const unprotected = Array.from({ length: 8 }, () => Array(8).fill(null));
+  unprotected[4][4] = { color: "w", type: "queen" };
+  assert.equal(context.testing.getDefenseCascadeLayers(unprotected, { row: 4, col: 4 }, false, 3).length, 0);
+});
+
 test("hover anticipation waits for sustained motion and zero restores field animations", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");

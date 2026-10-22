@@ -23,6 +23,7 @@
   let hatchAnimationFrame = 0;
   let hatchScrollLastTime = null;
   let hatchScrollDistance = 0;
+  let defenseHighlightFilterId = 0;
 
 
   function scheduleRender(board) {
@@ -59,20 +60,14 @@
         hasPatterns = true;
       }
     }
-    if (hasPatterns && settings?.threatCenterHatchSpeed > 0 && !isPieceBouncing()) {
+    if (hasPatterns && settings?.threatCenterHatchSpeed > 0) {
       hatchAnimationFrame = requestAnimationFrame(animateHatchPatterns);
     }
   }
 
-  // The hatch scroll repaints the masked overlay every frame, which competes with the hovered piece's animation.
-  // It pauses while a piece bounces and resumes without jumping over the paused time.
-  function isPieceBouncing() {
-    return Boolean(document.querySelector("piece[data-lfs-bounce-running]"));
-  }
-
   function syncHatchAnimation() {
     const hasPatterns = [...observedBoards.values()].some(entry => entry.hatchPatterns.length);
-    if (settings?.threatCenterHatchSpeed > 0 && hasPatterns && !isPieceBouncing()) {
+    if (settings?.threatCenterHatchSpeed > 0 && hasPatterns) {
       if (!hatchAnimationFrame) {
         hatchScrollLastTime = null;
         advanceHatchScroll();
@@ -90,6 +85,20 @@
   document.addEventListener("pointermove", event => {
     for (const [board, entry] of observedBoards) {
       const hasDraggingPiece = Boolean(board.querySelector(":scope > piece.dragging"));
+      const rect = board.getBoundingClientRect();
+      const insideBoard = rect.width && rect.height
+        && event.clientX >= rect.left && event.clientX < rect.right
+        && event.clientY >= rect.top && event.clientY < rect.bottom;
+      const nextHoveredSquare = insideBoard
+        ? {
+          row: Math.floor((event.clientY - rect.top) * 8 / rect.height),
+          col: Math.floor((event.clientX - rect.left) * 8 / rect.width)
+        }
+        : null;
+      if (entry.hoveredSquare?.row !== nextHoveredSquare?.row || entry.hoveredSquare?.col !== nextHoveredSquare?.col) {
+        entry.hoveredSquare = nextHoveredSquare;
+        scheduleRender(board);
+      }
       if (!board.contains(event.target) && !entry.previewPieceSvg && !hasDraggingPiece) continue;
       if (!entry.previewPieceSvg && !hasDraggingPiece && !board.querySelector(":scope > square.selected")) continue;
 
@@ -359,6 +368,52 @@
       }
     }
     return connections;
+  }
+
+  function getDefenseCascadeLayers(position, root, blackOrientation, depth) {
+    if (!position[root?.row]?.[root.col]) return [];
+    const defendersByTarget = new Map();
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const piece = position[row][col];
+        if (!piece) continue;
+        const source = { row, col };
+        for (const target of getDefendedPieces(position, source, blackOrientation, true)) {
+          const key = `${target.row},${target.col}`;
+          if (!defendersByTarget.has(key)) defendersByTarget.set(key, []);
+          defendersByTarget.get(key).push(source);
+        }
+      }
+    }
+    const rootKey = `${root.row},${root.col}`;
+    if (!defendersByTarget.get(rootKey)?.length) return [];
+    const layers = [[root]];
+    const visited = new Set([rootKey]);
+    for (let level = 0; level < depth; level++) {
+      const next = [];
+      for (const target of layers.at(-1)) {
+        for (const source of defendersByTarget.get(`${target.row},${target.col}`) ?? []) {
+          const key = `${source.row},${source.col}`;
+          if (visited.has(key)) continue;
+          visited.add(key);
+          if (!defendersByTarget.get(key)?.length) continue;
+          next.push(source);
+        }
+      }
+      if (!next.length) break;
+      layers.push(next);
+    }
+    return layers;
+  }
+
+  function getDefenseHighlightMix(phase, depth, strengthPercent, decayPercent) {
+    return Math.sin(Math.PI * phase) * strengthPercent / 100 * Math.pow(1 - decayPercent / 100, depth);
+  }
+
+  function isNewDefensePreviewTarget(entry, targetKey) {
+    if (entry.defensePreviewLastTargetKey === targetKey) return false;
+    entry.defensePreviewLastTargetKey = targetKey;
+    return true;
   }
 
   function applyExchangeCapture(position, source, target, blackOrientation) {
@@ -1909,6 +1964,291 @@
     }) ?? null;
   }
 
+  function clearDefensePreviewTimer(entry) {
+    if (entry.defensePreviewTimer) clearTimeout(entry.defensePreviewTimer);
+    entry.defensePreviewTimer = 0;
+    entry.defensePreviewPendingKey = null;
+    entry.defensePreviewPendingAt = 0;
+  }
+
+  function clearDefenseHoverTimer(entry) {
+    if (entry.defenseHoverTimer) clearTimeout(entry.defenseHoverTimer);
+    entry.defenseHoverTimer = 0;
+    entry.defenseHoverPendingKey = null;
+    entry.defenseHoverPendingAt = 0;
+  }
+
+  function getDefenseNodeMix(node, run, timestamp) {
+    if (node.fadeOut) {
+      const progress = (timestamp - node.fadeOut.startedAt) / node.fadeOut.duration;
+      return progress >= 1 ? 0 : node.fadeOut.mix * (1 - Math.max(0, progress));
+    }
+    const elapsed = timestamp - run.startedAt - node.depth * settings.defenseHighlightWaveIntervalMs;
+    if (elapsed < 0 || elapsed > settings.defenseHighlightDurationMs) return 0;
+    return getDefenseHighlightMix(
+      elapsed / settings.defenseHighlightDurationMs,
+      node.depth,
+      settings.defenseHighlightWhiteMixPercent,
+      settings.defenseHighlightWaveDecayPercent
+    );
+  }
+
+  function endPreviousDefenseWaves(entry, timestamp = performance.now()) {
+    const runs = [];
+    for (const run of entry.defenseHighlightRuns ?? []) {
+      const activeNodes = [];
+      for (const node of run.nodes) {
+        const waveStartsAt = run.startedAt + node.depth * settings.defenseHighlightWaveIntervalMs;
+        if (waveStartsAt > timestamp) continue;
+        const mix = getDefenseNodeMix(node, run, timestamp);
+        if (mix <= 0) continue;
+        node.fadeOut ??= { startedAt: timestamp, mix, duration: 180 };
+        activeNodes.push(node);
+      }
+      if (!activeNodes.length) continue;
+      run.nodes = activeNodes;
+      run.endAt = Math.max(...activeNodes.map(node => node.fadeOut.startedAt + node.fadeOut.duration));
+      runs.push(run);
+    }
+    entry.defenseHighlightRuns = runs;
+  }
+
+  function setDefenseCascadeContext(entry, key) {
+    if (entry.defenseCascadeContextKey === key) return false;
+    entry.defenseCascadeContextKey = key;
+    endPreviousDefenseWaves(entry);
+    return true;
+  }
+
+  function clearDefenseHighlights(entry) {
+    clearDefensePreviewTimer(entry);
+    clearDefenseHoverTimer(entry);
+    if (entry.defenseHighlightFrame) cancelAnimationFrame(entry.defenseHighlightFrame);
+    entry.defenseHighlightFrame = 0;
+    entry.defenseHighlightRuns = [];
+    for (const piece of entry.defenseHighlightedPieces ?? []) {
+      piece.removeAttribute("data-lfs-defense-highlight");
+      piece.style.removeProperty("--lfs-defense-highlight-mix");
+    }
+    entry.defenseHighlightedPieces = new Set();
+    entry.defensePreviewMix = 0;
+    entry.defenseSelectedKey = null;
+    entry.defenseHoverKey = null;
+    entry.defenseHoverStartedKey = null;
+    entry.defenseCascadeContextKey = null;
+    entry.defensePreviewSourceKey = null;
+    entry.defensePreviewLastTargetKey = null;
+    syncPreviewDefenseFilter(entry);
+  }
+
+  function ensurePreviewDefenseFilter(entry) {
+    if (entry.previewDefenseFilter || !entry.previewPieceSvg) return;
+    const defs = document.createElementNS(svgNamespace, "defs");
+    defs.setAttribute("data-lfs-defense-highlight-filter", "");
+    const filter = document.createElementNS(svgNamespace, "filter");
+    const id = `lfs-defense-preview-${++defenseHighlightFilterId}`;
+    filter.setAttribute("id", id);
+    filter.setAttribute("color-interpolation-filters", "sRGB");
+    const transfer = document.createElementNS(svgNamespace, "feComponentTransfer");
+    const channels = ["R", "G", "B"].map(channel => {
+      const func = document.createElementNS(svgNamespace, `feFunc${channel}`);
+      func.setAttribute("type", "linear");
+      transfer.append(func);
+      return func;
+    });
+    filter.append(transfer);
+    defs.append(filter);
+    entry.previewPieceSvg.insertBefore(defs, entry.previewPieceSvg.firstChild);
+    entry.previewDefenseFilter = { id, channels };
+  }
+
+  function syncPreviewDefenseFilter(entry) {
+    if (!entry.previewPieceImage) return;
+    const mix = Math.max(0, Math.min(1, entry.defensePreviewMix ?? 0));
+    if (!mix) {
+      entry.previewPieceImage.removeAttribute("filter");
+      return;
+    }
+    ensurePreviewDefenseFilter(entry);
+    if (!entry.previewDefenseFilter) return;
+    entry.previewPieceImage.setAttribute("filter", `url(#${entry.previewDefenseFilter.id})`);
+    for (const channel of entry.previewDefenseFilter.channels) {
+      channel.setAttribute("slope", String(1 - mix));
+      channel.setAttribute("intercept", String(mix));
+    }
+  }
+
+  function startDefenseCascade(board, entry, position, root, blackOrientation, preview = null) {
+    const layers = getDefenseCascadeLayers(position, root, blackOrientation, settings.defenseHighlightDepth);
+    if (!layers.length) return;
+    const nodes = [];
+    for (const [depth, layer] of layers.entries()) {
+      for (const square of layer) {
+        const previewRoot = Boolean(preview?.isHoverPreview && depth === 0
+          && square.row === root.row && square.col === root.col);
+        const piece = position[square.row][square.col];
+        const element = previewRoot ? null : piece.element
+          ?? findPieceElement(board, square, preview, blackOrientation);
+        if (element || previewRoot) nodes.push({ element, depth, previewRoot });
+      }
+    }
+    if (!nodes.length) return;
+    const startedAt = performance.now();
+    entry.defenseHighlightRuns ??= [];
+    entry.defenseHighlightRuns.push({
+      nodes,
+      startedAt,
+      endAt: startedAt + (layers.length - 1) * settings.defenseHighlightWaveIntervalMs + settings.defenseHighlightDurationMs
+    });
+    if (!entry.defenseHighlightFrame) {
+      entry.defenseHighlightFrame = requestAnimationFrame(timestamp => {
+        entry.defenseHighlightFrame = 0;
+        advanceDefenseCascade(entry, timestamp);
+      });
+    }
+  }
+
+  function advanceDefenseCascade(entry, timestamp) {
+    const mixByPiece = new Map();
+    let previewMix = 0;
+    const runs = [];
+    for (const run of entry.defenseHighlightRuns) {
+      if (timestamp < run.endAt) runs.push(run);
+      for (const node of run.nodes) {
+        const mix = getDefenseNodeMix(node, run, timestamp);
+        if (mix <= 0) continue;
+        if (node.previewRoot) previewMix = Math.max(previewMix, mix);
+        else if (node.element) mixByPiece.set(node.element, Math.max(mixByPiece.get(node.element) ?? 0, mix));
+      }
+    }
+    for (const piece of entry.defenseHighlightedPieces) {
+      if (mixByPiece.has(piece)) continue;
+      piece.removeAttribute("data-lfs-defense-highlight");
+      piece.style.removeProperty("--lfs-defense-highlight-mix");
+    }
+    for (const [piece, mix] of mixByPiece) {
+      piece.setAttribute("data-lfs-defense-highlight", "");
+      piece.style.setProperty("--lfs-defense-highlight-mix", `${(mix * 100).toFixed(2)}%`);
+    }
+    entry.defenseHighlightedPieces = new Set(mixByPiece.keys());
+    entry.defensePreviewMix = previewMix;
+    syncPreviewDefenseFilter(entry);
+    entry.defenseHighlightRuns = runs;
+    if (runs.length) {
+      entry.defenseHighlightFrame = requestAnimationFrame(timestamp => {
+        entry.defenseHighlightFrame = 0;
+        advanceDefenseCascade(entry, timestamp);
+      });
+    }
+  }
+
+  function updateDefenseHighlight(board, entry, parsed, preview) {
+    if (!settings?.enabled || !settings.defenseHighlightEnabled || settings.disableAnimations || !parsed) {
+      clearDefenseHighlights(entry);
+      return;
+    }
+
+    let selectedPosition = parsed.position;
+    let selectedRoot = parsed.selected;
+    if (preview?.isHoverPreview) {
+      const base = readDragPreview({ ...preview, position: preview.basePosition, target: preview.source, legal: false });
+      selectedPosition = base.position;
+      selectedRoot = base.selected;
+    }
+    const selectedPiece = selectedRoot && selectedPosition[selectedRoot.row]?.[selectedRoot.col];
+    const selectedKey = selectedPiece
+      ? `selected:${selectedRoot.row},${selectedRoot.col}:${selectedPiece.color}${selectedPiece.type}`
+      : null;
+    if (selectedPiece) {
+      clearDefenseHoverTimer(entry);
+      entry.defenseHoverKey = null;
+      entry.defenseHoverStartedKey = null;
+      if (entry.defenseSelectedKey !== selectedKey) {
+        entry.defenseSelectedKey = selectedKey;
+        setDefenseCascadeContext(entry, selectedKey);
+        startDefenseCascade(board, entry, selectedPosition, selectedRoot, parsed.blackOrientation);
+      } else if (!preview?.isHoverPreview) {
+        setDefenseCascadeContext(entry, selectedKey);
+      }
+    } else {
+      entry.defenseSelectedKey = null;
+      const square = entry.hoveredSquare;
+      const piece = square && parsed.position[square.row]?.[square.col];
+      const key = piece && square ? `hover:${square.row},${square.col}:${piece.color}${piece.type}` : null;
+      if (key !== entry.defenseHoverKey) {
+        entry.defenseHoverKey = key;
+        entry.defenseHoverStartedKey = null;
+        clearDefenseHoverTimer(entry);
+        setDefenseCascadeContext(entry, key);
+      }
+      if (!key || entry.defenseHoverStartedKey === key) {
+        if (!key) setDefenseCascadeContext(entry, null);
+      } else {
+        if (entry.defenseHoverPendingKey !== key) {
+          clearDefenseHoverTimer(entry);
+          entry.defenseHoverPendingKey = key;
+          entry.defenseHoverPendingAt = performance.now();
+        }
+        const remaining = settings.defensePreviewThresholdMs - (performance.now() - entry.defenseHoverPendingAt);
+        if (remaining > 0) {
+          if (!entry.defenseHoverTimer) {
+            entry.defenseHoverTimer = setTimeout(() => {
+              entry.defenseHoverTimer = 0;
+              scheduleRender(board);
+            }, remaining);
+          }
+        } else {
+          clearDefenseHoverTimer(entry);
+          entry.defenseHoverStartedKey = key;
+          setDefenseCascadeContext(entry, key);
+          startDefenseCascade(board, entry, parsed.position, square, parsed.blackOrientation);
+        }
+      }
+    }
+
+    if (!preview?.isHoverPreview || !preview.legal) {
+      clearDefensePreviewTimer(entry);
+      entry.defensePreviewSourceKey = null;
+      entry.defensePreviewLastTargetKey = null;
+      if (selectedKey) setDefenseCascadeContext(entry, selectedKey);
+      return;
+    }
+
+    const sourceKey = `${preview.source.row},${preview.source.col}`;
+    if (entry.defensePreviewSourceKey !== sourceKey) {
+      clearDefensePreviewTimer(entry);
+      entry.defensePreviewSourceKey = sourceKey;
+      entry.defensePreviewLastTargetKey = null;
+    }
+    const targetKey = `${sourceKey}:${preview.target.row},${preview.target.col}`;
+    if (preview.source.row === preview.target.row && preview.source.col === preview.target.col) {
+      clearDefensePreviewTimer(entry);
+      entry.defensePreviewLastTargetKey = targetKey;
+      setDefenseCascadeContext(entry, selectedKey);
+      return;
+    }
+    setDefenseCascadeContext(entry, `preview:${targetKey}`);
+    if (isNewDefensePreviewTarget(entry, targetKey)) {
+      clearDefensePreviewTimer(entry);
+      entry.defensePreviewPendingKey = targetKey;
+      entry.defensePreviewPendingAt = performance.now();
+    } else if (entry.defensePreviewPendingKey !== targetKey) {
+      return;
+    }
+    const remaining = settings.defensePreviewThresholdMs - (performance.now() - entry.defensePreviewPendingAt);
+    if (remaining > 0) {
+      if (!entry.defensePreviewTimer) {
+        entry.defensePreviewTimer = setTimeout(() => {
+          entry.defensePreviewTimer = 0;
+          scheduleRender(board);
+        }, remaining);
+      }
+      return;
+    }
+    clearDefensePreviewTimer(entry);
+    startDefenseCascade(board, entry, parsed.position, parsed.selected, parsed.blackOrientation, preview);
+  }
+
   function clearMovePreviewPiece(board, entry) {
     for (const square of board.querySelectorAll(":scope > square[data-lfs-preview-move-dest]")) {
       square.removeAttribute("data-lfs-preview-move-dest");
@@ -1925,11 +2265,14 @@
     entry.previewTargetKey = null;
     entry.previewSourceKey = null;
     entry.previewPointerMotion = null;
+    entry.defensePreviewMix = 0;
+    syncPreviewDefenseFilter(entry);
     if (!entry.previewPieceSvg) return;
     entry.previewPieceSvg.remove();
     entry.previewPieceSvg = null;
     entry.previewPieceGroup = null;
     entry.previewPieceImage = null;
+    entry.previewDefenseFilter = null;
   }
 
   function bezierCoordinate(t, firstControl, secondControl) {
@@ -2196,6 +2539,7 @@
     entry.previewPieceImage.setAttribute("x", String(sourceSquare.col));
     entry.previewPieceImage.setAttribute("y", String(sourceSquare.row));
     entry.previewPieceImage.setAttribute("href", getPieceAssetUrl(color, type));
+    syncPreviewDefenseFilter(entry);
     if (isPieceRotated(color, blackOrientation)) {
       entry.previewPieceImage.setAttribute("transform", `rotate(180 ${sourceSquare.col + 0.5} ${sourceSquare.row + 0.5})`);
     } else {
@@ -2203,7 +2547,7 @@
     }
 
     for (const child of [...entry.previewPieceSvg.children]) {
-      if (child !== entry.previewPieceGroup) child.remove();
+      if (child !== entry.previewPieceGroup && !child.matches?.("defs[data-lfs-defense-highlight-filter]")) child.remove();
     }
     for (const { piece, square } of newPieces) {
       if (square.row === targetSquare.row && square.col === targetSquare.col) continue;
@@ -2320,6 +2664,7 @@
     const movePreview = globalThis.LichessThreatCoding?.getInteractionPreview(board);
     const dragPreview = movePreview;
     const parsed = movePreview ? readDragPreview(movePreview) : readPosition(board);
+    updateDefenseHighlight(board, entry, parsed, movePreview);
     const selectedPiece = parsed?.selected && parsed.position[parsed.selected.row]?.[parsed.selected.col];
     const selectedColor = settings?.enabled && settings.moveDotsPlayerColor ? selectedPiece?.color : null;
     if (board.getAttribute("data-lfs-selected-piece-color") !== (selectedColor ?? "")) {
@@ -2829,6 +3174,15 @@
       previewOpacity: 0,
       previewTargetKey: null,
       previewSourceKey: null,
+      hoveredSquare: null,
+      defenseHoverTimer: 0,
+      defenseHoverPendingKey: null,
+      defenseHoverStartedKey: null,
+      defenseCascadeContextKey: null,
+      defenseHighlightRuns: [],
+      defenseHighlightedPieces: new Set(),
+      defensePreviewLastTargetKey: null,
+      defensePreviewMix: 0,
       frame: 0,
       figureBlends: new Map(),
       hatchPatterns: []
@@ -2843,6 +3197,7 @@
       // Chessground updates moving-piece transforms every frame; recalculating overlays on those writes is expensive and unnecessary.
       const relevantChange = mutations.some(mutation => !isOverlayOnlyChange(mutation)
         && !(mutation.type === "attributes" && mutation.attributeName === "style" && mutation.target.matches?.("piece.anim"))
+        && !(mutation.type === "attributes" && mutation.attributeName === "style" && mutation.target.matches?.("piece[data-lfs-defense-highlight]"))
         && (mutation.target === board || mutation.target.matches?.("piece, square")));
       if (!relevantChange) return;
       scheduleRender(board);
@@ -2885,6 +3240,7 @@
       if (entry.frame) cancelAnimationFrame(entry.frame);
 
       for (const piece of board.querySelectorAll(":scope > piece")) clearThreatenedPieceOutline(piece);
+      clearDefenseHighlights(entry);
       entry.svg?.remove();
       entry.arcSvg?.remove();
       entry.centerSvg?.remove();

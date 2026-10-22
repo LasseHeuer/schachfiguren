@@ -225,6 +225,18 @@
           </div>
         </details>
         <details class="analysis-subsection">
+          <summary>Verteidigungs-Highlight</summary>
+          <label class="switch-setting"><span><strong>Verteidigungs-Kaskade aktivieren</strong><small>Hebt die Figur und ihre Verteidiger nacheinander hervor.</small></span><input type="checkbox" data-setting="defenseHighlightEnabled" role="switch"></label>
+          <div class="range-grid" data-depends-on="defenseHighlightEnabled">
+            <label class="range-setting"><span>Verteidigungstiefe</span><output data-value-for="defenseHighlightDepth"></output><input type="range" min="1" max="6" step="1" data-setting="defenseHighlightDepth"></label>
+            <label class="range-setting"><span>Abstand zwischen Wellen (ms)</span><output data-value-for="defenseHighlightWaveIntervalMs"></output><input type="range" min="0" max="1000" step="10" data-setting="defenseHighlightWaveIntervalMs"></label>
+            <label class="range-setting"><span>Highlight-Dauer je Welle (ms)</span><output data-value-for="defenseHighlightDurationMs"></output><input type="range" min="100" max="2000" step="50" data-setting="defenseHighlightDurationMs"></label>
+            <label class="range-setting"><span>Abnahme der Weißmischung je Welle</span><output data-value-for="defenseHighlightWaveDecayPercent"></output><input type="range" min="0" max="50" step="1" data-setting="defenseHighlightWaveDecayPercent"></label>
+            <label class="range-setting"><span>Weißmischung</span><output data-value-for="defenseHighlightWhiteMixPercent"></output><input type="range" min="0" max="100" step="1" data-setting="defenseHighlightWhiteMixPercent"></label>
+            <label class="range-setting range-wide"><span>Wartezeit vor dem Highlight (ms)</span><output data-value-for="defensePreviewThresholdMs"></output><input type="range" min="0" max="2000" step="50" data-setting="defensePreviewThresholdMs"></label>
+          </div>
+        </details>
+        <details class="analysis-subsection">
           <summary>Figurenkontur im Zentrum</summary>
           <label class="switch-setting"><span><strong>Figurenkontur im Zentrum</strong><small>Markiert Figuren, die mehr angegriffen als verteidigt werden.</small></span><input type="checkbox" data-setting="threatCenterOutlineEnabled" role="switch"></label>
           <label class="select-setting" data-depends-on="threatCenterOutlineEnabled"><span>Ansicht</span><select data-setting="threatCenterOutlineStyle"><option value="outline">Figurenoutline</option><option value="hatching">Schraffur (eine Richtung)</option></select></label>

@@ -220,6 +220,18 @@
             <label class="field" data-center-outline-mode="hatching"><span>Schraffurtempo (0 stoppt, bis 1 Feld/s)</span><input type="range" min="0" max="1" step="0.01" data-setting="threatCenterHatchSpeed"><output data-value-for="threatCenterHatchSpeed"></output></label>
             <label class="field" data-center-outline-mode="outline"><span>Deckkraft</span><input type="range" min="0" max="100" step="1" data-setting="threatCenterOutlineOpacity"><output data-value-for="threatCenterOutlineOpacity"></output></label>
           </div>
+          <details class="defense-highlight-section">
+            <summary>Verteidigungs-Highlight</summary>
+            <label class="switch-field"><span><strong>Verteidigungs-Kaskade aktivieren</strong><small>Hebt die Figur und ihre Verteidiger nacheinander hervor.</small></span><input type="checkbox" data-setting="defenseHighlightEnabled" role="switch"></label>
+            <div class="control-grid">
+              <label class="field"><span>Verteidigungstiefe</span><input type="range" min="1" max="6" step="1" data-setting="defenseHighlightDepth"><output data-value-for="defenseHighlightDepth"></output></label>
+              <label class="field"><span>Abstand zwischen Wellen (ms)</span><input type="range" min="0" max="1000" step="10" data-setting="defenseHighlightWaveIntervalMs"><output data-value-for="defenseHighlightWaveIntervalMs"></output></label>
+              <label class="field"><span>Highlight-Dauer je Welle (ms)</span><input type="range" min="100" max="2000" step="50" data-setting="defenseHighlightDurationMs"><output data-value-for="defenseHighlightDurationMs"></output></label>
+              <label class="field"><span>Abnahme der Weißmischung je Welle</span><input type="range" min="0" max="50" step="1" data-setting="defenseHighlightWaveDecayPercent"><output data-value-for="defenseHighlightWaveDecayPercent"></output></label>
+              <label class="field"><span>Weißmischung</span><input type="range" min="0" max="100" step="1" data-setting="defenseHighlightWhiteMixPercent"><output data-value-for="defenseHighlightWhiteMixPercent"></output></label>
+              <label class="field field-wide"><span>Wartezeit vor dem Highlight (ms)</span><input type="range" min="0" max="2000" step="50" data-setting="defensePreviewThresholdMs"><output data-value-for="defensePreviewThresholdMs"></output></label>
+            </div>
+          </details>
         </section>
 
         <section class="settings-card" id="hover">

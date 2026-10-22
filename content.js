@@ -934,6 +934,7 @@
       threatenedPieceOutlineEnabled: false,
       kingMovementFieldsEnabled: false,
       defenseCirclesEnabled: false,
+      defenseHighlightEnabled: false,
       threatCenterOutlineEnabled: false
     };
     globalThis.LichessLastMoveLine?.update(settings);

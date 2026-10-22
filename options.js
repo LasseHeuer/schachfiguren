@@ -33,7 +33,7 @@
     if (control.type !== "range") return;
     const output = document.querySelector(`[data-value-for="${control.dataset.setting}"]`);
     if (!output) return;
-    if (["threatMoveDepth", "wedgePotentialCutoffValue", "wedgePotentialPerPieceCount"].includes(control.dataset.setting)) {
+    if (["threatMoveDepth", "defenseHighlightDepth", "wedgePotentialCutoffValue", "wedgePotentialPerPieceCount"].includes(control.dataset.setting)) {
       output.value = control.value;
       return;
     }
@@ -57,7 +57,7 @@
       output.value = `${Number(control.value).toFixed(2)} Felder/s`;
       return;
     }
-    if (["pieceBounceTiming", "pieceBounceDuration", "pieceBounceWiggleDuration"].includes(control.dataset.setting)) {
+    if (["pieceBounceTiming", "pieceBounceDuration", "pieceBounceWiggleDuration", "defenseHighlightWaveIntervalMs", "defenseHighlightDurationMs", "defensePreviewThresholdMs"].includes(control.dataset.setting)) {
       output.value = `${control.value} ms`;
       return;
     }

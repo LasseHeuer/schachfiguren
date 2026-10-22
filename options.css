@@ -99,6 +99,10 @@ output { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 10
 .engine-arrow-control-section summary { color: oklch(0.479928597967839 0.025373638603468 153.555472525237); cursor: pointer; font-size: 10px; font-weight: 700; }
 .engine-arrow-control-section[open] summary { margin-bottom: 10px; }
 .engine-arrow-control-section .range-grid { margin-top: 0; }
+.defense-highlight-section { margin-top: 12px; padding: 10px; border-radius: 7px; background: oklch(0.971550277719091 0.004097064856420 121.560436500494); }
+.defense-highlight-section summary { color: oklch(0.479928597967839 0.025373638603468 153.555472525237); cursor: pointer; font-size: 10px; font-weight: 700; }
+.defense-highlight-section[open] summary { margin-bottom: 8px; }
+.defense-highlight-section .control-grid { margin-top: 0; }
 .threat-controls { grid-template-columns: 1fr; align-items: center; }
 .threat-range-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 12px; }
 .threat-display-mode { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }

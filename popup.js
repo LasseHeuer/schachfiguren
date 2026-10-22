@@ -72,7 +72,7 @@
   }
 
   function formatOutput(control) {
-    if (["threatMoveDepth", "wedgePotentialCutoffValue", "wedgePotentialPerPieceCount"].includes(control.dataset.setting)) {
+    if (["threatMoveDepth", "defenseHighlightDepth", "wedgePotentialCutoffValue", "wedgePotentialPerPieceCount"].includes(control.dataset.setting)) {
       return control.value;
     }
     if (control.dataset.setting.endsWith("Px")) return `${control.value} px`;
@@ -81,7 +81,7 @@
     if (control.dataset.setting === "moveAnimationDistanceFactor") return `${Number(control.value).toFixed(2)}x`;
     if (control.dataset.setting === "zenClockBlinkFrequency") return `${Number(control.value).toFixed(1)} Hz`;
     if (control.dataset.setting === "threatCenterHatchSpeed") return `${Number(control.value).toFixed(2)} Felder/s`;
-    if (["pieceBounceTiming", "pieceBounceDuration", "pieceBounceWiggleDuration"].includes(control.dataset.setting)) {
+    if (["pieceBounceTiming", "pieceBounceDuration", "pieceBounceWiggleDuration", "defenseHighlightWaveIntervalMs", "defenseHighlightDurationMs", "defensePreviewThresholdMs"].includes(control.dataset.setting)) {
       return `${control.value} ms`;
     }
     if (["pieceBounceWiggleAngle", "threatArcAngleDeg", "threatSquareAngleDeg", "threatCenterHatchAngleDeg"].includes(control.dataset.setting)) {

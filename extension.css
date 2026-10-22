@@ -1042,6 +1042,23 @@ html:not([data-lfs-disabled]) .is2d cg-board > piece[data-lfs-move-preview-hidde
   opacity: 0 !important;
 }
 
+html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board > piece[data-lfs-defense-highlight]::after {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  background: white !important;
+  -webkit-mask: var(--lfs-bounce-piece-mask) center / contain no-repeat !important;
+  mask: var(--lfs-bounce-piece-mask) center / contain no-repeat !important;
+  opacity: var(--lfs-defense-highlight-mix, 0);
+  content: "";
+  pointer-events: none;
+}
+
+html:not([data-lfs-disabled]) .is2d .cg-wrap.orientation-white cg-board > piece.black[data-lfs-defense-highlight]::after,
+html:not([data-lfs-disabled]) .is2d .cg-wrap.orientation-black cg-board > piece.white[data-lfs-defense-highlight]::after {
+  transform: rotate(180deg);
+}
+
 html:not([data-lfs-disabled]) #lfs-pv-preview > svg.lfs-last-move-line {
   z-index: 1 !important;
 }

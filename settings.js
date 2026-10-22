@@ -100,6 +100,13 @@
     wedgeBasePiecePreviewEnabled: false,
     kingMovementFieldsEnabled: false,
     defenseCirclesEnabled: true,
+    defenseHighlightEnabled: true,
+    defenseHighlightDepth: 3,
+    defenseHighlightWaveIntervalMs: 160,
+    defenseHighlightDurationMs: 700,
+    defenseHighlightWaveDecayPercent: 10,
+    defenseHighlightWhiteMixPercent: 65,
+    defensePreviewThresholdMs: 350,
     defenseLineAnimationDistancePercent: 4,
     defenseLineAnimationLoopMs: 1200,
     defenseLineAnimationOffsetMs: 80,
@@ -236,6 +243,12 @@
     threatCenterHatchThicknessPercent: [0.25, 20],
     threatCenterHatchAngleDeg: [0, 180],
     threatCenterHatchSpeed: [0, 1],
+    defenseHighlightDepth: [1, 6],
+    defenseHighlightWaveIntervalMs: [0, 1000],
+    defenseHighlightDurationMs: [100, 2000],
+    defenseHighlightWaveDecayPercent: [0, 50],
+    defenseHighlightWhiteMixPercent: [0, 100],
+    defensePreviewThresholdMs: [0, 2000],
     threatOwnSeeThrough: [0, 1],
     threatOpponentSeeThrough: [0, 1],
     threatMoveDepth: [1, 5],
@@ -351,6 +364,12 @@
     result.pieceBounceWiggleAngle = Math.round(result.pieceBounceWiggleAngle);
     result.threatCenterHatchAngleDeg = Math.round(result.threatCenterHatchAngleDeg);
     result.threatCenterHatchSpeed = Number(result.threatCenterHatchSpeed.toFixed(2));
+    result.defenseHighlightDepth = Math.round(result.defenseHighlightDepth);
+    result.defenseHighlightWaveDecayPercent = Math.round(result.defenseHighlightWaveDecayPercent);
+    for (const key of ["defenseHighlightWaveIntervalMs", "defenseHighlightDurationMs", "defensePreviewThresholdMs"]) {
+      result[key] = Math.round(result[key] / 10) * 10;
+    }
+    result.defenseHighlightWhiteMixPercent = Math.round(result.defenseHighlightWhiteMixPercent);
     result.threatCenterOutlineWidthPercent = Number(result.threatCenterOutlineWidthPercent.toFixed(1));
     result.engineArrowOutlineWidthPercent = Number(result.engineArrowOutlineWidthPercent.toFixed(1));
     result.engineArrowShaftWidthPercent = Number(result.engineArrowShaftWidthPercent.toFixed(1));
@@ -421,6 +440,7 @@
       "kingMovementFieldsEnabled",
 
       "defenseCirclesEnabled",
+      "defenseHighlightEnabled",
 
 
       "moveDotsPlayerColor",
