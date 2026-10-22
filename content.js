@@ -35,6 +35,10 @@
     ["selectedPieceWedgeEnabled", "Kandidatenzüge"],
     ["selectedPieceWedgeOnlySelected", "Keile nur für Auswahl", "selectedPieceWedgeEnabled"],
     ["wedgeBasePiecePreviewEnabled", "Figur an Keilbasis", "selectedPieceWedgeEnabled"],
+    ["highlightCascadesEnabled", "Highlights"],
+    ["attackHighlightEnabled", "Angriffs-Highlight", "highlightCascadesEnabled"],
+    ["defenseHighlightEnabled", "Verteidigungs-Highlight", "highlightCascadesEnabled"],
+    ["highlightCascadeLinesEnabled", "Highlight-Linien", "highlightCascadesEnabled"],
     ["threatenedPieceOutlineEnabled", "Angriffe"],
     ["kingMovementFieldsEnabled", "Königbewegungsfelder"],
     ["defenseCirclesEnabled", "Verteidigungen"],
@@ -186,26 +190,25 @@
         featureList.append(label);
         analysisInputs.set(key, input);
         analysisRows.set(key, { label, parentKey });
-        if (key === "threatenedPieceOutlineEnabled") {
-          const modeLabel = document.createElement("label");
-          modeLabel.className = "lfs-analysis-toolbar-feature lfs-analysis-toolbar-child";
-          const modeText = document.createElement("span");
-          modeText.textContent = "Bedrohte Bewegungsfelder";
-          moveFieldDisplaySelect = document.createElement("select");
-          for (const [value, text] of [["both", "Linien und Schraffur"], ["lines", "Nur Linien"], ["hatch", "Nur Schraffur"], ["none", "Aus"]]) {
-            moveFieldDisplaySelect.append(new Option(text, value));
-          }
-          moveFieldDisplaySelect.addEventListener("change", () => {
-            const value = moveFieldDisplaySelect.value;
-            settings = normalize({ ...settings, threatMoveFieldDisplayMode: value });
-            apply(document.documentElement);
-            chrome.storage.local.set({ threatMoveFieldDisplayMode: value });
-          });
-          modeLabel.append(modeText, moveFieldDisplaySelect);
-          featureList.append(modeLabel);
-          analysisRows.set("threatMoveFieldDisplayMode", { label: modeLabel, parentKey: "threatenedPieceOutlineEnabled" });
-        }
       }
+
+      const modeLabel = document.createElement("label");
+      modeLabel.className = "lfs-analysis-toolbar-feature lfs-analysis-toolbar-child lfs-analysis-toolbar-select-setting";
+      const modeText = document.createElement("span");
+      modeText.textContent = "Bedrohte Bewegungsfelder";
+      moveFieldDisplaySelect = document.createElement("select");
+      for (const [value, text] of [["both", "Linien und Schraffur"], ["lines", "Nur Linien"], ["hatch", "Nur Schraffur"], ["none", "Aus"]]) {
+        moveFieldDisplaySelect.append(new Option(text, value));
+      }
+      moveFieldDisplaySelect.addEventListener("change", () => {
+        const value = moveFieldDisplaySelect.value;
+        settings = normalize({ ...settings, threatMoveFieldDisplayMode: value });
+        apply(document.documentElement);
+        chrome.storage.local.set({ threatMoveFieldDisplayMode: value });
+      });
+      modeLabel.append(modeText, moveFieldDisplaySelect);
+      featureList.append(modeLabel);
+      analysisRows.set("threatMoveFieldDisplayMode", { label: modeLabel, parentKey: "threatenedPieceOutlineEnabled" });
 
 
       document.documentElement.append(zenToggle, analysisToolbar);
@@ -934,7 +937,10 @@
       threatenedPieceOutlineEnabled: false,
       kingMovementFieldsEnabled: false,
       defenseCirclesEnabled: false,
+      highlightCascadesEnabled: false,
       defenseHighlightEnabled: false,
+      attackHighlightEnabled: false,
+      highlightCascadeLinesEnabled: false,
       threatCenterOutlineEnabled: false
     };
     globalThis.LichessLastMoveLine?.update(settings);

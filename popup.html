@@ -158,9 +158,6 @@
           <label class="switch-setting"><span><strong>Angriffsrichtungen aktivieren</strong><small>Zeigt Angriffsrichtungen am bedrohten Feld.</small></span><input type="checkbox" data-setting="threatenedPieceOutlineEnabled" role="switch"></label>
           <div data-threat-role="attack" data-depends-on="threatenedPieceOutlineEnabled">
           <label class="select-setting threat-display-select"><span>Angriffsdarstellung</span><select data-setting="threatAttackDisplayMode"><option value="segments">Kreissegmente</option><option value="lines">Linien</option><option value="square">Eckig</option></select></label>
-          <label class="select-setting" data-depends-on="threatenedPieceOutlineEnabled"><span>Bedrohte Bewegungsfelder</span><select data-setting="threatMoveFieldDisplayMode"><option value="both">Linien und Schraffur</option><option value="lines">Nur Linien</option><option value="hatch">Nur Schraffur</option><option value="none">Aus</option></select></label>
-
-
           <p class="display-setting-label" data-threat-display-label="segments">Kreissegment-Einstellungen</p>
           <div class="range-grid" data-threat-display-group="segments">
             <label class="range-setting outline-width-setting"><span>Radius (ab Feldmitte)</span><output data-value-for="threatArcRadius"></output><input type="range" min="0.3" max="0.7" step="0.01" data-setting="threatArcRadius"></label>
@@ -225,14 +222,20 @@
           </div>
         </details>
         <details class="analysis-subsection">
-          <summary>Verteidigungs-Highlight</summary>
+          <summary>Angriffs- und Verteidigungs-Highlight</summary>
+          <label class="switch-setting"><span><strong>Highlight-Kaskaden aktivieren</strong><small>Schaltet die Angriffs- und Verteidigungs-Highlights gemeinsam ein oder aus.</small></span><input type="checkbox" data-setting="highlightCascadesEnabled" role="switch"></label>
           <label class="switch-setting"><span><strong>Verteidigungs-Kaskade aktivieren</strong><small>Hebt die Figur und ihre Verteidiger nacheinander hervor.</small></span><input type="checkbox" data-setting="defenseHighlightEnabled" role="switch"></label>
-          <div class="range-grid" data-depends-on="defenseHighlightEnabled">
+          <label class="switch-setting"><span><strong>Angriffs-Kaskade aktivieren</strong><small>Hebt die Figur und ihre Angreifer nacheinander hervor.</small></span><input type="checkbox" data-setting="attackHighlightEnabled" role="switch"></label>
+          <label class="switch-setting" data-depends-on="highlightCascadesEnabled"><span><strong>Linien zwischen Highlight-Figuren</strong><small>Zeigt die animierten Verbindungslinien der Kaskaden.</small></span><input type="checkbox" data-setting="highlightCascadeLinesEnabled" role="switch"></label>
+          <div class="range-grid">
             <label class="range-setting"><span>Verteidigungstiefe</span><output data-value-for="defenseHighlightDepth"></output><input type="range" min="1" max="6" step="1" data-setting="defenseHighlightDepth"></label>
             <label class="range-setting"><span>Abstand zwischen Wellen (ms)</span><output data-value-for="defenseHighlightWaveIntervalMs"></output><input type="range" min="0" max="1000" step="10" data-setting="defenseHighlightWaveIntervalMs"></label>
             <label class="range-setting"><span>Highlight-Dauer je Welle (ms)</span><output data-value-for="defenseHighlightDurationMs"></output><input type="range" min="100" max="2000" step="50" data-setting="defenseHighlightDurationMs"></label>
             <label class="range-setting"><span>Abnahme der Weißmischung je Welle</span><output data-value-for="defenseHighlightWaveDecayPercent"></output><input type="range" min="0" max="50" step="1" data-setting="defenseHighlightWaveDecayPercent"></label>
             <label class="range-setting"><span>Weißmischung</span><output data-value-for="defenseHighlightWhiteMixPercent"></output><input type="range" min="0" max="100" step="1" data-setting="defenseHighlightWhiteMixPercent"></label>
+            <label class="range-setting"><span>Pfadlinienbreite (% der Feldbreite)</span><output data-value-for="defenseHighlightLineWidthPercent"></output><input type="range" min="0.2" max="8" step="0.1" data-setting="defenseHighlightLineWidthPercent"></label>
+            <label class="range-setting"><span>Länge des bewegten Linienabschnitts</span><output data-value-for="defenseHighlightLineLengthPercent"></output><input type="range" min="1" max="100" step="1" data-setting="defenseHighlightLineLengthPercent"></label>
+            <label class="range-setting"><span>Weiche Ausblendung an den Enden (% der Linienlänge)</span><output data-value-for="defenseHighlightLineBlurPercent"></output><input type="range" min="0" max="50" step="1" data-setting="defenseHighlightLineBlurPercent"></label>
             <label class="range-setting range-wide"><span>Wartezeit vor dem Highlight (ms)</span><output data-value-for="defensePreviewThresholdMs"></output><input type="range" min="0" max="2000" step="50" data-setting="defensePreviewThresholdMs"></label>
           </div>
         </details>
@@ -250,6 +253,7 @@
             <label class="range-setting" data-depends-on="threatCenterOutlineEnabled threatCenterOutlineStyle=hatching"><span>Schraffurtempo</span><output data-value-for="threatCenterHatchSpeed"></output><input type="range" min="0" max="1" step="0.01" data-setting="threatCenterHatchSpeed"></label>
             <label class="range-setting" data-depends-on="threatCenterOutlineEnabled threatCenterOutlineStyle=outline"><span>Deckkraft</span><output data-value-for="threatCenterOutlineOpacity"></output><input type="range" min="0" max="100" step="1" data-setting="threatCenterOutlineOpacity"></label>
           </div>
+          <label class="select-setting" data-depends-on="threatenedPieceOutlineEnabled"><span>Bedrohte Bewegungsfelder</span><select data-setting="threatMoveFieldDisplayMode"><option value="both">Linien und Schraffur</option><option value="lines">Nur Linien</option><option value="hatch">Nur Schraffur</option><option value="none">Aus</option></select></label>
         </details>
       </section>
 

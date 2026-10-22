@@ -17,10 +17,10 @@ const previousColors = {
   buttonBackgroundLight: "#bdbdbd", threatPinnedOutlineDark: "#383838", threatPinnedOutlineLight: "#f0f0f0"
 };
 
-test("board bevel defaults and limits preserve the existing board until enabled", () => {
+test("board bevel defaults and limits", () => {
   const defaults = settings.normalize();
-  assert.equal(defaults.boardBevelEnabled, false);
-  assert.equal(defaults.boardBevelPercent, 30);
+  assert.equal(defaults.boardBevelEnabled, true);
+  assert.equal(defaults.boardBevelPercent, 40);
   assert.equal(settings.normalize({ boardBevelPercent: -10 }).boardBevelPercent, 0);
   assert.equal(settings.normalize({ boardBevelPercent: 120 }).boardBevelPercent, 100);
   assert.equal(settings.normalize({ boardBevelEnabled: true }).boardBevelEnabled, true);
@@ -96,11 +96,10 @@ test("neutral colors have no chroma or arbitrary hue", () => {
   assert.equal(colors.toOklch("#000"), "oklch(0 0 0)");
 });
 
-test("all previous defaults and saved custom colors retain their appearance", () => {
+test("default and saved custom colors remain valid and retain their appearance", () => {
   const migrated = settings.normalize(previousColors);
   for (const [key, hex] of Object.entries(previousColors)) {
-    assert.ok(settings.defaults[key].startsWith("oklch("), key);
-    assert.equal(colors.toHex(settings.defaults[key]), hex, key);
+    assert.equal(colors.parse(settings.defaults[key]).alpha, 1, key);
     assert.equal(colors.toHex(migrated[key]), hex, key);
     assert.equal(settings.normalize(migrated)[key], migrated[key], key);
     assert.equal(colors.toHex(settings.normalize({ [key]: "#12abef" })[key]), "#12abef", key);
@@ -109,8 +108,8 @@ test("all previous defaults and saved custom colors retain their appearance", ()
 });
 
 test("hover preview corridor width and origin opacity retain saved values and valid limits", () => {
-  assert.equal(settings.normalize().movePreviewCorridorWidthPercent, 100);
-  for (const [saved, expected] of [[0, 0], [60, 60], [150, 150], [-5, 0], [250, 200], ["invalid", 100]]) {
+  assert.equal(settings.normalize().movePreviewCorridorWidthPercent, 185);
+  for (const [saved, expected] of [[0, 0], [60, 60], [150, 150], [-5, 0], [250, 200], ["invalid", 185]]) {
     const normalized = settings.normalize({ movePreviewCorridorWidthPercent: saved });
     assert.equal(normalized.movePreviewCorridorWidthPercent, expected);
     assert.equal(settings.normalize(normalized).movePreviewCorridorWidthPercent, expected);
@@ -120,9 +119,9 @@ test("hover preview corridor width and origin opacity retain saved values and va
   }
 });
 
-test("hover preview anticipation preserves the existing default and clamps saved values", () => {
-  assert.equal(settings.normalize().movePreviewAnticipationPercent, 100);
-  for (const [saved, expected] of [[0, 0], [35, 35], [100, 100], [-5, 0], [150, 100], ["invalid", 100]]) {
+test("hover preview anticipation uses the configured default and clamps saved values", () => {
+  assert.equal(settings.normalize().movePreviewAnticipationPercent, 40);
+  for (const [saved, expected] of [[0, 0], [35, 35], [100, 100], [-5, 0], [150, 100], ["invalid", 40]]) {
     const normalized = settings.normalize({ movePreviewAnticipationPercent: saved });
     assert.equal(normalized.movePreviewAnticipationPercent, expected);
     assert.equal(settings.normalize(normalized).movePreviewAnticipationPercent, expected);
@@ -132,28 +131,46 @@ test("hover preview anticipation preserves the existing default and clamps saved
 test("defense highlight settings have stable defaults and clamp saved values", () => {
   const defaults = settings.normalize();
   assert.equal(defaults.defenseHighlightEnabled, true);
+  assert.equal(defaults.attackHighlightEnabled, true);
+  assert.equal(defaults.highlightCascadesEnabled, true);
+  assert.equal(defaults.highlightCascadeLinesEnabled, true);
   assert.equal(defaults.defenseHighlightDepth, 3);
-  assert.equal(defaults.defenseHighlightWaveIntervalMs, 160);
+  assert.equal(defaults.defenseHighlightWaveIntervalMs, 210);
   assert.equal(defaults.defenseHighlightDurationMs, 700);
-  assert.equal(defaults.defenseHighlightWaveDecayPercent, 10);
-  assert.equal(defaults.defenseHighlightWhiteMixPercent, 65);
-  assert.equal(defaults.defensePreviewThresholdMs, 350);
+  assert.equal(defaults.defenseHighlightWaveDecayPercent, 20);
+  assert.equal(defaults.defenseHighlightWhiteMixPercent, 35);
+  assert.equal(defaults.defensePreviewThresholdMs, 200);
+  assert.equal(defaults.defenseHighlightLineWidthPercent, 0.5);
+  assert.equal(defaults.defenseHighlightLineLengthPercent, 70);
+  assert.equal(defaults.defenseHighlightLineBlurPercent, 20);
   const normalized = settings.normalize({
     defenseHighlightEnabled: true,
+    attackHighlightEnabled: false,
+    highlightCascadesEnabled: false,
+    highlightCascadeLinesEnabled: false,
     defenseHighlightDepth: 20,
     defenseHighlightWaveIntervalMs: -5,
     defenseHighlightDurationMs: 2050,
     defenseHighlightWaveDecayPercent: 90,
     defenseHighlightWhiteMixPercent: 120,
-    defensePreviewThresholdMs: "invalid"
+    defensePreviewThresholdMs: "invalid",
+    defenseHighlightLineWidthPercent: -5,
+    defenseHighlightLineLengthPercent: 120,
+    defenseHighlightLineBlurPercent: "invalid"
   });
   assert.equal(normalized.defenseHighlightEnabled, true);
+  assert.equal(normalized.attackHighlightEnabled, false);
+  assert.equal(normalized.highlightCascadesEnabled, false);
+  assert.equal(normalized.highlightCascadeLinesEnabled, false);
   assert.equal(normalized.defenseHighlightDepth, 6);
   assert.equal(normalized.defenseHighlightWaveIntervalMs, 0);
   assert.equal(normalized.defenseHighlightDurationMs, 2000);
   assert.equal(normalized.defenseHighlightWaveDecayPercent, 50);
   assert.equal(normalized.defenseHighlightWhiteMixPercent, 100);
-  assert.equal(normalized.defensePreviewThresholdMs, 350);
+  assert.equal(normalized.defensePreviewThresholdMs, 200);
+  assert.equal(normalized.defenseHighlightLineWidthPercent, 0.2);
+  assert.equal(normalized.defenseHighlightLineLengthPercent, 100);
+  assert.equal(normalized.defenseHighlightLineBlurPercent, 20);
 });
 
 test("defense cascade visits direct defenders before their defenders without cycles", () => {
@@ -163,7 +180,15 @@ test("defense cascade visits direct defenders before their defenders without cyc
   const context = vm.createContext({ document: { addEventListener: () => {} } });
   const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
   vm.runInContext(source.replace("  documentObserver = new MutationObserver", `
-    globalThis.testing = { getDefenseCascadeLayers, getDefenseHighlightMix, isNewDefensePreviewTarget };
+    globalThis.testing = {
+      getDefenseCascadeLayers,
+      getAttackCascadeLayers,
+      getHighlightCascadeConnections,
+      getDefenseHighlightMix,
+      getHighlightLineState,
+      setSettings: value => { settings = value; },
+      isNewDefensePreviewTarget
+    };
     return;
     documentObserver = new MutationObserver`), context);
   const position = Array.from({ length: 8 }, () => Array(8).fill(null));
@@ -175,6 +200,11 @@ test("defense cascade visits direct defenders before their defenders without cyc
   assert.deepEqual(Array.from(layers, layer => Array.from(layer, square => [square.row, square.col])), [
     [[4, 4]], [[2, 5]], [[7, 5]]
   ]);
+  assert.deepEqual(Array.from(context.testing.getHighlightCascadeConnections(position, layers, false, false), edge => [
+    [edge.from.row, edge.from.col], [edge.to.row, edge.to.col], edge.depth
+  ]), [
+    [[4, 4], [2, 5], 1], [[2, 5], [7, 5], 2]
+  ]);
   const directOnly = context.testing.getDefenseCascadeLayers(position, { row: 4, col: 4 }, false, 1);
   assert.deepEqual(Array.from(directOnly, layer => layer.length), [1, 1]);
   assert.ok(Math.abs(context.testing.getDefenseHighlightMix(0.5, 0, 80, 25) - 0.8) < 1e-12);
@@ -184,9 +214,36 @@ test("defense cascade visits direct defenders before their defenders without cyc
   assert.equal(context.testing.isNewDefensePreviewTarget(previewEntry, "A"), false);
   assert.equal(context.testing.isNewDefensePreviewTarget(previewEntry, "B"), true);
   assert.equal(context.testing.isNewDefensePreviewTarget(previewEntry, "A"), true);
+  context.testing.setSettings({
+    defenseHighlightWaveIntervalMs: 210,
+    defenseHighlightDurationMs: 700,
+    defenseHighlightWaveDecayPercent: 20
+  });
+  const line = { depth: 2 };
+  const run = { startedAt: 1000 };
+  assert.deepEqual({ ...context.testing.getHighlightLineState(line, run, 1420) }, { progress: 0, opacity: 0, finished: false });
+  assert.ok(Math.abs(context.testing.getHighlightLineState(line, run, 1770).opacity - 0.64) < 1e-12);
+  assert.deepEqual({ ...context.testing.getHighlightLineState(line, run, 2120) }, { progress: 1, opacity: 0, finished: true });
   const unprotected = Array.from({ length: 8 }, () => Array(8).fill(null));
   unprotected[4][4] = { color: "w", type: "queen" };
   assert.equal(context.testing.getDefenseCascadeLayers(unprotected, { row: 4, col: 4 }, false, 3).length, 0);
+
+  const attackedPosition = Array.from({ length: 8 }, () => Array(8).fill(null));
+  attackedPosition[4][4] = { color: "w", type: "king" };
+  attackedPosition[7][4] = { color: "w", type: "rook" };
+  attackedPosition[2][5] = { color: "b", type: "knight" };
+  attackedPosition[4][7] = { color: "w", type: "bishop" };
+  const attackLayers = context.testing.getAttackCascadeLayers(attackedPosition, { row: 4, col: 4 }, false, 3);
+  assert.deepEqual(Array.from(attackLayers, layer => Array.from(layer, square => [square.row, square.col])), [
+    [[4, 4]], [[2, 5]], [[4, 7]]
+  ]);
+  assert.deepEqual(Array.from(context.testing.getHighlightCascadeConnections(attackedPosition, attackLayers, true, false), edge => [
+    [edge.from.row, edge.from.col], [edge.to.row, edge.to.col], edge.depth
+  ]), [
+    [[4, 4], [2, 5], 1], [[2, 5], [4, 7], 2]
+  ]);
+  attackedPosition[7][4] = null;
+  assert.equal(context.testing.getAttackCascadeLayers(attackedPosition, { row: 4, col: 4 }, false, 3).length, 3);
 });
 
 test("hover anticipation waits for sustained motion and zero restores field animations", () => {
@@ -247,7 +304,7 @@ test("hover anticipation waits for sustained motion and zero restores field anim
     lastTime: now - 16, velocity: { x: 0, y: 0 }, destinations: [{ x: 2, y: 0 }]
   };
   entry.previewPointerMotion = { smooth: true, time: now, x: 1.9, y: 0.5, vx: 0.01, vy: 0 };
-  api.configure(settings.normalize());
+  api.configure(settings.normalize({ movePreviewAnticipationPercent: 100 }));
   const original = api.getMovePreviewState(entry, now);
   assert.ok(Math.abs(original.x - (2 - 1.56 * Math.exp(-0.56))) < 1e-12);
   api.configure(settings.normalize({ movePreviewAnticipationPercent: 50 }));
@@ -262,7 +319,7 @@ test("hover anticipation waits for sustained motion and zero restores field anim
     { source: { row: 0, col: 0 }, target: { row: 0, col: 1 } },
     { row: 0, col: 0 }, { row: 0, col: 1 });
   assert.equal(entry.previewAnimation?.tracking, undefined);
-  assert.ok(entry.previewAnimation.duration >= 200 && entry.previewAnimation.duration <= 230);
+  assert.ok(entry.previewAnimation.duration >= 150 && entry.previewAnimation.duration <= 180);
 });
 
 test("OKLCH percentages, hue normalization and alpha survive conversion", () => {
@@ -293,7 +350,7 @@ test("threat mixing retains equal perceptual board contrast for both player colo
     const dark = settings.defaults[`boardDark${theme}`];
     const originalContrast = colors.parse(light).l - colors.parse(dark).l;
     for (const threatMaxMixPercent of [0, 10, 30, 60, 100]) {
-      const options = { ...settings.defaults, threatMaxMixPercent };
+      const options = { ...settings.defaults, threatBlendMode: "oklab", threatMaxMixPercent };
       for (const strength of [0, 0.2, 1, 3, 5, 8]) {
         const amount = Math.min(strength / 5, 1) * threatMaxMixPercent / 100;
         for (const sign of [-1, 1]) {
@@ -324,7 +381,7 @@ test("threat mixing preserves endpoints and accepts RGB board colors", () => {
 });
 
 test("saturated custom threat colors keep their intended lightness inside the RGB gamut", () => {
-  const options = { ...settings.defaults, whitePieceColor: "#00ff00", blackPieceColor: "#0000ff", threatMaxMixPercent: 60 };
+  const options = { ...settings.defaults, threatBlendMode: "oklab", whitePieceColor: "#00ff00", blackPieceColor: "#0000ff", threatMaxMixPercent: 60 };
   for (const base of ["#ff0000", "#ffff00", "#0000ff", "#ffffff", "#000000"]) {
     for (const value of [-5, -1, 1, 5]) {
       const tint = colors.parse(value > 0 ? options.whitePieceColor : options.blackPieceColor);
@@ -358,14 +415,16 @@ test("rasterized threat backgrounds retain balanced contrast within RGB8 precisi
 });
 
 test("blend mode settings survive saving and reject unsupported values", () => {
+  assert.equal(settings.normalize().threatBlendMode, "normal");
   for (const mode of ["oklab", "normal", "multiply", "screen", "overlay", "soft-light", "hard-light", "darken", "lighten", "difference"]) {
     const normalized = settings.normalize({ threatBlendMode: mode });
     assert.equal(normalized.threatBlendMode, mode);
     assert.equal(settings.normalize(JSON.parse(JSON.stringify(normalized))).threatBlendMode, mode);
   }
   for (const mode of [undefined, null, "", "invalid", "__proto__", "toString", 1, {}]) {
-    assert.equal(settings.normalize({ threatBlendMode: mode }).threatBlendMode, "oklab");
-    assert.equal(threats.getOpacityColor(3, { ...settings.defaults, threatBlendMode: mode }, "#424240"),
+    const normalized = settings.normalize({ threatBlendMode: mode });
+    assert.equal(normalized.threatBlendMode, settings.defaults.threatBlendMode);
+    assert.equal(threats.getOpacityColor(3, normalized, "#424240"),
       threats.getOpacityColor(3, settings.defaults, "#424240"));
   }
 });

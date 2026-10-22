@@ -153,16 +153,19 @@
   }
 
   function createOverlay(kingElement) {
+    const group = document.createElement("span");
+    group.classList.add("lfs-king-movement-group");
     const svg = createSvgElement("svg", { viewBox: "0 0 1 1", "aria-hidden": "true" });
     svg.classList.add("lfs-king-movement-fields");
     kingElement.setAttribute("data-lfs-king-movement-fields", "");
-    kingElement.append(svg);
-    return svg;
+    group.append(svg);
+    kingElement.append(group);
+    return { group, svg };
   }
 
   function removeOverlays(entry) {
-    for (const [piece, svg] of entry.overlays) {
-      svg.remove();
+    for (const [piece, overlay] of entry.overlays) {
+      overlay.group.remove();
       piece.removeAttribute("data-lfs-king-movement-fields");
     }
     entry.overlays.clear();
@@ -187,12 +190,18 @@
       }
     }
     svg.replaceChildren();
-    if (paths.length) svg.append(createSvgElement("path", {
-      d: paths.join(""),
-      fill: king.color === "w" ? settings.whitePieceColor : settings.blackPieceColor,
-      "fill-rule": "nonzero",
-      "shape-rendering": "crispEdges"
-    }));
+    if (paths.length) {
+      const color = king.color === "w" ? settings.whitePieceColor : settings.blackPieceColor;
+      svg.append(createSvgElement("path", {
+        d: paths.join(""),
+        fill: color,
+        stroke: color,
+        "stroke-width": "0.02",
+        "stroke-linejoin": "miter",
+        "fill-rule": "nonzero",
+        "shape-rendering": "crispEdges"
+      }));
+    }
   }
 
   function renderPreview(group, preview) {
@@ -226,23 +235,23 @@
       return;
     }
     const currentKings = new Set(parsed.kings.map(king => king.element));
-    for (const [piece, svg] of entry.overlays) {
+    for (const [piece, overlay] of entry.overlays) {
       if (!parsed.complete || currentKings.has(piece)) continue;
-      svg.remove();
+      overlay.group.remove();
       piece.removeAttribute("data-lfs-king-movement-fields");
       entry.overlays.delete(piece);
     }
 
     for (const king of parsed.kings) {
-      let svg = entry.overlays.get(king.element);
-      if (!svg) {
-        svg = createOverlay(king.element);
-        entry.overlays.set(king.element, svg);
-      } else if (svg.parentNode !== king.element) {
-        king.element.append(svg);
+      let overlay = entry.overlays.get(king.element);
+      if (!overlay) {
+        overlay = createOverlay(king.element);
+        entry.overlays.set(king.element, overlay);
+      } else if (overlay.group.parentNode !== king.element) {
+        king.element.append(overlay.group);
       }
       king.element.setAttribute("data-lfs-king-movement-fields", "");
-      fillOverlay(svg, parsed.position, king, parsed.blackOrientation);
+      fillOverlay(overlay.svg, parsed.position, king, parsed.blackOrientation);
     }
   }
 

@@ -221,14 +221,20 @@
             <label class="field" data-center-outline-mode="outline"><span>Deckkraft</span><input type="range" min="0" max="100" step="1" data-setting="threatCenterOutlineOpacity"><output data-value-for="threatCenterOutlineOpacity"></output></label>
           </div>
           <details class="defense-highlight-section">
-            <summary>Verteidigungs-Highlight</summary>
+            <summary>Angriffs- und Verteidigungs-Highlight</summary>
+            <label class="switch-field"><span><strong>Highlight-Kaskaden aktivieren</strong><small>Schaltet die Angriffs- und Verteidigungs-Highlights gemeinsam ein oder aus.</small></span><input type="checkbox" data-setting="highlightCascadesEnabled" role="switch"></label>
             <label class="switch-field"><span><strong>Verteidigungs-Kaskade aktivieren</strong><small>Hebt die Figur und ihre Verteidiger nacheinander hervor.</small></span><input type="checkbox" data-setting="defenseHighlightEnabled" role="switch"></label>
+            <label class="switch-field"><span><strong>Angriffs-Kaskade aktivieren</strong><small>Hebt die Figur und ihre Angreifer nacheinander hervor.</small></span><input type="checkbox" data-setting="attackHighlightEnabled" role="switch"></label>
+            <label class="switch-field"><span><strong>Linien zwischen Highlight-Figuren</strong><small>Zeigt die animierten Verbindungslinien der Kaskaden.</small></span><input type="checkbox" data-setting="highlightCascadeLinesEnabled" role="switch"></label>
             <div class="control-grid">
               <label class="field"><span>Verteidigungstiefe</span><input type="range" min="1" max="6" step="1" data-setting="defenseHighlightDepth"><output data-value-for="defenseHighlightDepth"></output></label>
               <label class="field"><span>Abstand zwischen Wellen (ms)</span><input type="range" min="0" max="1000" step="10" data-setting="defenseHighlightWaveIntervalMs"><output data-value-for="defenseHighlightWaveIntervalMs"></output></label>
               <label class="field"><span>Highlight-Dauer je Welle (ms)</span><input type="range" min="100" max="2000" step="50" data-setting="defenseHighlightDurationMs"><output data-value-for="defenseHighlightDurationMs"></output></label>
               <label class="field"><span>Abnahme der Weißmischung je Welle</span><input type="range" min="0" max="50" step="1" data-setting="defenseHighlightWaveDecayPercent"><output data-value-for="defenseHighlightWaveDecayPercent"></output></label>
               <label class="field"><span>Weißmischung</span><input type="range" min="0" max="100" step="1" data-setting="defenseHighlightWhiteMixPercent"><output data-value-for="defenseHighlightWhiteMixPercent"></output></label>
+              <label class="field"><span>Pfadlinienbreite (% der Feldbreite)</span><input type="range" min="0.2" max="8" step="0.1" data-setting="defenseHighlightLineWidthPercent"><output data-value-for="defenseHighlightLineWidthPercent"></output></label>
+              <label class="field"><span>Länge des bewegten Linienabschnitts</span><input type="range" min="1" max="100" step="1" data-setting="defenseHighlightLineLengthPercent"><output data-value-for="defenseHighlightLineLengthPercent"></output></label>
+              <label class="field"><span>Weiche Ausblendung an den Enden (% der Linienlänge)</span><input type="range" min="0" max="50" step="1" data-setting="defenseHighlightLineBlurPercent"><output data-value-for="defenseHighlightLineBlurPercent"></output></label>
               <label class="field field-wide"><span>Wartezeit vor dem Highlight (ms)</span><input type="range" min="0" max="2000" step="50" data-setting="defensePreviewThresholdMs"><output data-value-for="defensePreviewThresholdMs"></output></label>
             </div>
           </details>
