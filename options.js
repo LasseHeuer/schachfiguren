@@ -98,6 +98,11 @@
     return currentSettings[durationKeys[activeCurveKey]];
   }
 
+  function previewPieceUrl(piece = "r", color = "w", settings = currentSettings) {
+    const asset = settings.pieceSet === "cage" ? `cage/cage_${piece}.svg` : `${settings.pieceSet}/${color}${piece}.svg`;
+    return chrome.runtime.getURL(asset);
+  }
+
   function setCurveTab(key) {
     if (!Array.isArray(defaults[key])) return;
     activeCurveKey = key;
@@ -153,6 +158,11 @@
     defaults.pieceBounceCurve,
     saveBounceCurve,
     previewDuration
+  );
+  globalThis.LichessHighlightLinePreview.mount(
+    document.querySelector("[data-highlight-line-preview]"),
+    () => currentSettings,
+    previewPieceUrl
   );
   for (const tab of curveTabs) tab.addEventListener("click", () => setCurveTab(tab.dataset.curveTab));
 

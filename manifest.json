@@ -21,7 +21,7 @@
     {
       "matches": ["https://lichess.org/*"],
       "css": ["extension.css"],
-      "js": ["colors.js", "settings.js", "sound-catalog.js", "board-overlay.js", "last-move-line.js", "threat-coding.js", "king-movement-fields.js", "piece-bounce.js", "move-animation.js", "selected-piece-wedge.js", "puzzle-scheduler.js", "puzzle-playlist.js", "blunder-list.js", "content.js"],
+      "js": ["colors.js", "settings.js", "sound-catalog.js", "board-overlay.js", "last-move-line.js", "threat-coding.js", "king-movement-fields.js", "piece-bounce.js", "move-animation.js", "highlight-line-preview.js", "selected-piece-wedge.js", "puzzle-scheduler.js", "puzzle-playlist.js", "blunder-list.js", "content.js"],
       "run_at": "document_start"
     },
     {

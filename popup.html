@@ -226,18 +226,30 @@
           <label class="switch-setting"><span><strong>Highlight-Kaskaden aktivieren</strong><small>Schaltet die Angriffs- und Verteidigungs-Highlights gemeinsam ein oder aus.</small></span><input type="checkbox" data-setting="highlightCascadesEnabled" role="switch"></label>
           <label class="switch-setting"><span><strong>Verteidigungs-Kaskade aktivieren</strong><small>Hebt die Figur und ihre Verteidiger nacheinander hervor.</small></span><input type="checkbox" data-setting="defenseHighlightEnabled" role="switch"></label>
           <label class="switch-setting"><span><strong>Angriffs-Kaskade aktivieren</strong><small>Hebt die Figur und ihre Angreifer nacheinander hervor.</small></span><input type="checkbox" data-setting="attackHighlightEnabled" role="switch"></label>
-          <label class="switch-setting" data-depends-on="highlightCascadesEnabled"><span><strong>Linien zwischen Highlight-Figuren</strong><small>Zeigt die animierten Verbindungslinien der Kaskaden.</small></span><input type="checkbox" data-setting="highlightCascadeLinesEnabled" role="switch"></label>
           <div class="range-grid">
             <label class="range-setting"><span>Verteidigungstiefe</span><output data-value-for="defenseHighlightDepth"></output><input type="range" min="1" max="6" step="1" data-setting="defenseHighlightDepth"></label>
             <label class="range-setting"><span>Abstand zwischen Wellen (ms)</span><output data-value-for="defenseHighlightWaveIntervalMs"></output><input type="range" min="0" max="1000" step="10" data-setting="defenseHighlightWaveIntervalMs"></label>
             <label class="range-setting"><span>Highlight-Dauer je Welle (ms)</span><output data-value-for="defenseHighlightDurationMs"></output><input type="range" min="100" max="2000" step="50" data-setting="defenseHighlightDurationMs"></label>
             <label class="range-setting"><span>Abnahme der Weißmischung je Welle</span><output data-value-for="defenseHighlightWaveDecayPercent"></output><input type="range" min="0" max="50" step="1" data-setting="defenseHighlightWaveDecayPercent"></label>
             <label class="range-setting"><span>Weißmischung</span><output data-value-for="defenseHighlightWhiteMixPercent"></output><input type="range" min="0" max="100" step="1" data-setting="defenseHighlightWhiteMixPercent"></label>
-            <label class="range-setting"><span>Pfadlinienbreite (% der Feldbreite)</span><output data-value-for="defenseHighlightLineWidthPercent"></output><input type="range" min="0.2" max="8" step="0.1" data-setting="defenseHighlightLineWidthPercent"></label>
-            <label class="range-setting"><span>Länge des bewegten Linienabschnitts</span><output data-value-for="defenseHighlightLineLengthPercent"></output><input type="range" min="1" max="100" step="1" data-setting="defenseHighlightLineLengthPercent"></label>
-            <label class="range-setting"><span>Weiche Ausblendung an den Enden (% der Linienlänge)</span><output data-value-for="defenseHighlightLineBlurPercent"></output><input type="range" min="0" max="50" step="1" data-setting="defenseHighlightLineBlurPercent"></label>
             <label class="range-setting range-wide"><span>Wartezeit vor dem Highlight (ms)</span><output data-value-for="defensePreviewThresholdMs"></output><input type="range" min="0" max="2000" step="50" data-setting="defensePreviewThresholdMs"></label>
           </div>
+          <fieldset class="highlight-line-settings">
+            <legend>Angriffs- und Verteidigungslinien</legend>
+            <label class="switch-setting" data-depends-on="highlightCascadesEnabled"><span><strong>Verbindungslinien aktivieren</strong><small>Zeigt die gemeinsamen Linien der Angriffs- und Verteidigungs-Kaskaden.</small></span><input type="checkbox" data-setting="highlightCascadeLinesEnabled" role="switch"></label>
+            <div class="range-grid">
+              <label class="range-setting"><span>Pfadlinienbreite (% der Feldbreite)</span><output data-value-for="defenseHighlightLineWidthPercent"></output><input type="range" min="0.2" max="8" step="0.1" data-setting="defenseHighlightLineWidthPercent"></label>
+              <label class="range-setting"><span>Länge des bewegten Linienabschnitts</span><output data-value-for="defenseHighlightLineLengthPercent"></output><input type="range" min="1" max="100" step="1" data-setting="defenseHighlightLineLengthPercent"></label>
+              <label class="range-setting"><span>Weiche Ausblendung an den Enden (% der Linienlänge)</span><output data-value-for="defenseHighlightLineBlurPercent"></output><input type="range" min="0" max="50" step="1" data-setting="defenseHighlightLineBlurPercent"></label>
+              <label class="range-setting"><span>Linien-Deckkraft</span><output data-value-for="highlightLineOpacityPercent"></output><input type="range" min="0" max="100" step="1" data-setting="highlightLineOpacityPercent"></label>
+              <label class="range-setting"><span>Deckkraftabnahme je Kaskadenstufe</span><output data-value-for="highlightLineDecayPercent"></output><input type="range" min="0" max="50" step="1" data-setting="highlightLineDecayPercent"></label>
+              <label class="range-setting"><span>Ease-in-Stärke (0 linear, 100 maximal)</span><output data-value-for="highlightLineEaseInPercent"></output><input type="range" min="0" max="100" step="1" data-setting="highlightLineEaseInPercent"></label>
+              <label class="range-setting"><span>Ease-out-Stärke (0 linear, 100 maximal)</span><output data-value-for="highlightLineEaseOutPercent"></output><input type="range" min="0" max="100" step="1" data-setting="highlightLineEaseOutPercent"></label>
+            </div>
+            <p class="highlight-line-preview-title">Animationsvorschau</p>
+            <div class="highlight-line-preview" data-highlight-line-preview></div>
+            <p class="highlight-line-preview-caption">Startfigur - Zwischenfigur - Zielfigur</p>
+          </fieldset>
         </details>
         <details class="analysis-subsection">
           <summary>Figurenkontur im Zentrum</summary>
@@ -356,6 +368,7 @@
     <script src="colors.js"></script>
     <script src="settings.js"></script>
     <script src="sound-catalog.js"></script>
+    <script src="highlight-line-preview.js"></script>
     <script src="bezier-editor.js"></script>
     <script src="popup.js"></script>
   </body>

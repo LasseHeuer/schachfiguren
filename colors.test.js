@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 require("./colors.js");
 require("./settings.js");
 require("./threat-coding.js");
+require("./highlight-line-preview.js");
 const colors = globalThis.LichessColors;
 const settings = globalThis.LichessSettings;
 const threats = globalThis.LichessThreatCoding;
@@ -143,6 +144,13 @@ test("defense highlight settings have stable defaults and clamp saved values", (
   assert.equal(defaults.defenseHighlightLineWidthPercent, 0.5);
   assert.equal(defaults.defenseHighlightLineLengthPercent, 70);
   assert.equal(defaults.defenseHighlightLineBlurPercent, 20);
+  assert.equal(settings.normalize({ highlightLineDurationMs: 1600 }).highlightLineDurationMs, undefined);
+  assert.equal(settings.normalize({ highlightLineArrivalLeadPercent: 45 }).highlightLineArrivalLeadPercent, undefined);
+  assert.equal(defaults.highlightLineOpacityPercent, 100);
+  assert.equal(defaults.highlightLineDecayPercent, 20);
+  assert.equal(defaults.highlightLineEaseInPercent, 100);
+  assert.equal(defaults.highlightLineEaseOutPercent, 100);
+  assert.equal(settings.normalize({ defenseHighlightWaveDecayPercent: 35 }).highlightLineDecayPercent, 35);
   const normalized = settings.normalize({
     defenseHighlightEnabled: true,
     attackHighlightEnabled: false,
@@ -156,7 +164,11 @@ test("defense highlight settings have stable defaults and clamp saved values", (
     defensePreviewThresholdMs: "invalid",
     defenseHighlightLineWidthPercent: -5,
     defenseHighlightLineLengthPercent: 120,
-    defenseHighlightLineBlurPercent: "invalid"
+    defenseHighlightLineBlurPercent: "invalid",
+    highlightLineOpacityPercent: -10,
+    highlightLineDecayPercent: 70,
+    highlightLineEaseInPercent: 150,
+    highlightLineEaseOutPercent: -5
   });
   assert.equal(normalized.defenseHighlightEnabled, true);
   assert.equal(normalized.attackHighlightEnabled, false);
@@ -171,21 +183,123 @@ test("defense highlight settings have stable defaults and clamp saved values", (
   assert.equal(normalized.defenseHighlightLineWidthPercent, 0.2);
   assert.equal(normalized.defenseHighlightLineLengthPercent, 100);
   assert.equal(normalized.defenseHighlightLineBlurPercent, 20);
+  assert.equal(normalized.highlightLineOpacityPercent, 0);
+  assert.equal(normalized.highlightLineDecayPercent, 50);
+  assert.equal(normalized.highlightLineEaseInPercent, 100);
+  assert.equal(normalized.highlightLineEaseOutPercent, 0);
 });
 
-test("defense cascade visits direct defenders before their defenders without cycles", () => {
+test("highlight pulses remain continuous with zero wave spacing and reuse static SVG attributes", () => {
+  const animation = globalThis.LichessHighlightLinePreview;
+  const options = settings.normalize({ defenseHighlightWaveIntervalMs: 0 });
+  const startedAt = 1000;
+  const pulseStart = startedAt;
+  for (const duration of [200, 520, 1600]) {
+    const values = { ...options, defenseHighlightDurationMs: duration };
+    let previousProgress = 0;
+    for (let elapsed = 0; elapsed <= duration; elapsed++) {
+      const state = animation.getLineMotion(values, 1, startedAt, pulseStart + elapsed);
+      assert.ok(Number.isFinite(state.progress) && Number.isFinite(state.opacity));
+      assert.ok(state.progress >= previousProgress && state.progress <= 1);
+      assert.ok(state.opacity >= 0 && state.opacity <= 1);
+      previousProgress = state.progress;
+    }
+    assert.equal(animation.getLineMotion(values, 1, startedAt, pulseStart).opacity, 0);
+    assert.equal(animation.getLineMotion(values, 1, startedAt, pulseStart + duration).opacity, 0);
+    assert.ok(animation.getLineMotion(values, 1, startedAt, pulseStart + duration / 2).opacity > 0);
+  }
+  const writes = [];
+  const element = () => ({ attributes: {}, setAttribute(key, value) { this.attributes[key] = value; writes.push(key); } });
+  for (const length of [1, 70, 100]) {
+    const values = { ...options, defenseHighlightLineLengthPercent: length };
+    const line = { path: element(), gradient: element(), stops: Array.from({ length: 9 }, element),
+      length: 5, fromX: 1, fromY: 2, toX: 4, toY: 6, color: "red" };
+    animation.updateLine(line, { progress: 0, opacity: 0 }, values, 0.01);
+    assert.ok(Math.abs(Number(line.path.attributes["stroke-dashoffset"]) - (5 * length / 100 - 0.6)) < 1e-12);
+    const [dash, gap] = line.path.attributes["stroke-dasharray"].split(" ").map(Number);
+    assert.ok(gap > line.length + dash);
+    writes.length = 0;
+    animation.updateLine(line, { progress: 0.5, opacity: 0.8 }, values, 0.01);
+    assert.deepEqual(writes, ["gradientTransform", "stroke-dashoffset", "stroke-opacity"]);
+    animation.updateLine(line, { progress: 1, opacity: 0 }, values, 0.01);
+    assert.equal(Number(line.path.attributes["stroke-dashoffset"]), -5);
+    animation.updateLine(line, { progress: 0.5, opacity: 0.8 }, { ...values, defenseHighlightLineBlurPercent: 0 }, 0.01);
+    assert.ok(line.stops.every(stop => stop.attributes["stop-opacity"] === "1"));
+  }
+});
+
+test("highlight lines start with the first highlight and easing strongly changes the speed profile", () => {
+  const animation = globalThis.LichessHighlightLinePreview;
+  const options = settings.normalize();
+  const startedAt = 1000;
+  for (const duration of [100, 700, 2000]) {
+    const values = { ...options, defenseHighlightDurationMs: duration };
+    assert.equal(animation.getLineMotion(values, 1, startedAt, startedAt).progress, 0);
+    const firstFrame = animation.getLineMotion(values, 1, startedAt, startedAt + 16);
+    assert.ok(firstFrame.opacity > 0, "the first rendered frame already shows the pulse");
+    assert.ok(firstFrame.progress > 0);
+  }
+  const sample = (easeIn, easeOut, fraction) => animation.getLineMotion({ ...options,
+    highlightLineEaseInPercent: easeIn, highlightLineEaseOutPercent: easeOut
+  }, 1, startedAt, startedAt + options.defenseHighlightDurationMs * fraction).progress;
+  assert.equal(sample(0, 0, 0.25), 0.25);
+  assert.ok(sample(100, 0, 0.25) < 0.06, "strong ease-in visibly delays acceleration");
+  assert.ok(sample(0, 100, 0.75) > 0.94, "strong ease-out visibly slows the approach");
+  assert.ok(sample(100, 100, 0.25) < 0.06);
+  assert.ok(Math.abs(sample(100, 100, 0.5) - 0.5) < 1e-6);
+  for (const easeIn of [0, 50, 100]) {
+    for (const easeOut of [0, 50, 100]) {
+      let previous = 0;
+      for (let frame = 0; frame < 100; frame++) {
+        const progress = sample(easeIn, easeOut, frame / 100);
+        assert.ok(progress >= previous && progress <= 1);
+        previous = progress;
+      }
+    }
+  }
+});
+
+test("line timing and brightness stay synchronized with each highlight wave", () => {
+  const animation = globalThis.LichessHighlightLinePreview;
+  for (const duration of [100, 700, 2000]) {
+    for (const interval of [0, 210, 1000]) {
+      const options = settings.normalize({ defenseHighlightDurationMs: duration, defenseHighlightWaveIntervalMs: interval });
+      for (let depth = 1; depth <= 6; depth++) {
+        const start = 1000 + (depth - 1) * interval;
+        assert.equal(animation.getLineMotion(options, depth, 1000, start - 1).opacity, 0);
+        for (const phase of [0, 0.1, 0.25, 0.5, 0.75, 0.9]) {
+          const line = animation.getLineMotion(options, depth, 1000, start + phase * duration);
+          const highlight = animation.getHighlightMix(phase, depth, options.highlightLineOpacityPercent, options.highlightLineDecayPercent);
+          assert.ok(Math.abs(line.opacity - highlight) < 1e-12);
+        }
+        assert.equal(animation.getLineMotion(options, depth, 1000, start + duration).finished, true);
+      }
+    }
+  }
+});
+
+test("highlight cascades only follow recaptures on the root square and reveal vacated lines", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");
   const { join } = require("node:path");
-  const context = vm.createContext({ document: { addEventListener: () => {} } });
+  const previewSource = readFileSync(join(__dirname, "highlight-line-preview.js"), "utf8");
+  const context = vm.createContext({
+    document: { addEventListener: () => {} },
+    getComputedStyle: () => ({ display: "block", visibility: "visible" })
+  });
   const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
+  vm.runInContext(previewSource, context);
   vm.runInContext(source.replace("  documentObserver = new MutationObserver", `
     globalThis.testing = {
       getDefenseCascadeLayers,
       getAttackCascadeLayers,
       getHighlightCascadeConnections,
+      getPositionAnalysis,
       getDefenseHighlightMix,
       getHighlightLineState,
+      getPreviewMoveKey,
+      getLastMove,
+      shouldPlayLastMoveCascade,
       setSettings: value => { settings = value; },
       isNewDefensePreviewTarget
     };
@@ -198,12 +312,16 @@ test("defense cascade visits direct defenders before their defenders without cyc
   position[5][7] = { color: "w", type: "bishop" };
   const layers = context.testing.getDefenseCascadeLayers(position, { row: 4, col: 4 }, false, 6);
   assert.deepEqual(Array.from(layers, layer => Array.from(layer, square => [square.row, square.col])), [
-    [[4, 4]], [[2, 5]], [[7, 5]]
+    [[4, 4]], [[2, 5]]
   ]);
+  context.testing.setSettings({ threatenedPieceOutlineEnabled: true, defenseCirclesEnabled: true });
+  const cachedAnalysis = context.testing.getPositionAnalysis(position, false);
+  assert.equal(context.testing.getPositionAnalysis(position, false), cachedAnalysis);
+  assert.notEqual(context.testing.getPositionAnalysis(position, true), cachedAnalysis);
   assert.deepEqual(Array.from(context.testing.getHighlightCascadeConnections(position, layers, false, false), edge => [
     [edge.from.row, edge.from.col], [edge.to.row, edge.to.col], edge.depth
   ]), [
-    [[4, 4], [2, 5], 1], [[2, 5], [7, 5], 2]
+    [[4, 4], [2, 5], 1]
   ]);
   const directOnly = context.testing.getDefenseCascadeLayers(position, { row: 4, col: 4 }, false, 1);
   assert.deepEqual(Array.from(directOnly, layer => layer.length), [1, 1]);
@@ -214,16 +332,82 @@ test("defense cascade visits direct defenders before their defenders without cyc
   assert.equal(context.testing.isNewDefensePreviewTarget(previewEntry, "A"), false);
   assert.equal(context.testing.isNewDefensePreviewTarget(previewEntry, "B"), true);
   assert.equal(context.testing.isNewDefensePreviewTarget(previewEntry, "A"), true);
+  const moveEntry = { defenseLastMoveKey: null, defensePlayedMoveKeys: new Set(["1,0:3,0"]) };
+  assert.equal(context.testing.getPreviewMoveKey({
+    source: { row: 1, col: 0 }, target: { row: 3, col: 0 }, blackOrientation: true
+  }), "1,0:3,0");
+  const makeSquare = (row, col) => ({
+    getBoundingClientRect: () => ({ left: col * 10, top: row * 10, width: 10, height: 10 })
+  });
+  const board = {
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 80, height: 80 }),
+    querySelector: () => null,
+    querySelectorAll: () => [makeSquare(6, 7), makeSquare(4, 7)]
+  };
+  const movePosition = Array.from({ length: 8 }, () => Array(8).fill(null));
+  movePosition[4][7] = { color: "w", type: "pawn" };
+  const lastMove = context.testing.getLastMove(board, movePosition, true);
+  assert.deepEqual({ ...lastMove.source }, { row: 6, col: 7 });
+  assert.deepEqual({ ...lastMove.target }, { row: 4, col: 7 });
+  assert.equal(lastMove.key, "1,0:3,0");
+  assert.equal(context.testing.shouldPlayLastMoveCascade(moveEntry, "1,0:3,0"), false);
+  assert.equal(moveEntry.defensePlayedMoveKeys.size, 0);
+  assert.equal(context.testing.shouldPlayLastMoveCascade(moveEntry, "1,0:3,0"), false);
+  assert.equal(context.testing.shouldPlayLastMoveCascade(moveEntry, "1,0:4,0"), true);
+  assert.equal(context.testing.shouldPlayLastMoveCascade(moveEntry, "1,0:4,0"), false);
+  assert.equal(context.testing.shouldPlayLastMoveCascade(moveEntry, null), false);
+  assert.equal(context.testing.shouldPlayLastMoveCascade(moveEntry, "1,0:3,0"), true);
   context.testing.setSettings({
     defenseHighlightWaveIntervalMs: 210,
-    defenseHighlightDurationMs: 700,
-    defenseHighlightWaveDecayPercent: 20
+    defenseHighlightDurationMs: 520,
+    defenseHighlightWaveDecayPercent: 20,
+    defenseHighlightWhiteMixPercent: 35,
+    highlightLineOpacityPercent: 100,
+    highlightLineDecayPercent: 20,
+    highlightLineEaseInPercent: 100,
+    highlightLineEaseOutPercent: 100
   });
   const line = { depth: 2 };
   const run = { startedAt: 1000 };
-  assert.deepEqual({ ...context.testing.getHighlightLineState(line, run, 1420) }, { progress: 0, opacity: 0, finished: false });
-  assert.ok(Math.abs(context.testing.getHighlightLineState(line, run, 1770).opacity - 0.64) < 1e-12);
-  assert.deepEqual({ ...context.testing.getHighlightLineState(line, run, 2120) }, { progress: 1, opacity: 0, finished: true });
+  assert.deepEqual({ ...context.testing.getHighlightLineState(line, run, 1209) }, { progress: 0, opacity: 0, finished: false });
+  const atStart = context.testing.getHighlightLineState(line, run, 1210);
+  assert.equal(atStart.progress, 0);
+  assert.equal(atStart.opacity, 0);
+  assert.equal(atStart.finished, false);
+  const atQuarter = context.testing.getHighlightLineState(line, run, 1340);
+  assert.ok(atQuarter.progress > 0 && atQuarter.progress < 0.06);
+  const atMidpoint = context.testing.getHighlightLineState(line, run, 1470);
+  assert.equal(atMidpoint.progress, 0.5);
+  assert.ok(Math.abs(context.testing.getDefenseHighlightMix(0.5, 2, 35, 20) - 0.224) < 1e-12);
+  const atArrival = context.testing.getHighlightLineState(line, run, 1729);
+  assert.equal(atArrival.finished, false);
+  assert.ok(atArrival.opacity > 0 && atArrival.opacity < 0.005);
+  assert.deepEqual({ ...context.testing.getHighlightLineState(line, run, 1730) }, { progress: 1, opacity: 0, finished: true });
+  context.testing.setSettings({
+    defenseHighlightWaveIntervalMs: 210,
+    defenseHighlightDurationMs: 520,
+    defenseHighlightWaveDecayPercent: 20,
+    highlightLineOpacityPercent: 50,
+    highlightLineDecayPercent: 0,
+    highlightLineEaseInPercent: 0,
+    highlightLineEaseOutPercent: 100
+  });
+  const adjustedLine = context.testing.getHighlightLineState(line, run, 1340);
+  assert.ok(adjustedLine.progress > 0.6);
+  assert.ok(Math.abs(adjustedLine.opacity - Math.sin(Math.PI / 4) * 0.5) < 1e-12);
+  context.testing.setSettings({
+    defenseHighlightWaveIntervalMs: 210,
+    defenseHighlightDurationMs: 520,
+    highlightLineOpacityPercent: 100,
+    highlightLineDecayPercent: 20,
+    highlightLineEaseInPercent: 0,
+    highlightLineEaseOutPercent: 0
+  });
+  assert.ok(Math.abs(context.testing.getHighlightLineState(line, run, 1340).progress - 0.25) < 1e-12);
+  const interruptedLine = { depth: 2, fadeOut: { startedAt: 1470, opacity: 0.64, duration: 180 } };
+  assert.ok(context.testing.getHighlightLineState(interruptedLine, run, 1560).progress > 0.5);
+  assert.ok(Math.abs(context.testing.getHighlightLineState(interruptedLine, run, 1560).opacity - 0.32) < 1e-12);
+  assert.equal(context.testing.getHighlightLineState(interruptedLine, run, 1650).finished, true);
   const unprotected = Array.from({ length: 8 }, () => Array(8).fill(null));
   unprotected[4][4] = { color: "w", type: "queen" };
   assert.equal(context.testing.getDefenseCascadeLayers(unprotected, { row: 4, col: 4 }, false, 3).length, 0);
@@ -235,15 +419,69 @@ test("defense cascade visits direct defenders before their defenders without cyc
   attackedPosition[4][7] = { color: "w", type: "bishop" };
   const attackLayers = context.testing.getAttackCascadeLayers(attackedPosition, { row: 4, col: 4 }, false, 3);
   assert.deepEqual(Array.from(attackLayers, layer => Array.from(layer, square => [square.row, square.col])), [
-    [[4, 4]], [[2, 5]], [[4, 7]]
+    [[4, 4]], [[2, 5]], [[7, 4]]
   ]);
   assert.deepEqual(Array.from(context.testing.getHighlightCascadeConnections(attackedPosition, attackLayers, true, false), edge => [
     [edge.from.row, edge.from.col], [edge.to.row, edge.to.col], edge.depth
   ]), [
-    [[4, 4], [2, 5], 1], [[2, 5], [4, 7], 2]
+    [[4, 4], [2, 5], 1], [[4, 4], [7, 4], 2]
   ]);
   attackedPosition[7][4] = null;
-  assert.equal(context.testing.getAttackCascadeLayers(attackedPosition, { row: 4, col: 4 }, false, 3).length, 3);
+  assert.equal(context.testing.getAttackCascadeLayers(attackedPosition, { row: 4, col: 4 }, false, 3).length, 2);
+
+  const coordinates = result => Array.from(result, layer => Array.from(layer, square => [square.row, square.col]));
+  const battery = Array.from({ length: 8 }, () => Array(8).fill(null));
+  battery[6][4] = { color: "w", type: "pawn" };
+  battery[4][4] = { color: "w", type: "rook" };
+  battery[2][4] = { color: "w", type: "rook" };
+  battery[0][4] = { color: "w", type: "queen" };
+  battery[2][3] = { color: "w", type: "knight" };
+  const unchanged = JSON.stringify(battery);
+  const batteryLayers = context.testing.getDefenseCascadeLayers(battery, { row: 6, col: 4 }, false, 6);
+  assert.deepEqual(coordinates(batteryLayers), [[[6, 4]], [[4, 4]], [[2, 4]], [[0, 4]]]);
+  assert.equal(JSON.stringify(battery), unchanged, "simulations never change the displayed position");
+  assert.deepEqual(Array.from(context.testing.getHighlightCascadeConnections(battery, batteryLayers, false, false), edge => [
+    [edge.from.row, edge.from.col], [edge.to.row, edge.to.col], edge.depth
+  ]), [
+    [[6, 4], [4, 4], 1], [[6, 4], [2, 4], 2], [[6, 4], [0, 4], 3]
+  ]);
+  assert.equal(context.testing.getDefenseCascadeLayers(battery, { row: 6, col: 4 }, false, 1).length, 2);
+  battery[3][4] = { color: "b", type: "pawn" };
+  assert.deepEqual(coordinates(context.testing.getDefenseCascadeLayers(battery, { row: 6, col: 4 }, false, 6)), [
+    [[6, 4]], [[4, 4]]
+  ], "a blocker outside earlier waves must stay on the board");
+  assert.equal(context.testing.getHighlightCascadeConnections(battery, batteryLayers, false, false).length, 1);
+
+  const diagonal = Array.from({ length: 8 }, () => Array(8).fill(null));
+  diagonal[4][4] = { color: "w", type: "knight" };
+  diagonal[5][3] = { color: "w", type: "pawn" };
+  diagonal[6][2] = { color: "w", type: "bishop" };
+  diagonal[7][1] = { color: "w", type: "queen" };
+  diagonal[5][0] = { color: "w", type: "rook" };
+  const diagonalExpected = [[[4, 4]], [[5, 3]], [[6, 2]], [[7, 1]]];
+  assert.deepEqual(coordinates(context.testing.getDefenseCascadeLayers(diagonal, { row: 4, col: 4 }, false, 6)), diagonalExpected);
+  const rotatedDiagonal = diagonal.map(row => [...row].reverse()).reverse();
+  assert.deepEqual(coordinates(context.testing.getDefenseCascadeLayers(rotatedDiagonal, { row: 3, col: 3 }, true, 6)),
+    diagonalExpected.map(layer => layer.map(([row, col]) => [7 - row, 7 - col])));
+
+  const exchange = Array.from({ length: 8 }, () => Array(8).fill(null));
+  exchange[4][4] = { color: "w", type: "knight" };
+  exchange[3][3] = { color: "b", type: "pawn" };
+  exchange[2][2] = { color: "b", type: "bishop" };
+  exchange[1][1] = { color: "b", type: "queen" };
+  exchange[4][6] = { color: "w", type: "rook" };
+  exchange[4][7] = { color: "w", type: "rook" };
+  exchange[3][0] = { color: "w", type: "rook" };
+  const exchangeLayers = context.testing.getAttackCascadeLayers(exchange, { row: 4, col: 4 }, false, 6);
+  const exchangeExpected = [[[4, 4]], [[3, 3]], [[4, 6]], [[2, 2]], [[4, 7]], [[1, 1]]];
+  assert.deepEqual(coordinates(exchangeLayers), exchangeExpected,
+    "attacking waves alternate sides but always recapture on the root square");
+  const exchangeLines = context.testing.getHighlightCascadeConnections(exchange, exchangeLayers, true, false);
+  assert.equal(exchangeLines.length, 5);
+  assert.ok(exchangeLines.every(edge => edge.from.row === 4 && edge.from.col === 4));
+  const rotatedExchange = exchange.map(row => [...row].reverse()).reverse();
+  assert.deepEqual(coordinates(context.testing.getAttackCascadeLayers(rotatedExchange, { row: 3, col: 3 }, true, 6)),
+    exchangeExpected.map(layer => layer.map(([row, col]) => [7 - row, 7 - col])));
 });
 
 test("hover anticipation waits for sustained motion and zero restores field animations", () => {

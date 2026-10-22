@@ -91,6 +91,14 @@ input[type="range"] { width: 100%; height: 13px; margin: 1px 0 0; accent-color: 
 .analysis-subsection[open] summary { margin-bottom: 6px; }
 .analysis-subsection .switch-setting + .switch-setting { margin-top: 4px; }
 .analysis-subsection .range-grid { margin-top: 5px; }
+.highlight-line-settings { min-width: 0; margin: 10px 0 0; padding: 5px 7px 7px; border: 1px solid oklch(0.780553901228319 0.014518732296303 145.217881281824); border-radius: 5px; }
+.highlight-line-settings legend { padding: 0 4px; color: oklch(0.419474635449233 0.024159457145304 154.175591955091); font-size: 9px; font-weight: 700; }
+.highlight-line-settings .range-grid { margin-top: 3px; }
+.highlight-line-preview-title { margin: 9px 0 4px; color: oklch(0.419474635449233 0.024159457145304 154.175591955091); font-size: 9px; font-weight: 700; }
+.highlight-line-preview { padding: 4px; border-radius: 5px; background: oklch(0.941382400499024 0.009036223973306 134.874460275728); }
+.highlight-line-preview-caption { margin: 3px 0 0; color: oklch(0.620712577050277 0.016268548991320 142.189058748758); font-size: 8px; text-align: center; }
+.lfs-highlight-line-preview-svg { display: block; width: 100%; height: auto; }
+.lfs-highlight-line-preview-piece { overflow: visible; }
 .display-setting-label { margin: 9px 0 4px; color: oklch(0.479928597967839 0.025373638603468 153.555472525237); font-size: 9px; font-weight: 700; }
 .display-setting-label[hidden] { display: none; }
 .outline-width-setting { margin-top: 6px; }
@@ -140,6 +148,11 @@ body { background: oklch(0.270290391535434 0.013904843167648 131.721939034385); 
 .power-toggle, .select-setting, .color-setting, .color-row, .range-setting, .switch-setting, .footer { color: oklch(0.871991739575481 0.013811258972272 134.905695162673); }
 .tabs { background: oklch(0.318683341370328 0.013363541109067 131.635457794919); }
 .analysis-subsection { background: oklch(0.321683852327794 0.013973539120098 136.663471993538); }
+.highlight-line-settings { border-color: oklch(0.502362283141642 0.019364739082104 143.736221490563); }
+.highlight-line-settings legend { color: oklch(0.918879355912415 0.011955118581507 133.3819277179); }
+.highlight-line-preview-title { color: oklch(0.918879355912415 0.011955118581507 133.3819277179); }
+.highlight-line-preview { background: oklch(0.270290391535434 0.013904843167648 131.721939034385); }
+.highlight-line-preview-caption { color: oklch(0.741236331476554 0.017937014190262 137.041978845330); }
 .sound-import, .sound-setting { background: oklch(0.321683852327794 0.013973539120098 136.663471993538); }
 .sound-import { color: oklch(0.918879355912415 0.011955118581507 133.381927717997); }
 .sound-import button { background: oklch(0.403465931901006 0.017363094884042 138.732435817977); color: oklch(0.918879355912415 0.011955118581507 133.381927717997); }

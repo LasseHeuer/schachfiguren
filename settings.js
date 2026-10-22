@@ -131,6 +131,10 @@
     defenseHighlightLineWidthPercent: 0.5,
     defenseHighlightLineLengthPercent: 70,
     defenseHighlightLineBlurPercent: 20,
+    highlightLineOpacityPercent: 100,
+    highlightLineDecayPercent: 20,
+    highlightLineEaseInPercent: 100,
+    highlightLineEaseOutPercent: 100,
     defenseLineAnimationDistancePercent: 4,
     defenseLineAnimationLoopMs: 1200,
     defenseLineAnimationOffsetMs: 80,
@@ -276,6 +280,10 @@
     defenseHighlightLineWidthPercent: [0.2, 8],
     defenseHighlightLineLengthPercent: [1, 100],
     defenseHighlightLineBlurPercent: [0, 50],
+    highlightLineOpacityPercent: [0, 100],
+    highlightLineDecayPercent: [0, 50],
+    highlightLineEaseInPercent: [0, 100],
+    highlightLineEaseOutPercent: [0, 100],
     threatOwnSeeThrough: [0, 1],
     threatOpponentSeeThrough: [0, 1],
     threatMoveDepth: [1, 5],
@@ -296,6 +304,12 @@
 
   function normalize(values = {}) {
     const result = { ...defaults, ...values };
+    delete result.highlightLineDurationMs;
+    delete result.highlightLineArrivalLeadPercent;
+    if (!Object.prototype.hasOwnProperty.call(values, "highlightLineDecayPercent")
+      && Object.prototype.hasOwnProperty.call(values, "defenseHighlightWaveDecayPercent")) {
+      result.highlightLineDecayPercent = values.defenseHighlightWaveDecayPercent;
+    }
     const legacyArrowOffset = Number(values.engineArrowCenterOffsetPercent);
     if (Number.isFinite(legacyArrowOffset)) {
       if (!Object.prototype.hasOwnProperty.call(values, "engineArrowStartOffsetPercent")) {
@@ -393,6 +407,10 @@
     result.threatCenterHatchSpeed = Number(result.threatCenterHatchSpeed.toFixed(2));
     result.defenseHighlightDepth = Math.round(result.defenseHighlightDepth);
     result.defenseHighlightWaveDecayPercent = Math.round(result.defenseHighlightWaveDecayPercent);
+    result.highlightLineOpacityPercent = Math.round(result.highlightLineOpacityPercent);
+    result.highlightLineDecayPercent = Math.round(result.highlightLineDecayPercent);
+    result.highlightLineEaseInPercent = Math.round(result.highlightLineEaseInPercent);
+    result.highlightLineEaseOutPercent = Math.round(result.highlightLineEaseOutPercent);
     for (const key of ["defenseHighlightWaveIntervalMs", "defenseHighlightDurationMs", "defensePreviewThresholdMs"]) {
       result[key] = Math.round(result[key] / 10) * 10;
     }

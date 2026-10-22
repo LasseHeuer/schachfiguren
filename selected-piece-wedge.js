@@ -18,7 +18,10 @@
   const pieceNamesByLetter = { P: "pawn", N: "knight", B: "bishop", R: "rook", Q: "queen", K: "king" };
   const observedBoards = new Map();
   const moveDestinationPreviewCache = new WeakMap();
+  const positionAnalysisCache = new Map();
+  const maxPositionAnalysisCacheSize = 128;
   let settings = null;
+  let pointerOverBoard = null;
   let documentObserver = null;
   let hatchAnimationFrame = 0;
   let hatchScrollLastTime = null;
@@ -84,13 +87,26 @@
   document.addEventListener("lfs-hover-preview-change", event => scheduleRender(event.detail));
 
   document.addEventListener("pointermove", event => {
+    const eventBoard = typeof event.target?.closest === "function"
+      ? event.target.closest(boardSelector)
+      : null;
+    const previousBoard = pointerOverBoard;
+    pointerOverBoard = eventBoard;
+    const boardsToUpdate = new Set([eventBoard, previousBoard]);
     for (const [board, entry] of observedBoards) {
+      if (entry.previewPieceSvg) boardsToUpdate.add(board);
+    }
+
+    for (const board of boardsToUpdate) {
+      const entry = observedBoards.get(board);
+      if (!entry) continue;
       const hasDraggingPiece = Boolean(board.querySelector(":scope > piece.dragging"));
-      const rect = board.getBoundingClientRect();
-      const insideBoard = rect.width && rect.height
+      const shouldUpdatePreview = board === eventBoard || entry.previewPieceSvg || hasDraggingPiece;
+      const rect = shouldUpdatePreview ? board.getBoundingClientRect() : null;
+      const insideBoard = board === eventBoard && rect.width && rect.height
         && event.clientX >= rect.left && event.clientX < rect.right
         && event.clientY >= rect.top && event.clientY < rect.bottom;
-      const nextHoveredSquare = insideBoard
+      const nextHoveredSquare = insideBoard && rect.width && rect.height
         ? {
           row: Math.floor((event.clientY - rect.top) * 8 / rect.height),
           col: Math.floor((event.clientX - rect.left) * 8 / rect.width)
@@ -100,12 +116,11 @@
         entry.hoveredSquare = nextHoveredSquare;
         scheduleRender(board);
       }
-      if (!board.contains(event.target) && !entry.previewPieceSvg && !hasDraggingPiece) continue;
+      if (!insideBoard && !entry.previewPieceSvg && !hasDraggingPiece) continue;
       if (!entry.previewPieceSvg && !hasDraggingPiece && !board.querySelector(":scope > square.selected")) continue;
 
       const preview = globalThis.LichessThreatCoding?.getInteractionPreview(board, event.clientX, event.clientY);
       if (preview?.isHoverPreview) {
-        const rect = board.getBoundingClientRect();
         const now = performance.now();
         const sourceKey = `${preview.source.row},${preview.source.col}`;
         const previous = entry.previewPointerMotion;
@@ -371,103 +386,142 @@
     return connections;
   }
 
+  function getPositionKey(position) {
+    return position.map(row => row.map(piece => piece ? `${piece.color}${piece.type}` : "-").join("")).join("/");
+  }
+
+  function getPositionAnalysis(position, blackOrientation) {
+    const key = `${blackOrientation}:${getPositionKey(position)}`;
+    let analysis = positionAnalysisCache.get(key);
+    if (analysis) {
+      positionAnalysisCache.delete(key);
+    } else {
+      analysis = { threatenedSquares: null, defenseConnections: null };
+    }
+    if (settings.threatenedPieceOutlineEnabled && !analysis.threatenedSquares) {
+      analysis.threatenedSquares = getThreatenedSquares(position, blackOrientation);
+    }
+    if (settings.defenseCirclesEnabled && !analysis.defenseConnections) {
+      analysis.defenseConnections = getDefenseConnections(position, blackOrientation);
+    }
+    positionAnalysisCache.set(key, analysis);
+    if (positionAnalysisCache.size > maxPositionAnalysisCacheSize) {
+      positionAnalysisCache.delete(positionAnalysisCache.keys().next().value);
+    }
+    return analysis;
+  }
+
   function getDefenseCascadeLayers(position, root, blackOrientation, depth) {
-    if (!position[root?.row]?.[root.col]) return [];
-    const defendersByTarget = new Map();
-    for (let row = 0; row < 8; row++) {
-      for (let col = 0; col < 8; col++) {
-        const piece = position[row][col];
-        if (!piece) continue;
-        const source = { row, col };
-        for (const target of getDefendedPieces(position, source, blackOrientation, true)) {
-          const key = `${target.row},${target.col}`;
-          if (!defendersByTarget.has(key)) defendersByTarget.set(key, []);
-          defendersByTarget.get(key).push(source);
-        }
-      }
-    }
-    const rootKey = `${root.row},${root.col}`;
-    if (!defendersByTarget.get(rootKey)?.length) return [];
-    const layers = [[root]];
-    const visited = new Set([rootKey]);
-    for (let level = 0; level < depth; level++) {
-      const next = [];
-      for (const target of layers.at(-1)) {
-        for (const source of defendersByTarget.get(`${target.row},${target.col}`) ?? []) {
-          const key = `${source.row},${source.col}`;
-          if (visited.has(key)) continue;
-          visited.add(key);
-          if (!defendersByTarget.get(key)?.length) continue;
-          next.push(source);
-        }
-      }
-      if (!next.length) break;
-      layers.push(next);
-    }
-    return layers;
+    return getHighlightCascadeLayers(position, root, blackOrientation, depth, false);
   }
 
   function getAttackCascadeLayers(position, root, blackOrientation, depth) {
-    if (!position[root?.row]?.[root.col]) return [];
-    const attackersByTarget = new Map();
-    for (let row = 0; row < 8; row++) {
-      for (let col = 0; col < 8; col++) {
-        const piece = position[row][col];
-        if (!piece) continue;
-        const source = { row, col };
-        const sourceKey = `${row},${col}`;
-        for (const target of getAttackedPieces(position, source, blackOrientation)) {
-          const targetPiece = position[target.row][target.col];
-          if (!targetPiece || targetPiece.color === piece.color) continue;
-          const targetKey = `${target.row},${target.col}`;
-          if (!attackersByTarget.has(targetKey)) attackersByTarget.set(targetKey, []);
-          attackersByTarget.get(targetKey).push({ source, key: sourceKey });
-        }
-      }
-    }
-    const rootKey = `${root.row},${root.col}`;
-    if (!attackersByTarget.get(rootKey)?.length) return [];
+    return getHighlightCascadeLayers(position, root, blackOrientation, depth, true);
+  }
+
+  function getHighlightCascadeLayers(position, root, blackOrientation, depth, isAttack) {
+    const rootPiece = position[root?.row]?.[root.col];
+    if (!rootPiece) return [];
+    const simulated = position.map(row => row.slice());
+    let color = isAttack ? rootPiece.color === "w" ? "b" : "w" : rootPiece.color;
     const layers = [[root]];
-    const visited = new Set([rootKey]);
     for (let level = 0; level < depth; level++) {
       const next = [];
-      for (const target of layers.at(-1)) {
-        for (const { source, key } of attackersByTarget.get(`${target.row},${target.col}`) ?? []) {
-          if (visited.has(key)) continue;
-          visited.add(key);
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          if (row === root.row && col === root.col) continue;
+          if (simulated[row][col]?.color !== color) continue;
+          const source = { row, col };
+          if (!canReach(simulated, source, root, blackOrientation)) continue;
           next.push(source);
         }
       }
       if (!next.length) break;
       layers.push(next);
+      // Vacated source squares reveal batteries; every later wave still targets the original square.
+      for (const source of next) simulated[source.row][source.col] = null;
+      if (isAttack) color = color === "w" ? "b" : "w";
     }
-    return layers;
+    return layers.length > 1 ? layers : [];
   }
 
   function getHighlightCascadeConnections(position, layers, isAttack, blackOrientation) {
+    const root = layers[0]?.[0];
+    if (!root) return [];
+    const simulated = position.map(row => row.slice());
+    const rootPiece = position[root.row][root.col];
+    if (!rootPiece) return [];
     const connections = [];
     for (let depth = 1; depth < layers.length; depth++) {
-      for (const from of layers[depth - 1]) {
-        for (const to of layers[depth]) {
-          const targetIsConnected = isAttack
-            ? getAttackedPieces(position, to, blackOrientation).some(target => target.row === from.row
-              && target.col === from.col && position[target.row][target.col].color !== position[to.row][to.col].color)
-            : getDefendedPieces(position, to, blackOrientation, true).some(target => target.row === from.row && target.col === from.col);
-          if (targetIsConnected) connections.push({ from, to, depth });
-        }
-      }
+      const opposite = isAttack && depth % 2 === 1;
+      const color = opposite ? rootPiece.color === "w" ? "b" : "w" : rootPiece.color;
+      const wave = layers[depth].filter(to => simulated[to.row][to.col]?.color === color
+        && canReach(simulated, to, root, blackOrientation));
+      for (const to of wave) connections.push({ from: root, to, depth });
+      for (const to of wave) simulated[to.row][to.col] = null;
     }
     return connections;
   }
 
   function getDefenseHighlightMix(phase, depth, strengthPercent, decayPercent) {
-    return Math.sin(Math.PI * phase) * strengthPercent / 100 * Math.pow(1 - decayPercent / 100, depth);
+    return globalThis.LichessHighlightLinePreview.getHighlightMix(phase, depth, strengthPercent, decayPercent);
   }
 
   function isNewDefensePreviewTarget(entry, targetKey) {
     if (entry.defensePreviewLastTargetKey === targetKey) return false;
     entry.defensePreviewLastTargetKey = targetKey;
     return true;
+  }
+
+  function getMoveKey(source, target) {
+    return `${source.row},${source.col}:${target.row},${target.col}`;
+  }
+
+  function getPreviewMoveKey(preview) {
+    return getMoveKey(preview.source, preview.target);
+  }
+
+  function screenToLogical(square, blackOrientation) {
+    return blackOrientation
+      ? { row: 7 - square.row, col: 7 - square.col }
+      : square;
+  }
+
+  function shouldPlayLastMoveCascade(entry, moveKey, targetAlreadyHighlighted = false) {
+    if (!moveKey) {
+      entry.defenseLastMoveKey = null;
+      entry.defensePlayedMoveKeys.clear();
+      return false;
+    }
+    if (entry.defenseLastMoveKey === moveKey) return false;
+    entry.defenseLastMoveKey = moveKey;
+    const previewed = entry.defensePlayedMoveKeys.has(moveKey);
+    entry.defensePlayedMoveKeys.clear();
+    return !previewed && !targetAlreadyHighlighted;
+  }
+
+  function markPreviewMovePlayed(entry, preview) {
+    if (preview?.legal) entry.defensePlayedMoveKeys.add(getPreviewMoveKey(preview));
+  }
+
+  function getLastMove(board, position, blackOrientation) {
+    const squares = [...board.querySelectorAll(":scope > square.last-move")]
+      .map(element => getScreenSquare(element, board));
+    if (squares.length !== 2 || squares.some(square => !square)) return null;
+    const occupied = squares.filter(square => position[square.row]?.[square.col]);
+    const destination = occupied.length === 1
+      ? occupied[0]
+      : occupied.length === 2
+        ? occupied.find(square => position[square.row][square.col].type === "king")
+        : null;
+    if (!destination) return null;
+    const source = squares.find(square => square !== destination);
+    if (!source) return null;
+    return {
+      source,
+      target: destination,
+      key: getMoveKey(screenToLogical(source, blackOrientation), screenToLogical(destination, blackOrientation))
+    };
   }
 
   function applyExchangeCapture(position, source, target, blackOrientation) {
@@ -752,7 +806,7 @@
     const destinations = [...board.querySelectorAll(":scope > square.move-dest")]
       .map(square => ({ square, target: getScreenSquare(square, board) }))
       .filter(({ target }) => target);
-    const positionKey = position.map(row => row.map(occupant => occupant ? `${occupant.color}${occupant.type}` : "-").join("")).join("/");
+    const positionKey = getPositionKey(position);
     const destinationKey = destinations.map(({ target }) => `${target.row},${target.col}`).join(";");
     const cacheKey = `${positionKey}:${source.row},${source.col}:${blackOrientation}:${destinationKey}:${settings.threatenedPieceOutlineEnabled}:${settings.defenseCirclesEnabled}:${settings.threatMoveFieldDisplayMode}:${settings.whitePieceColor}:${settings.blackPieceColor}`;
     const cached = moveDestinationPreviewCache.get(board);
@@ -2048,23 +2102,16 @@
   }
 
   function getHighlightLineState(line, run, timestamp) {
+    const state = globalThis.LichessHighlightLinePreview.getLineMotion(settings, line.depth, run.startedAt, timestamp);
     if (line.fadeOut) {
-      const progress = (timestamp - line.fadeOut.startedAt) / line.fadeOut.duration;
+      const progress = Math.max(0, Math.min(1, (timestamp - line.fadeOut.startedAt) / line.fadeOut.duration));
       return {
-        progress: line.fadeOut.progress,
-        opacity: progress >= 1 ? 0 : line.fadeOut.opacity * (1 - Math.max(0, progress)),
-        finished: progress >= 1
+        progress: state.progress,
+        opacity: Math.min(state.opacity, line.fadeOut.opacity * (1 - progress * progress * (3 - 2 * progress))),
+        finished: state.finished || progress >= 1
       };
     }
-    const elapsed = timestamp - run.startedAt - line.depth * settings.defenseHighlightWaveIntervalMs;
-    if (elapsed < 0) return { progress: 0, opacity: 0, finished: false };
-    if (elapsed >= settings.defenseHighlightDurationMs) return { progress: 1, opacity: 0, finished: true };
-    const progress = elapsed / settings.defenseHighlightDurationMs;
-    return {
-      progress,
-      opacity: Math.sin(Math.PI * progress) * Math.pow(1 - settings.defenseHighlightWaveDecayPercent / 100, line.depth),
-      finished: false
-    };
+    return state;
   }
 
   function removeHighlightLine(line) {
@@ -2073,45 +2120,7 @@
   }
 
   function updateHighlightLine(line, state) {
-    const path = line.path;
-    const gradient = line.gradient;
-    const totalLength = line.length;
-    const segmentLength = totalLength * settings.defenseHighlightLineLengthPercent / 100;
-    const travelLength = Math.max(0, totalLength - segmentLength);
-    const startLength = travelLength * state.progress;
-    const endLength = Math.min(totalLength, startLength + segmentLength);
-    const start = path.getPointAtLength(startLength);
-    const end = path.getPointAtLength(endLength);
-    gradient.setAttribute("x1", String(start.x));
-    gradient.setAttribute("y1", String(start.y));
-    gradient.setAttribute("x2", String(end.x));
-    gradient.setAttribute("y2", String(end.y));
-    path.setAttribute("stroke-width", String(settings.defenseHighlightLineWidthPercent / 100));
-    path.setAttribute("stroke-dasharray", `${segmentLength} ${Math.max(0.001, travelLength)}`);
-    path.setAttribute("stroke-dashoffset", String(-startLength));
-    path.setAttribute("stroke-opacity", String(state.opacity));
-    path.setAttribute("visibility", state.opacity > 0 ? "visible" : "hidden");
-
-    const blur = Math.max(0, Math.min(50, settings.defenseHighlightLineBlurPercent)) / 100;
-    const stops = line.stops;
-    if (blur === 0) {
-      stops[0].setAttribute("offset", "0%");
-      stops[0].setAttribute("stop-opacity", "1");
-      stops[1].setAttribute("offset", "100%");
-      stops[1].setAttribute("stop-opacity", "1");
-      stops[2].remove();
-      stops[3].remove();
-    } else {
-      if (!stops[2].parentNode) line.gradient.append(stops[2], stops[3]);
-      stops[0].setAttribute("offset", "0%");
-      stops[0].setAttribute("stop-opacity", "0");
-      stops[1].setAttribute("offset", `${blur * 100}%`);
-      stops[1].setAttribute("stop-opacity", "1");
-      stops[2].setAttribute("offset", `${(1 - blur) * 100}%`);
-      stops[2].setAttribute("stop-opacity", "1");
-      stops[3].setAttribute("offset", "100%");
-      stops[3].setAttribute("stop-opacity", "0");
-    }
+    globalThis.LichessHighlightLinePreview.updateLine(line, state, settings, 0.01);
   }
 
   function endPreviousDefenseWaves(entry, timestamp = performance.now()) {
@@ -2128,17 +2137,12 @@
         activeNodes.push(node);
       }
       for (const line of run.lines ?? []) {
-        const startsAt = run.startedAt + line.depth * settings.defenseHighlightWaveIntervalMs;
-        if (startsAt > timestamp) {
-          removeHighlightLine(line);
-          continue;
-        }
         const state = getHighlightLineState(line, run, timestamp);
         if (state.opacity <= 0) {
           removeHighlightLine(line);
           continue;
         }
-        line.fadeOut ??= { startedAt: timestamp, progress: state.progress, opacity: state.opacity, duration: 180 };
+        line.fadeOut ??= { startedAt: timestamp, opacity: state.opacity, duration: 180 };
         activeLines.push(line);
       }
       if (!activeNodes.length && !activeLines.length) continue;
@@ -2184,6 +2188,7 @@
     entry.defenseCascadeContextKey = null;
     entry.defensePreviewSourceKey = null;
     entry.defensePreviewLastTargetKey = null;
+    entry.defensePlayedMoveKeys.clear();
     syncPreviewDefenseFilter(entry);
   }
 
@@ -2233,9 +2238,10 @@
       cascades.push({ layers: getAttackCascadeLayers(position, root, blackOrientation, settings.defenseHighlightDepth), isAttack: true });
     }
     const activeCascades = cascades.filter(cascade => cascade.layers.length);
-    if (!activeCascades.length) return;
+    if (!activeCascades.length) return false;
     const startedAt = performance.now();
     entry.defenseHighlightRuns ??= [];
+    const previousRunCount = entry.defenseHighlightRuns.length;
     for (const { layers, isAttack } of activeCascades) {
       const nodes = [];
       for (const [depth, layer] of layers.entries()) {
@@ -2268,7 +2274,7 @@
           const gradient = document.createElementNS(svgNamespace, "linearGradient");
           gradient.setAttribute("id", id);
           gradient.setAttribute("gradientUnits", "userSpaceOnUse");
-          const stops = Array.from({ length: 4 }, () => document.createElementNS(svgNamespace, "stop"));
+          const stops = Array.from({ length: 9 }, () => document.createElementNS(svgNamespace, "stop"));
           for (const stop of stops) stop.setAttribute("stop-color", color);
           gradient.append(...stops);
           entry.highlightLineDefs.append(gradient);
@@ -2284,7 +2290,10 @@
           path.setAttribute("stroke-linecap", "round");
           path.setAttribute("pointer-events", "none");
           entry.highlightLineSvg.append(path);
-          lines.push({ path, gradient, stops, length: path.getTotalLength(), depth });
+          lines.push({ path, gradient, stops, color, depth,
+            fromX: from.col + 0.5, fromY: from.row + 0.5,
+            toX: to.col + 0.5, toY: to.row + 0.5,
+            length: Math.hypot(to.col - from.col, to.row - from.row) });
         }
       }
       if (!nodes.length && !lines.length) continue;
@@ -2295,13 +2304,14 @@
         endAt: startedAt + (layers.length - 1) * settings.defenseHighlightWaveIntervalMs + settings.defenseHighlightDurationMs
       });
     }
-    if (!entry.defenseHighlightRuns.length) return;
+    if (entry.defenseHighlightRuns.length === previousRunCount) return false;
     if (!entry.defenseHighlightFrame) {
       entry.defenseHighlightFrame = requestAnimationFrame(timestamp => {
         entry.defenseHighlightFrame = 0;
         advanceDefenseCascade(entry, timestamp);
       });
     }
+    return true;
   }
 
   function advanceDefenseCascade(entry, timestamp) {
@@ -2391,8 +2401,9 @@
       if (entry.defenseSelectedKey !== selectedKey) {
         entry.defenseSelectedKey = selectedKey;
         setDefenseCascadeContext(entry, selectedKey);
-        startHighlightCascades(board, entry, selectedPosition, selectedRoot, parsed.blackOrientation);
-      } else if (!preview?.isHoverPreview) {
+        const started = startHighlightCascades(board, entry, selectedPosition, selectedRoot, parsed.blackOrientation);
+        if (started && preview && !preview.isHoverPreview) markPreviewMovePlayed(entry, preview);
+      } else if (!preview?.isHoverPreview && !entry.defenseCascadeContextKey?.startsWith("move:")) {
         setDefenseCascadeContext(entry, selectedKey);
       }
     } else {
@@ -2407,7 +2418,7 @@
         setDefenseCascadeContext(entry, key);
       }
       if (!key || entry.defenseHoverStartedKey === key) {
-        if (!key) setDefenseCascadeContext(entry, null);
+        if (!key && !entry.defenseCascadeContextKey?.startsWith("move:")) setDefenseCascadeContext(entry, null);
       } else {
         if (entry.defenseHoverPendingKey !== key) {
           clearDefenseHoverTimer(entry);
@@ -2435,7 +2446,35 @@
       clearDefensePreviewTimer(entry);
       entry.defensePreviewSourceKey = null;
       entry.defensePreviewLastTargetKey = null;
-      if (selectedKey) setDefenseCascadeContext(entry, selectedKey);
+      if (selectedKey && !entry.defenseCascadeContextKey?.startsWith("move:")) {
+        setDefenseCascadeContext(entry, selectedKey);
+      }
+      if (!preview && !board.querySelector(":scope > piece.anim")) {
+        const lastMove = getLastMove(board, parsed.position, parsed.blackOrientation);
+        const moveKey = lastMove?.key;
+        const targetPiece = lastMove && parsed.position[lastMove.target.row][lastMove.target.col];
+        const targetHoverKey = targetPiece
+          ? `hover:${lastMove.target.row},${lastMove.target.col}:${targetPiece.color}${targetPiece.type}`
+          : null;
+        const targetSelectedKey = targetPiece
+          ? `selected:${lastMove.target.row},${lastMove.target.col}:${targetPiece.color}${targetPiece.type}`
+          : null;
+        const alreadyHighlighted = Boolean(targetHoverKey && (
+          entry.defenseHoverStartedKey === targetHoverKey || entry.defenseSelectedKey === targetSelectedKey
+        ));
+        if (shouldPlayLastMoveCascade(entry, moveKey, alreadyHighlighted)) {
+          setDefenseCascadeContext(entry, `move:${moveKey}`);
+          if (startHighlightCascades(board, entry, parsed.position, lastMove.target, parsed.blackOrientation)) {
+            entry.defensePlayedMoveKeys.add(moveKey);
+          }
+        }
+        if (targetHoverKey && entry.hoveredSquare?.row === lastMove.target.row
+          && entry.hoveredSquare?.col === lastMove.target.col) {
+          clearDefenseHoverTimer(entry);
+          entry.defenseHoverKey = targetHoverKey;
+          entry.defenseHoverStartedKey = targetHoverKey;
+        }
+      }
       return;
     }
 
@@ -2471,7 +2510,9 @@
       return;
     }
     clearDefensePreviewTimer(entry);
-    startHighlightCascades(board, entry, parsed.position, parsed.selected, parsed.blackOrientation, preview);
+    if (startHighlightCascades(board, entry, parsed.position, parsed.selected, parsed.blackOrientation, preview)) {
+      markPreviewMovePlayed(entry, preview);
+    }
   }
 
   function clearMovePreviewPiece(board, entry) {
@@ -2908,8 +2949,11 @@
     }
 
     const threatsEnabled = settings.threatenedPieceOutlineEnabled;
+    const positionAnalysis = threatsEnabled || settings.defenseCirclesEnabled
+      ? getPositionAnalysis(parsed.position, parsed.blackOrientation)
+      : null;
     const threatenedSquares = threatsEnabled
-      ? getThreatenedSquares(parsed.position, parsed.blackOrientation)
+      ? positionAnalysis.threatenedSquares
       : { w: new Map(), b: new Map() };
     const threats = updateThreatenedPieces(
       board,
@@ -2973,7 +3017,7 @@
       }
     }
     const defenseSegments = settings.defenseCirclesEnabled
-      ? getDefenseConnections(parsed.position, parsed.blackOrientation)
+      ? positionAnalysis.defenseConnections
         .filter(({ source, target }) => ![source, target].some(square => animatedSquares.has(`${square.row},${square.col}`)))
         .map(connection => ({
           target: connection.target,
@@ -3407,6 +3451,8 @@
       defenseHighlightRuns: [],
       defenseHighlightedPieces: new Set(),
       defensePreviewLastTargetKey: null,
+      defenseLastMoveKey: null,
+      defensePlayedMoveKeys: new Set(),
       defensePreviewMix: 0,
       frame: 0,
       figureBlends: new Map(),
@@ -3471,6 +3517,7 @@
       entry.centerSvg?.remove();
       entry.moveOutlineSvg?.remove();
       clearMovePreviewPiece(board, entry);
+      if (pointerOverBoard === board) pointerOverBoard = null;
       observedBoards.delete(board);
     }
     syncHatchAnimation();

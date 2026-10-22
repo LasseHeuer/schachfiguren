@@ -236,8 +236,8 @@
     return baseDuration + distance * currentSettings.moveAnimationDistanceFactor * baseDuration;
   }
 
-  function previewPieceUrl() {
-    const asset = currentSettings.pieceSet === "cage" ? "cage/cage_r.svg" : `${currentSettings.pieceSet}/wr.svg`;
+  function previewPieceUrl(piece = "r", color = "w", settings = currentSettings) {
+    const asset = settings.pieceSet === "cage" ? `cage/cage_${piece}.svg` : `${settings.pieceSet}/${color}${piece}.svg`;
     return chrome.runtime.getURL(asset);
   }
 
@@ -649,6 +649,11 @@
     saveBounceCurve,
     previewDuration,
     [1, 3, 7],
+    previewPieceUrl
+  );
+  globalThis.LichessHighlightLinePreview.mount(
+    document.querySelector("[data-highlight-line-preview]"),
+    () => currentSettings,
     previewPieceUrl
   );
   for (const tab of curveTabs) tab.addEventListener("click", () => setCurveTab(tab.dataset.curveTab));
