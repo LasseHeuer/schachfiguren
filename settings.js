@@ -123,6 +123,7 @@
     attackHighlightEnabled: true,
     highlightCascadeLinesEnabled: true,
     highlightCascadeLinesHoldEnabled: false,
+    highlightCascadeReverseEnabled: false,
     defenseHighlightDepth: 3,
     defenseHighlightWaveIntervalMs: 210,
     defenseHighlightDurationMs: 700,
@@ -493,6 +494,7 @@
       "attackHighlightEnabled",
       "highlightCascadeLinesEnabled",
       "highlightCascadeLinesHoldEnabled",
+      "highlightCascadeReverseEnabled",
 
 
       "moveDotsPlayerColor",

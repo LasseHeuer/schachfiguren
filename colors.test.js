@@ -136,6 +136,7 @@ test("defense highlight settings have stable defaults and clamp saved values", (
   assert.equal(defaults.highlightCascadesEnabled, true);
   assert.equal(defaults.highlightCascadeLinesEnabled, true);
   assert.equal(defaults.highlightCascadeLinesHoldEnabled, false);
+  assert.equal(defaults.highlightCascadeReverseEnabled, false);
   assert.equal(defaults.defenseHighlightDepth, 3);
   assert.equal(defaults.defenseHighlightWaveIntervalMs, 210);
   assert.equal(defaults.defenseHighlightDurationMs, 700);
@@ -711,10 +712,12 @@ test("held SVG lines survive selection, preview waits and replacement before ret
       documentObserver = new MutationObserver`), context);
   const api = context.testing;
   const options = settings.normalize({ highlightCascadeLinesHoldEnabled: true });
-  api.configure(options);
+  api.configure({ ...options, pieceSet: "cage" });
   const maskDefs = element();
   const maskEntry = { highlightLineDefs: maskDefs };
   const maskPosition = Array.from({ length: 8 }, () => Array(8).fill(null));
+  maskPosition[2][4] = { color: "b", type: "queen" };
+  maskPosition[3][2] = { color: "w", type: "knight" };
   maskPosition[4][4] = { color: "w", type: "rook" };
   maskPosition[5][3] = { color: "b", type: "pawn" };
   maskPosition[6][2] = { color: "w", type: "bishop" };
@@ -725,8 +728,21 @@ test("held SVG lines survive selection, preview waits and replacement before ret
   assert.equal(mask, reusedMask, "identical positions share one static cage mask");
   assert.equal(mask.references, 2);
   assert.equal(mask.blur.attributes.stdDeviation, "0.025 0.025");
-  assert.equal(mask.mask.children[1].children.length, 3, "available cage SVGs mask figures; the king has no cage asset");
-  assert.ok(mask.mask.children[1].children.some(image => image.attributes.transform === "rotate(180 3.5 5.5)"));
+  const paths = mask.mask.children[1].children;
+  assert.equal(paths.length, 5, "all five available cage-piece bounds become mask paths; no king asset exists");
+  const boundsByType = new Map([
+    ["queen", "M 4.14241301 2.14241039 H 4.85289572 V 2.85289299 H 4.14241301 Z"],
+    ["knight", "M 2.14241435 3.14241039 H 2.85290008 V 3.85289861 H 2.14241435 Z"],
+    ["rook", "M 4.14221585 4.14241192 H 4.85309753 V 4.85329284 H 4.14221585 Z"],
+    ["pawn", "M 3.19615882 5.29301634 H 3.7967371 V 5.74636993 H 3.19615882 Z"],
+    ["bishop", "M 2.14221704 6.1424122 H 2.85309716 V 6.85289664 H 2.14221704 Z"]
+  ]);
+  for (const [type, pathData] of boundsByType) {
+    const path = paths.find(candidate => candidate.attributes.d === pathData);
+    assert.ok(path, `${type} uses the normalized bounds of its Cage SVG`);
+  }
+  const pawnMaskPath = paths.find(path => path.attributes.d === "M 3.19615882 5.29301634 H 3.7967371 V 5.74636993 H 3.19615882 Z");
+  assert.equal(pawnMaskPath.attributes.transform, "rotate(180 3.5 5.5)");
   api.configure({ ...options, pieceSet: "cage", defenseHighlightLineMaskBlurPx: 3 });
   api.syncHighlightLineMasks(maskEntry, board);
   assert.equal(mask.blur.attributes.stdDeviation, "0.0375 0.0375");
@@ -735,14 +751,14 @@ test("held SVG lines survive selection, preview waits and replacement before ret
   api.releaseHighlightLineMask(maskEntry, reusedMask);
   assert.equal(maskDefs.children.length, 0);
   assert.equal(maskEntry.highlightLineMaskCache.size, 0);
-  api.configure(options);
+  api.configure({ ...options, pieceSet: "cage" });
   const position = Array.from({ length: 8 }, () => Array(8).fill(null));
   for (const [row, col, type] of [[4, 4, "rook"], [5, 3, "pawn"], [6, 2, "bishop"], [7, 4, "rook"]]) {
     position[row][col] = { color: "w", type, element: { ...element(), style: { setProperty() {}, removeProperty() {} } } };
   }
   const entry = {
     hoveredSquare: { row: 4, col: 4 }, defenseHighlightRuns: [],
-    defenseHighlightedPieces: new Set(), defensePlayedMoveKeys: new Set()
+    defenseHighlightedPieces: new Set(), defensePlayedMoveKeys: new Set(), highlightLineDefs: element()
   };
   const parsed = { position, selected: null, blackOrientation: false };
   function update(time, preview = null, selected = null) {
@@ -770,6 +786,9 @@ test("held SVG lines survive selection, preview waits and replacement before ret
   frame(216);
   const initial = entry.defenseHighlightRuns[0];
   const originalLines = [...initial.lines];
+  assert.equal(originalLines[0].path.attributes.mask, `url(#${initial.lineMask.mask.id})`,
+    "the mask is attached to the rendered line path");
+  assert.equal(initial.lineGroup.attributes.mask, undefined, "the group itself is not the masked target");
   assert.ok(Number(originalLines[0].path.attributes["stroke-dasharray"].split(" ")[0]) > 0);
   frame(1320);
   assert.ok(originalLines.every(line => visible(line) && line.path.attributes["stroke-dasharray"] === "none"));
@@ -1271,14 +1290,14 @@ ${marker}`);
         svgBeforePiece: Boolean(entry.highlightLineSvg.compareDocumentPosition(board.querySelector("piece")) & Node.DOCUMENT_POSITION_FOLLOWING) };
       globalThis.testLineGroup = run.lineGroup;
       globalThis.testLineSvg = entry.highlightLineSvg;
-      const imageLinks = [...run.lineMask.mask.querySelectorAll("image")].map(image => image.getAttribute("href"));
-      return { lines: run.lines.length, pathMask: run.lineGroup.getAttribute("mask"), maskId: run.lineMask.mask.id,
-        imageLinks, blur: run.lineMask.blur.getAttribute("stdDeviation"),
+      const maskPaths = [...run.lineMask.mask.querySelectorAll("path")].map(path => path.getAttribute("d"));
+      return { lines: run.lines.length, pathMask: run.lines[0].path.getAttribute("mask"), maskId: run.lineMask.mask.id,
+        maskPaths, blur: run.lineMask.blur.getAttribute("stdDeviation"),
         heldOpacity: run.lines[0].path.getAttribute("stroke-opacity"), originalStacking };
     })()`);
     assert.equal(setup.lines, 1);
     assert.equal(setup.pathMask, `url(#${setup.maskId})`);
-    assert.equal(setup.imageLinks.length, 2);
+    assert.equal(setup.maskPaths.length, 2);
     assert.equal(setup.heldOpacity, "0.8", "the held line keeps its configured starting opacity");
     await evaluate("new Promise(resolve => setTimeout(resolve, 300))");
     assert.ok(requestedAssets.has("/cage/cage_p.svg"));

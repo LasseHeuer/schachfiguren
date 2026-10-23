@@ -1214,6 +1214,14 @@
   }
 
   const figureAssetLetters = { pawn: "p", knight: "n", bishop: "b", rook: "r", queen: "q", king: "k" };
+  // Normalized visible-content bounds from each cage SVG after its nested transforms.
+  const cagePieceBounds = {
+    p: [0.19615882, 0.29301634, 0.79673710, 0.74636993],
+    n: [0.14241435, 0.14241039, 0.85290008, 0.85289861],
+    b: [0.14221704, 0.14241220, 0.85309716, 0.85289664],
+    r: [0.14221585, 0.14241192, 0.85309753, 0.85329284],
+    q: [0.14241301, 0.14241039, 0.85289572, 0.85289299]
+  };
   const figureRadiiCache = new Map();
 
   // Directional radii per figure type, merged across the white and black SVGs the extension ships.
@@ -1221,7 +1229,9 @@
     if (!figureRadiiCache.has(pieceSet)) {
       const radii = new Map();
       figureRadiiCache.set(pieceSet, radii);
-      Promise.all(Object.entries(figureAssetLetters).flatMap(([type, letter]) => ["w", "b"].map(async color => {
+      const figures = Object.entries(figureAssetLetters).filter(([type]) => pieceSet !== "cage" || type !== "king");
+      const colors = pieceSet === "cage" ? ["w"] : ["w", "b"];
+      Promise.all(figures.flatMap(([type, letter]) => colors.map(async color => {
         const response = await fetch(chrome.runtime.getURL(pieceSet === "cage" ? `cage/cage_${letter}.svg` : `${pieceSet}/${color}${letter}.svg`));
         const measured = measureOutlineRadii(await response.text());
         const previous = radii.get(type);
@@ -2092,7 +2102,7 @@
       const progress = (timestamp - node.fadeOut.startedAt) / node.fadeOut.duration;
       return progress >= 1 ? 0 : node.fadeOut.mix * (1 - Math.max(0, progress));
     }
-    const elapsed = timestamp - run.startedAt - node.depth * settings.defenseHighlightWaveIntervalMs;
+    const elapsed = timestamp - run.startedAt - node.wave * settings.defenseHighlightWaveIntervalMs;
     if (elapsed < 0 || elapsed > settings.defenseHighlightDurationMs) return 0;
     return getDefenseHighlightMix(
       elapsed / settings.defenseHighlightDurationMs,
@@ -2103,7 +2113,7 @@
   }
 
   function getHighlightLineState(line, run, timestamp, holdAtEnd = line.held) {
-    const state = globalThis.LichessHighlightLinePreview.getLineMotion(settings, line.depth, run.startedAt, timestamp, holdAtEnd);
+    const state = globalThis.LichessHighlightLinePreview.getLineMotion(settings, line.depth, run.startedAt, timestamp, holdAtEnd, line.wave);
     if (line.fadeOut) {
       const progress = Math.max(0, Math.min(1, (timestamp - line.fadeOut.startedAt) / line.fadeOut.duration));
       const easedProgress = progress * progress * (3 - 2 * progress);
@@ -2171,13 +2181,9 @@
     filter.setAttribute("height", "16");
     filter.setAttribute("filterUnits", "userSpaceOnUse");
     filter.setAttribute("primitiveUnits", "userSpaceOnUse");
-    const blacken = document.createElementNS(svgNamespace, "feColorMatrix");
-    blacken.setAttribute("type", "matrix");
-    blacken.setAttribute("values", "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0");
-    blacken.setAttribute("result", "black-shapes");
     const blur = document.createElementNS(svgNamespace, "feGaussianBlur");
-    blur.setAttribute("in", "black-shapes");
-    filter.append(blacken, blur);
+    blur.setAttribute("in", "SourceGraphic");
+    filter.append(blur);
 
     const mask = document.createElementNS(svgNamespace, "mask");
     mask.id = id;
@@ -2203,18 +2209,20 @@
       for (let col = 0; col < position[row].length; col++) {
         const piece = position[row][col];
         const letter = piece && figureAssetLetters[piece.type];
-        if (!letter || piece.type === "king") continue;
-        const image = document.createElementNS(svgNamespace, "image");
-        image.setAttribute("x", String(col));
-        image.setAttribute("y", String(row));
-        image.setAttribute("width", "1");
-        image.setAttribute("height", "1");
-        image.setAttribute("preserveAspectRatio", "xMidYMid meet");
-        image.setAttribute("href", chrome.runtime.getURL(`cage/cage_${letter}.svg`));
+        const bounds = cagePieceBounds[letter];
+        if (!bounds) continue;
+        const [left, top, right, bottom] = bounds;
+        const x1 = col + left;
+        const y1 = row + top;
+        const x2 = col + right;
+        const y2 = row + bottom;
+        const path = document.createElementNS(svgNamespace, "path");
+        path.setAttribute("d", `M ${x1} ${y1} H ${x2} V ${y2} H ${x1} Z`);
+        path.setAttribute("fill", "black");
         if (isPieceRotated(piece.color, blackOrientation)) {
-          image.setAttribute("transform", `rotate(180 ${col + 0.5} ${row + 0.5})`);
+          path.setAttribute("transform", `rotate(180 ${col + 0.5} ${row + 0.5})`);
         }
-        figures.append(image);
+        figures.append(path);
       }
     }
     mask.append(figures);
@@ -2257,7 +2265,7 @@
       const activeNodes = [];
       const activeLines = [];
       for (const node of run.nodes) {
-        const waveStartsAt = run.startedAt + node.depth * settings.defenseHighlightWaveIntervalMs;
+        const waveStartsAt = run.startedAt + node.wave * settings.defenseHighlightWaveIntervalMs;
         if (waveStartsAt > timestamp) continue;
         const mix = getDefenseNodeMix(node, run, timestamp);
         if (mix <= 0) continue;
@@ -2405,6 +2413,10 @@
     entry.defenseHighlightRuns ??= [];
     const previousRunCount = entry.defenseHighlightRuns.length;
     for (const { layers, isAttack } of activeCascades) {
+      const reverse = settings.highlightCascadeReverseEnabled;
+      const maxDepth = layers.length - 1;
+      const nodeWave = depth => reverse ? maxDepth - depth : depth;
+      const lineWave = depth => reverse ? maxDepth - depth + 1 : depth;
       const nodes = [];
       for (const [depth, layer] of layers.entries()) {
         for (const square of layer) {
@@ -2413,7 +2425,7 @@
           const piece = position[square.row][square.col];
           const element = previewRoot ? null : piece.element
             ?? findPieceElement(board, square, preview, blackOrientation);
-          if (element || previewRoot) nodes.push({ element, depth, previewRoot });
+          if (element || previewRoot) nodes.push({ element, depth, wave: nodeWave(depth), previewRoot });
         }
       }
       const lineEdges = settings.highlightCascadeLinesEnabled
@@ -2433,7 +2445,6 @@
         globalThis.LichessBoardOverlay.place(board, entry.highlightLineSvg, "between-pieces");
         lineMask = createHighlightLineMask(entry, board, position, blackOrientation);
         lineGroup = document.createElementNS(svgNamespace, "g");
-        if (lineMask) lineGroup.setAttribute("mask", `url(#${lineMask.mask.id})`);
         entry.highlightLineSvg.append(lineGroup);
         for (const { from, to, depth } of lineEdges) {
           const piece = position[to.row][to.col];
@@ -2447,7 +2458,8 @@
           gradient.append(...stops);
           entry.highlightLineDefs.append(gradient);
           const path = document.createElementNS(svgNamespace, "path");
-          path.setAttribute("d", `M ${from.col + 0.5} ${from.row + 0.5} L ${to.col + 0.5} ${to.row + 0.5}`);
+          const [start, end] = reverse ? [to, from] : [from, to];
+          path.setAttribute("d", `M ${start.col + 0.5} ${start.row + 0.5} L ${end.col + 0.5} ${end.row + 0.5}`);
           path.setAttribute("fill", "none");
           path.setAttribute("stroke", `url(#${id})`);
           path.setAttribute("stroke-width", String(settings.defenseHighlightLineWidthPercent / 100));
@@ -2457,11 +2469,12 @@
           path.setAttribute("visibility", "hidden");
           path.setAttribute("stroke-linecap", "round");
           path.setAttribute("pointer-events", "none");
+          if (lineMask) path.setAttribute("mask", `url(#${lineMask.mask.id})`);
           lineGroup.append(path);
-          lines.push({ path, gradient, stops, color, depth,
+          lines.push({ path, gradient, stops, color, depth, wave: lineWave(depth),
             lineMask,
-            fromX: from.col + 0.5, fromY: from.row + 0.5,
-            toX: to.col + 0.5, toY: to.row + 0.5,
+            fromX: start.col + 0.5, fromY: start.row + 0.5,
+            toX: end.col + 0.5, toY: end.row + 0.5,
             length: Math.hypot(to.col - from.col, to.row - from.row) });
         }
       }
@@ -2593,6 +2606,7 @@
       settings.attackHighlightEnabled,
       settings.highlightCascadeLinesEnabled,
       settings.highlightCascadeLinesHoldEnabled,
+      settings.highlightCascadeReverseEnabled,
       settings.pieceSet
     ].join(":");
     if (entry.defenseHighlightSettingsKey !== undefined

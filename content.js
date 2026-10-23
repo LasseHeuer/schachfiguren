@@ -40,6 +40,7 @@
     ["defenseHighlightEnabled", "Verteidigungs-Highlight", "highlightCascadesEnabled"],
     ["highlightCascadeLinesEnabled", "Highlightlinien", "highlightCascadesEnabled"],
     ["highlightCascadeLinesHoldEnabled", "Linie halten", "highlightCascadeLinesEnabled"],
+    ["highlightCascadeReverseEnabled", "Umgekehrte Richtung", "highlightCascadesEnabled"],
     ["threatenedPieceOutlineEnabled", "Angriffe"],
     ["kingMovementFieldsEnabled", "Königbewegungsfelder"],
     ["defenseCirclesEnabled", "Verteidigungen"],

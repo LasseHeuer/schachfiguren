@@ -9,10 +9,10 @@
     return element;
   }
 
-  function getLineMotion(settings, depth, startedAt, timestamp, holdAtEnd = settings.highlightCascadeLinesHoldEnabled) {
+  function getLineMotion(settings, depth, startedAt, timestamp, holdAtEnd = settings.highlightCascadeLinesHoldEnabled, wave = depth) {
     const waveInterval = settings.defenseHighlightWaveIntervalMs;
     const duration = settings.defenseHighlightDurationMs;
-    const startAt = startedAt + (depth - 1) * waveInterval;
+    const startAt = startedAt + (wave - 1) * waveInterval;
     const targetAt = startAt + waveInterval;
     const travelDuration = holdAtEnd && waveInterval > 0 ? waveInterval : duration;
     const endAt = holdAtEnd ? targetAt + duration : startAt + duration;
