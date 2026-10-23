@@ -39,10 +39,10 @@
       ? rootStyle.getPropertyValue("--lfs-white-piece-color").trim() || "oklch(0.5997409301 0.1721887956 40.1845294695)"
       : rootStyle.getPropertyValue("--lfs-black-piece-color").trim() || "oklch(0.6742384272 0.1206555753 228.5101815779)";
     if (alpha === "1") return selected;
-    const target = globalThis.LichessColors.parse(selected);
     const opacity = alpha.endsWith("%") ? Number(alpha.slice(0, -1)) / 100 : Number(alpha);
-    return target && Number.isFinite(opacity)
-      ? globalThis.LichessColors.format({ ...target, alpha: target.alpha * Math.max(0, Math.min(1, opacity)) })
+    const oklchMatch = /^oklch\((.*)\)$/i.exec(selected);
+    return oklchMatch && Number.isFinite(opacity)
+      ? `oklch(${oklchMatch[1]} / ${Math.max(0, Math.min(1, opacity))})`
       : selected;
   };
 
