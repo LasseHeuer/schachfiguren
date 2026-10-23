@@ -246,7 +246,8 @@
 
   function getLogicalSquare(element, board, blackOrientation) {
     const key = (globalThis.LichessMoveAnimation?.getDestinationKey(element)
-      ?? element.getAttribute("data-lfs-move-key") ?? element.dataset.key)?.toLowerCase();
+      ?? (element.classList.contains("anim") ? element.getAttribute("data-lfs-move-key") : null)
+      ?? element.dataset.key)?.toLowerCase();
     if (key && /^[a-h][1-8]$/.test(key)) {
       return { row: 8 - Number(key[1]), col: key.charCodeAt(0) - 97 };
     }

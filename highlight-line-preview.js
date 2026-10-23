@@ -9,12 +9,13 @@
     return element;
   }
 
-  function getLineMotion(settings, depth, startedAt, timestamp, holdAtEnd = settings.highlightCascadeLinesHoldEnabled, wave = depth) {
+  function getLineMotion(settings, depth, startedAt, timestamp, holdAtEnd = settings.highlightCascadeLinesHoldEnabled,
+    wave = depth, startWave = wave - 1) {
     const waveInterval = settings.defenseHighlightWaveIntervalMs;
     const duration = settings.defenseHighlightDurationMs;
-    const startAt = startedAt + (wave - 1) * waveInterval;
-    const targetAt = startAt + waveInterval;
-    const travelDuration = holdAtEnd && waveInterval > 0 ? waveInterval : duration;
+    const startAt = startedAt + (holdAtEnd ? startWave : wave) * waveInterval;
+    const targetAt = startedAt + wave * waveInterval;
+    const travelDuration = holdAtEnd ? targetAt - startAt : duration;
     const endAt = holdAtEnd ? targetAt + duration : startAt + duration;
     if (timestamp < startAt) return { progress: 0, opacity: 0, finished: false };
     if (timestamp >= endAt || endAt <= startAt) return {
@@ -25,7 +26,7 @@
       finished: true,
       ...(holdAtEnd ? { holding: true } : {})
     };
-    const linearProgress = holdAtEnd && waveInterval === 0 ? 1
+    const linearProgress = holdAtEnd && travelDuration === 0 ? 1
       : Math.min(1, (timestamp - startAt) / travelDuration);
     let progress = linearProgress;
     if (!holdAtEnd && (settings.highlightLineEaseInPercent || settings.highlightLineEaseOutPercent)) {

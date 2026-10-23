@@ -247,26 +247,27 @@ test("highlight pulses remain continuous with zero wave spacing and reuse static
   }
 });
 
-test("non-held pulses animate and finish independently of the destination highlight fade", () => {
+test("non-held pulses animate in the destination wave and finish without holding", () => {
   const animation = globalThis.LichessHighlightLinePreview;
   const options = settings.normalize();
   const startedAt = 1000;
   for (const duration of [100, 700, 2000]) {
     const values = { ...options, defenseHighlightDurationMs: duration };
     const travelDuration = duration;
-    assert.equal(animation.getLineMotion(values, 1, startedAt, startedAt).progress, 0);
-    const firstFrame = animation.getLineMotion(values, 1, startedAt, startedAt + 16);
+    const pulseStart = startedAt + values.defenseHighlightWaveIntervalMs;
+    assert.equal(animation.getLineMotion(values, 1, startedAt, pulseStart).progress, 0);
+    const firstFrame = animation.getLineMotion(values, 1, startedAt, pulseStart + 16);
     assert.ok(firstFrame.opacity > 0, "the first rendered frame already shows the pulse");
     assert.ok(firstFrame.progress > 0);
     for (let elapsed = 0; elapsed < travelDuration; elapsed++) {
-      const state = animation.getLineMotion(values, 1, startedAt, startedAt + elapsed);
+      const state = animation.getLineMotion(values, 1, startedAt, pulseStart + elapsed);
       const progress = elapsed / travelDuration;
       const opacity = animation.getHighlightMix(progress, 1, values.highlightLineOpacityPercent, values.highlightLineDecayPercent);
       assert.ok(Math.abs(state.progress - progress) < 1e-12);
       assert.ok(Math.abs(state.opacity - opacity) < 1e-12);
       assert.equal(state.finished, false);
     }
-    const arrived = animation.getLineMotion(values, 1, startedAt, startedAt + travelDuration);
+    const arrived = animation.getLineMotion(values, 1, startedAt, pulseStart + travelDuration);
     assert.deepEqual({ ...arrived }, { progress: 1, opacity: 0, finished: true });
   }
   const holding = settings.normalize({ highlightCascadeLinesHoldEnabled: true,
@@ -290,8 +291,8 @@ test("held lines align with destination highlights while pulses retain their con
           defenseHighlightWaveIntervalMs: interval, defenseHighlightDurationMs: duration,
           highlightLineOpacityPercent: 20, highlightLineDecayPercent: 0 });
         for (let depth = 1; depth <= 6; depth++) {
-          const start = 1000 + (depth - 1) * interval;
-          const arrival = start + interval;
+          const arrival = 1000 + depth * interval;
+          const start = hold ? arrival - interval : arrival;
           const lineEnd = hold ? arrival + duration : start + duration;
           if (!hold) {
             assert.ok(animation.getLineMotion(options, depth, 1000, lineEnd - 1).progress < 1);
@@ -321,7 +322,7 @@ test("non-held pulses follow the highlight and are never briefly held", () => {
         for (const depth of [1, 2, 3]) {
           const line = { path: element(), gradient: element(), stops: Array.from({ length: 10 }, element),
             length: 5, fromX: 1, fromY: 2, toX: 4, toY: 6, color: "red" };
-          const start = (depth - 1) * interval;
+          const start = depth * interval;
           const travelDuration = duration;
           const fadeEnd = travelDuration;
           for (let elapsed = 0; elapsed <= interval + duration + 16; elapsed++) {
@@ -414,7 +415,7 @@ test("line timing and brightness stay synchronized with each highlight wave", ()
     for (const interval of [0, 210, 1000]) {
       const options = settings.normalize({ defenseHighlightDurationMs: duration, defenseHighlightWaveIntervalMs: interval });
       for (let depth = 1; depth <= 6; depth++) {
-        const start = 1000 + (depth - 1) * interval;
+        const start = 1000 + depth * interval;
         assert.equal(animation.getLineMotion(options, depth, 1000, start - 1).opacity, 0);
         const end = start + duration;
         for (const phase of [0, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99]) {
@@ -429,6 +430,37 @@ test("line timing and brightness stay synchronized with each highlight wave", ()
         assert.equal(animation.getLineMotion(options, depth, 1000, end).finished, true);
       }
     }
+  }
+});
+
+test("hover previews ignore stale move keys and respect active move animations", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const context = vm.createContext({
+    document: { addEventListener: () => {} },
+    getComputedStyle: () => ({ display: "block", visibility: "visible" })
+  });
+  const threatSource = readFileSync(join(__dirname, "threat-coding.js"), "utf8");
+  vm.runInContext(threatSource.replace("  globalThis.LichessThreatCoding = {", `
+    globalThis.threatTesting = { getLogicalSquare };
+    globalThis.LichessThreatCoding = {`), context);
+  const previewSource = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
+  vm.runInContext(previewSource.replace("  documentObserver = new MutationObserver", `
+    globalThis.previewTesting = { getPieceScreenSquare };
+    return;
+    documentObserver = new MutationObserver`), context);
+  const board = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 80, height: 80 }) };
+  const animationKeyPiece = isAnimating => ({
+    classList: { contains: name => name === "anim" && isAnimating },
+    dataset: {},
+    getAttribute: name => name === "data-lfs-move-key" ? "h8" : null,
+    getBoundingClientRect: () => ({ left: 30, top: 20, width: 10, height: 10 })
+  });
+  for (const [isAnimating, expected] of [[false, { row: 2, col: 3 }], [true, { row: 0, col: 7 }]]) {
+    const piece = animationKeyPiece(isAnimating);
+    assert.deepEqual({ ...context.threatTesting.getLogicalSquare(piece, board, false) }, expected);
+    assert.deepEqual({ ...context.previewTesting.getPieceScreenSquare(piece, board, false) }, expected);
   }
 });
 
@@ -547,21 +579,21 @@ test("highlight cascades only follow recaptures on the root square and reveal va
   });
   const line = { depth: 2 };
   const run = { startedAt: 1000 };
-  assert.deepEqual({ ...context.testing.getHighlightLineState(line, run, 1209) }, { progress: 0, opacity: 0, finished: false });
-  const atStart = context.testing.getHighlightLineState(line, run, 1210);
+  assert.deepEqual({ ...context.testing.getHighlightLineState(line, run, 1419) }, { progress: 0, opacity: 0, finished: false });
+  const atStart = context.testing.getHighlightLineState(line, run, 1420);
   assert.equal(atStart.progress, 0);
   assert.equal(atStart.opacity, 0);
   assert.equal(atStart.finished, false);
-  const atQuarter = context.testing.getHighlightLineState(line, run, 1340);
+  const atQuarter = context.testing.getHighlightLineState(line, run, 1550);
   assert.ok(Math.abs(atQuarter.progress - 130 / 520) < 1e-12);
   assert.ok(Math.abs(atQuarter.opacity - context.testing.getDefenseHighlightMix(130 / 520, 2, 100, 20)) < 1e-12);
-  const atMidpoint = context.testing.getHighlightLineState(line, run, 1470);
+  const atMidpoint = context.testing.getHighlightLineState(line, run, 1680);
   assert.ok(Math.abs(atMidpoint.progress - 0.5) < 1e-12);
   assert.ok(Math.abs(atMidpoint.opacity - 0.64) < 1e-12);
   assert.ok(Math.abs(context.testing.getDefenseHighlightMix(0.5, 2, 35, 20) - 0.224) < 1e-12);
   const atArrival = context.testing.getHighlightLineState(line, run, 1939);
-  assert.equal(atArrival.finished, true);
-  assert.equal(atArrival.opacity, 0);
+  assert.equal(atArrival.finished, false);
+  assert.ok(atArrival.progress > 0.99 && atArrival.opacity > 0);
   assert.deepEqual({ ...context.testing.getHighlightLineState(line, run, 1940) }, { progress: 1, opacity: 0, finished: true });
   context.testing.setSettings({
     defenseHighlightWaveIntervalMs: 210,
@@ -570,7 +602,7 @@ test("highlight cascades only follow recaptures on the root square and reveal va
     highlightLineOpacityPercent: 50,
     highlightLineDecayPercent: 0,
   });
-  const adjustedLine = context.testing.getHighlightLineState(line, run, 1340);
+  const adjustedLine = context.testing.getHighlightLineState(line, run, 1550);
   assert.ok(Math.abs(adjustedLine.progress - 130 / 520) < 1e-12);
   assert.ok(Math.abs(adjustedLine.opacity - context.testing.getDefenseHighlightMix(130 / 520, 2, 50, 0)) < 1e-12);
   context.testing.setSettings({
@@ -579,11 +611,11 @@ test("highlight cascades only follow recaptures on the root square and reveal va
     highlightLineOpacityPercent: 100,
     highlightLineDecayPercent: 20,
   });
-  assert.ok(Math.abs(context.testing.getHighlightLineState(line, run, 1340).progress - 130 / 520) < 1e-12);
-  const interruptedLine = { depth: 2, fadeOut: { startedAt: 1470, opacity: 0.64, duration: 180 } };
-  assert.ok(context.testing.getHighlightLineState(interruptedLine, run, 1560).progress > 0.4);
-  assert.ok(Math.abs(context.testing.getHighlightLineState(interruptedLine, run, 1560).opacity - 0.32) < 1e-12);
-  assert.equal(context.testing.getHighlightLineState(interruptedLine, run, 1650).finished, true);
+  assert.ok(Math.abs(context.testing.getHighlightLineState(line, run, 1550).progress - 130 / 520) < 1e-12);
+  const interruptedLine = { depth: 2, fadeOut: { startedAt: 1680, opacity: 0.64, duration: 180 } };
+  assert.ok(context.testing.getHighlightLineState(interruptedLine, run, 1770).progress > 0.4);
+  assert.ok(Math.abs(context.testing.getHighlightLineState(interruptedLine, run, 1770).opacity - 0.32) < 1e-12);
+  assert.equal(context.testing.getHighlightLineState(interruptedLine, run, 1860).finished, true);
   context.testing.setSettings({ defenseHighlightWaveIntervalMs: 210, defenseHighlightDurationMs: 520,
     highlightCascadeLinesHoldEnabled: true, highlightLineOpacityPercent: 100, highlightLineDecayPercent: 20 });
   const heldLine = { depth: 2, held: true,
@@ -669,6 +701,171 @@ test("highlight cascades only follow recaptures on the root square and reveal va
   const rotatedExchange = exchange.map(row => [...row].reverse()).reverse();
   assert.deepEqual(coordinates(context.testing.getAttackCascadeLayers(rotatedExchange, { row: 3, col: 3 }, true, 6)),
     exchangeExpected.map(layer => layer.map(([row, col]) => [7 - row, 7 - col])));
+});
+
+test("attack and defense share deduplicated figure and line waves in both directions", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  let now = 1000;
+  const element = () => ({
+    attributes: {}, children: [], style: {
+      values: {}, setProperty(key, value) { this.values[key] = value; },
+      removeProperty(key) { delete this.values[key]; }
+    },
+    setAttribute(key, value) { this.attributes[key] = value; },
+    removeAttribute(key) { delete this.attributes[key]; },
+    append(...children) { for (const child of children) { child.parent = this; this.children.push(child); } },
+    remove() { this.parent?.children.splice(this.parent.children.indexOf(this), 1); this.parent = null; }
+  });
+  const context = vm.createContext({
+    document: { addEventListener() {}, createElementNS: element }, performance: { now: () => now },
+    requestAnimationFrame: () => 1, cancelAnimationFrame() {},
+    LichessBoardOverlay: { place: (board, svg) => board.append(svg) }
+  });
+  vm.runInContext(readFileSync(join(__dirname, "highlight-line-preview.js"), "utf8"), context);
+  vm.runInContext(readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8")
+    .replace("  documentObserver = new MutationObserver", `
+      globalThis.testing = { startHighlightCascades, advanceDefenseCascade, getDefenseNodeMix,
+        getHighlightLineState, endPreviousDefenseWaves, clearDefenseHighlights, configure(value) { settings = value; } };
+      return;
+      documentObserver = new MutationObserver`), context);
+  const api = context.testing;
+  const board = { ...element(), querySelectorAll: () => [] };
+  const position = Array.from({ length: 8 }, () => Array(8).fill(null));
+  for (const [row, color, type] of [[4, "w", "knight"], [6, "w", "rook"], [7, "w", "queen"],
+    [1, "b", "rook"], [0, "b", "queen"]]) {
+    position[row][4] = { color, type, element: element() };
+  }
+  const root = { row: 4, col: 4 };
+  for (const [defense, attack] of [[true, true], [true, false], [false, true]]) {
+    for (const reverse of [false, true]) for (const hold of [false, true]) {
+      for (const interval of [0, 210, 1000]) for (const duration of [100, 700]) {
+        const options = settings.normalize({ pieceSet: "rund", defenseHighlightDepth: 4,
+          defenseHighlightEnabled: defense, attackHighlightEnabled: attack,
+          highlightCascadeReverseEnabled: reverse, highlightCascadeLinesHoldEnabled: hold,
+          defenseHighlightWaveIntervalMs: interval, defenseHighlightDurationMs: duration,
+          defenseHighlightWhiteMixPercent: 100, highlightLineOpacityPercent: 100 });
+        api.configure(options);
+        const entry = { defenseHighlightedPieces: new Set(), defensePlayedMoveKeys: new Set(), defenseLineHoldRoot: root };
+        assert.equal(api.startHighlightCascades(board, entry, position, root, false), true);
+        assert.equal(entry.defenseHighlightRuns.length, 1, "both cascades must use one common display plan");
+        const run = entry.defenseHighlightRuns[0];
+        const nodes = [...run.nodes];
+        const lines = [...run.lines];
+        assert.equal(nodes.length, attack ? 5 : 3, "each figure is scheduled only once");
+        assert.equal(new Set(nodes.map(node => node.element)).size, nodes.length);
+        assert.equal(lines.length, nodes.length - 1, "each root connection is drawn only once");
+        assert.equal(run.endAt, 1000 + 2 * interval + duration);
+        for (const row of attack ? [6, 7, 1, 0] : [6, 7]) {
+          const node = nodes.find(node => node.element === position[row][4].element);
+          const depth = row === 6 || row === 1 ? 1 : 2;
+          assert.equal(node.depth, depth, "attack and defense of the same stage share a depth");
+          assert.equal(node.wave, reverse ? 2 - depth : depth);
+          const line = lines.find(line => (reverse ? line.fromY : line.toY) === row + 0.5);
+          assert.equal(line.depth, depth);
+          assert.equal(line.wave, node.wave);
+          const atPeak = 1000 + node.wave * interval + duration / 2;
+          const nodeMix = api.getDefenseNodeMix(node, run, atPeak);
+          if (!hold) {
+            const state = api.getHighlightLineState(line, run, atPeak, false);
+            assert.ok(Math.abs(state.opacity - nodeMix) < 1e-12, "pulse and figure peak in the same wave");
+            assert.equal(state.progress, 0.5);
+            assert.equal(state.holding, undefined);
+            assert.equal(api.getHighlightLineState(line, run, atPeak + duration / 2, false).finished, true);
+          } else {
+            const arrival = 1000 + (reverse ? 2 : node.wave) * interval;
+            assert.equal(api.getHighlightLineState(line, run, arrival, true).progress, 1);
+            if (interval) assert.ok(api.getHighlightLineState(line, run, arrival - 1, true).progress < 1,
+              "held lines arrive at the actual target's highlight, including reversed root connections");
+          }
+        }
+        for (let timestamp = 1000; timestamp <= run.endAt + 32; timestamp += 16) {
+          entry.defenseHighlightFrame = 0;
+          api.advanceDefenseCascade(entry, timestamp);
+          for (const node of nodes) {
+            const expected = api.getDefenseNodeMix(node, run, timestamp);
+            const actual = Number.parseFloat(node.element.style.values["--lfs-defense-highlight-mix"]) || 0;
+            assert.ok(Math.abs(actual / 100 - expected) <= 0.000051, "rendered pieces follow their single scheduled wave");
+          }
+        }
+        assert.equal(entry.defenseHighlightRuns.length, hold ? 1 : 0);
+        if (hold) assert.ok(run.lines.every(line => line.path.attributes["stroke-dasharray"] === "none"));
+        api.clearDefenseHighlights(entry);
+      }
+    }
+  }
+  position[5][4] = { color: "w", type: "rook", element: element() };
+  for (const reverse of [false, true]) for (const preview of [null, { isHoverPreview: true }, { isHoverPreview: false }]) {
+    api.configure(settings.normalize({ pieceSet: "rund", defenseHighlightDepth: 4,
+      highlightCascadeReverseEnabled: reverse, defenseHighlightWaveIntervalMs: 1000, defenseHighlightDurationMs: 100 }));
+    const entry = { defenseHighlightedPieces: new Set(), defensePlayedMoveKeys: new Set() };
+    api.startHighlightCascades(board, entry, position, root, false, preview);
+    const run = entry.defenseHighlightRuns[0];
+    assert.equal(run.nodes.length, 6);
+    assert.equal(run.lines.length, 5);
+    assert.equal(run.maxDepth, 3, "unequal cascade lengths use the longest shared display plan");
+    assert.equal(run.endAt, 4100);
+    const rootNode = run.nodes.find(node => node.depth === 0);
+    assert.equal(rootNode.wave, reverse ? 3 : 0, "the root is scheduled exactly once, including reverse previews");
+    assert.equal(rootNode.previewRoot, Boolean(preview?.isHoverPreview));
+    assert.equal(run.nodes.find(node => node.element === position[5][4].element).wave, reverse ? 2 : 1);
+    assert.equal(run.nodes.find(node => node.element === position[1][4].element).wave, reverse ? 2 : 1);
+    api.advanceDefenseCascade(entry, 1000 + rootNode.wave * 1000 + 50);
+    assert.equal(entry.defensePreviewMix > 0, Boolean(preview?.isHoverPreview));
+    api.clearDefenseHighlights(entry);
+  }
+  position[5][4] = null;
+  const reverseHeld = settings.normalize({ pieceSet: "rund", defenseHighlightDepth: 4,
+    highlightCascadeReverseEnabled: true, highlightCascadeLinesHoldEnabled: true,
+    defenseHighlightWaveIntervalMs: 1000, defenseHighlightDurationMs: 100 });
+  api.configure(reverseHeld);
+  const entry = { defenseHighlightedPieces: new Set(), defensePlayedMoveKeys: new Set(), defenseLineHoldRoot: root };
+  api.startHighlightCascades(board, entry, position, root, false);
+  const interrupted = entry.defenseHighlightRuns[0];
+  api.advanceDefenseCascade(entry, 1100);
+  const growing = interrupted.lines.filter(line => line.path.attributes.visibility === "visible");
+  const lengths = growing.map(line => api.getHighlightLineState(line, interrupted, 1100, true).progress);
+  assert.equal(growing.length, 2);
+  entry.defenseLineHoldRoot = null;
+  api.endPreviousDefenseWaves(entry, 1100, false);
+  api.advanceDefenseCascade(entry, 1190);
+  growing.forEach((line, index) => {
+    const state = api.getHighlightLineState(line, interrupted, 1190, false);
+    assert.ok(Math.abs(state.progress - lengths[index] / 2) < 1e-12,
+      "interrupting reversed growth retracts the existing length without a jump");
+    assert.equal(state.shrinking, true);
+  });
+  api.advanceDefenseCascade(entry, 1280);
+  assert.equal(entry.defenseHighlightRuns.length, 0);
+  api.clearDefenseHighlights(entry);
+
+  entry.defenseLineHoldRoot = root;
+  api.startHighlightCascades(board, entry, position, root, false);
+  const previous = entry.defenseHighlightRuns[0];
+  api.advanceDefenseCascade(entry, 1100);
+  const previousVisible = previous.lines.filter(line => line.path.attributes.visibility === "visible");
+  const movedPosition = position.map(rank => rank.slice());
+  movedPosition[4][4] = null;
+  movedPosition[3][4] = position[4][4];
+  const previewRoot = { row: 3, col: 4 };
+  entry.defenseLineHoldRoot = previewRoot;
+  api.endPreviousDefenseWaves(entry, 1100, true);
+  now = 1100;
+  api.startHighlightCascades(board, entry, movedPosition, previewRoot, false, { isHoverPreview: true });
+  for (const timestamp of [1100, 1116, 2000, 2100]) {
+    api.advanceDefenseCascade(entry, timestamp);
+    assert.ok(previousVisible.every(line => line.path.parent && line.path.attributes.visibility === "visible"),
+      "reversed preview replacement retains visible lines while deeper replacements are still growing");
+    assert.equal(previous.waitingForReplacement, true);
+  }
+  api.advanceDefenseCascade(entry, 2116);
+  assert.equal(previous.waitingForReplacement, false);
+  api.advanceDefenseCascade(entry, 2296);
+  assert.ok(previousVisible.every(line => !line.path.parent));
+  api.advanceDefenseCascade(entry, 3150);
+  assert.ok(entry.defensePreviewMix > 0, "the replacement preview highlights its root in the final reversed wave");
+  api.clearDefenseHighlights(entry);
 });
 
 test("held SVG lines survive selection, preview waits and replacement before retracting", () => {
