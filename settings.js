@@ -122,6 +122,7 @@
     defenseHighlightEnabled: true,
     attackHighlightEnabled: true,
     highlightCascadeLinesEnabled: true,
+    highlightCascadeLinesHoldEnabled: false,
     defenseHighlightDepth: 3,
     defenseHighlightWaveIntervalMs: 210,
     defenseHighlightDurationMs: 700,
@@ -133,8 +134,8 @@
     defenseHighlightLineBlurPercent: 20,
     highlightLineOpacityPercent: 100,
     highlightLineDecayPercent: 20,
-    highlightLineEaseInPercent: 100,
-    highlightLineEaseOutPercent: 100,
+    highlightLineHoldStartOpacityPercent: 80,
+    defenseHighlightLineMaskBlurPx: 1,
     defenseLineAnimationDistancePercent: 4,
     defenseLineAnimationLoopMs: 1200,
     defenseLineAnimationOffsetMs: 80,
@@ -282,8 +283,8 @@
     defenseHighlightLineBlurPercent: [0, 50],
     highlightLineOpacityPercent: [0, 100],
     highlightLineDecayPercent: [0, 50],
-    highlightLineEaseInPercent: [0, 100],
-    highlightLineEaseOutPercent: [0, 100],
+    highlightLineHoldStartOpacityPercent: [0, 100],
+    defenseHighlightLineMaskBlurPx: [0, 10],
     threatOwnSeeThrough: [0, 1],
     threatOpponentSeeThrough: [0, 1],
     threatMoveDepth: [1, 5],
@@ -306,6 +307,8 @@
     const result = { ...defaults, ...values };
     delete result.highlightLineDurationMs;
     delete result.highlightLineArrivalLeadPercent;
+    delete result.highlightLineEaseInPercent;
+    delete result.highlightLineEaseOutPercent;
     if (!Object.prototype.hasOwnProperty.call(values, "highlightLineDecayPercent")
       && Object.prototype.hasOwnProperty.call(values, "defenseHighlightWaveDecayPercent")) {
       result.highlightLineDecayPercent = values.defenseHighlightWaveDecayPercent;
@@ -409,8 +412,8 @@
     result.defenseHighlightWaveDecayPercent = Math.round(result.defenseHighlightWaveDecayPercent);
     result.highlightLineOpacityPercent = Math.round(result.highlightLineOpacityPercent);
     result.highlightLineDecayPercent = Math.round(result.highlightLineDecayPercent);
-    result.highlightLineEaseInPercent = Math.round(result.highlightLineEaseInPercent);
-    result.highlightLineEaseOutPercent = Math.round(result.highlightLineEaseOutPercent);
+    result.highlightLineHoldStartOpacityPercent = Math.round(result.highlightLineHoldStartOpacityPercent);
+    result.defenseHighlightLineMaskBlurPx = Number(result.defenseHighlightLineMaskBlurPx.toFixed(1));
     for (const key of ["defenseHighlightWaveIntervalMs", "defenseHighlightDurationMs", "defensePreviewThresholdMs"]) {
       result[key] = Math.round(result[key] / 10) * 10;
     }
@@ -489,6 +492,7 @@
       "defenseHighlightEnabled",
       "attackHighlightEnabled",
       "highlightCascadeLinesEnabled",
+      "highlightCascadeLinesHoldEnabled",
 
 
       "moveDotsPlayerColor",

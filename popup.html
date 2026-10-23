@@ -237,18 +237,18 @@
           <fieldset class="highlight-line-settings">
             <legend>Angriffs- und Verteidigungslinien</legend>
             <label class="switch-setting" data-depends-on="highlightCascadesEnabled"><span><strong>Verbindungslinien aktivieren</strong><small>Zeigt die gemeinsamen Linien der Angriffs- und Verteidigungs-Kaskaden.</small></span><input type="checkbox" data-setting="highlightCascadeLinesEnabled" role="switch"></label>
+            <label class="switch-setting" data-depends-on="highlightCascadeLinesEnabled"><span><strong>Linie halten</strong><small>Zeigt nach der Animation die ganze Linie, solange du über der Figur bist oder sie ziehst.</small></span><input type="checkbox" data-setting="highlightCascadeLinesHoldEnabled" role="switch"></label>
             <div class="range-grid">
-              <label class="range-setting"><span>Pfadlinienbreite (% der Feldbreite)</span><output data-value-for="defenseHighlightLineWidthPercent"></output><input type="range" min="0.2" max="8" step="0.1" data-setting="defenseHighlightLineWidthPercent"></label>
-              <label class="range-setting"><span>Länge des bewegten Linienabschnitts</span><output data-value-for="defenseHighlightLineLengthPercent"></output><input type="range" min="1" max="100" step="1" data-setting="defenseHighlightLineLengthPercent"></label>
-              <label class="range-setting"><span>Weiche Ausblendung an den Enden (% der Linienlänge)</span><output data-value-for="defenseHighlightLineBlurPercent"></output><input type="range" min="0" max="50" step="1" data-setting="defenseHighlightLineBlurPercent"></label>
-              <label class="range-setting"><span>Linien-Deckkraft</span><output data-value-for="highlightLineOpacityPercent"></output><input type="range" min="0" max="100" step="1" data-setting="highlightLineOpacityPercent"></label>
-              <label class="range-setting"><span>Deckkraftabnahme je Kaskadenstufe</span><output data-value-for="highlightLineDecayPercent"></output><input type="range" min="0" max="50" step="1" data-setting="highlightLineDecayPercent"></label>
-              <label class="range-setting"><span>Ease-in-Stärke (0 linear, 100 maximal)</span><output data-value-for="highlightLineEaseInPercent"></output><input type="range" min="0" max="100" step="1" data-setting="highlightLineEaseInPercent"></label>
-              <label class="range-setting"><span>Ease-out-Stärke (0 linear, 100 maximal)</span><output data-value-for="highlightLineEaseOutPercent"></output><input type="range" min="0" max="100" step="1" data-setting="highlightLineEaseOutPercent"></label>
+              <label class="range-setting"><span>Breite</span><output data-value-for="defenseHighlightLineWidthPercent"></output><input type="range" min="0.2" max="8" step="0.1" data-setting="defenseHighlightLineWidthPercent"></label>
+              <label class="range-setting"><span>Länge</span><output data-value-for="defenseHighlightLineLengthPercent"></output><input type="range" min="1" max="100" step="1" data-setting="defenseHighlightLineLengthPercent"></label>
+              <label class="range-setting"><span>Kante</span><output data-value-for="defenseHighlightLineBlurPercent"></output><input type="range" min="0" max="50" step="1" data-setting="defenseHighlightLineBlurPercent"></label>
+              <label class="range-setting"><span>Deckkraft</span><output data-value-for="highlightLineOpacityPercent"></output><input type="range" min="0" max="100" step="1" data-setting="highlightLineOpacityPercent"></label>
+              <label class="range-setting"><span>Abnahme</span><output data-value-for="highlightLineDecayPercent"></output><input type="range" min="0" max="50" step="1" data-setting="highlightLineDecayPercent"></label>
+              <label class="range-setting"><span>Startdeckkraft beim Halten</span><output data-value-for="highlightLineHoldStartOpacityPercent"></output><input type="range" min="0" max="100" step="1" data-setting="highlightLineHoldStartOpacityPercent"></label>
+              <label class="range-setting"><span>Cage-Maskenunschärfe</span><output data-value-for="defenseHighlightLineMaskBlurPx"></output><input type="range" min="0" max="10" step="0.1" data-setting="defenseHighlightLineMaskBlurPx"></label>
             </div>
-            <p class="highlight-line-preview-title">Animationsvorschau</p>
+            <p class="highlight-line-preview-title">Vorschau (Regler klicken)</p>
             <div class="highlight-line-preview" data-highlight-line-preview></div>
-            <p class="highlight-line-preview-caption">Startfigur - Zwischenfigur - Zielfigur</p>
           </fieldset>
         </details>
         <details class="analysis-subsection">

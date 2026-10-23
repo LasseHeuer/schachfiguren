@@ -39,6 +39,7 @@
     ["attackHighlightEnabled", "Angriffs-Highlight", "highlightCascadesEnabled"],
     ["defenseHighlightEnabled", "Verteidigungs-Highlight", "highlightCascadesEnabled"],
     ["highlightCascadeLinesEnabled", "Highlightlinien", "highlightCascadesEnabled"],
+    ["highlightCascadeLinesHoldEnabled", "Linie halten", "highlightCascadeLinesEnabled"],
     ["threatenedPieceOutlineEnabled", "Angriffe"],
     ["kingMovementFieldsEnabled", "Königbewegungsfelder"],
     ["defenseCirclesEnabled", "Verteidigungen"],
@@ -49,8 +50,6 @@
   let settings = { ...defaults };
   let analysisToolbar;
   let analysisEnabledInput;
-  let moveFieldDisplaySelect;
-  let analysisLineSettings;
   let zenToggle;
   let boardLayout;
   let zenBoard;
@@ -89,7 +88,6 @@
   let pvPreviewStepDuration;
   const analysisInputs = new Map();
   const analysisRows = new Map();
-  const analysisRangeControls = new Map();
 
   function observeZenBoardOrientation(board) {
     const nextOrientationBoard = board?.matches(".cg-wrap") ? board : board?.querySelector(".cg-wrap") ?? null;
@@ -193,116 +191,15 @@
         featureList.append(label);
         analysisInputs.set(key, input);
         analysisRows.set(key, { label, parentKey });
-        if (key === "highlightCascadeLinesEnabled") {
-          analysisLineSettings = document.createElement("div");
-          analysisLineSettings.className = "lfs-analysis-toolbar-line-settings";
-          const lineSettingsTitle = document.createElement("span");
-          lineSettingsTitle.className = "lfs-analysis-toolbar-line-settings-title";
-          lineSettingsTitle.textContent = "Lichtimpuls";
-          analysisLineSettings.append(lineSettingsTitle);
-          const lineControls = document.createElement("div");
-          lineControls.className = "lfs-analysis-toolbar-line-grid";
-          const advanced = document.createElement("details");
-          advanced.className = "lfs-analysis-toolbar-line-advanced";
-          const advancedTitle = document.createElement("summary");
-          advancedTitle.textContent = "Feinabstimmung";
-          const advancedControls = document.createElement("div");
-          advancedControls.className = "lfs-analysis-toolbar-line-grid";
-          advanced.append(advancedTitle, advancedControls);
-          analysisLineSettings.append(lineControls, advanced);
-          for (const [rangeKey, rangeLabel, minimum, maximum, step] of [
-            ["defenseHighlightDurationMs", "Dauer", 100, 2000, 10],
-            ["defenseHighlightLineLengthPercent", "Länge", 1, 100, 1],
-            ["defenseHighlightLineWidthPercent", "Breite", 0.2, 8, 0.1],
-            ["defenseHighlightLineBlurPercent", "Weichheit", 0, 50, 1],
-            ["highlightLineOpacityPercent", "Deckkraft", 0, 100, 1],
-            ["highlightLineDecayPercent", "Abnahme", 0, 50, 1],
-            ["highlightLineEaseInPercent", "Anlauf", 0, 100, 1],
-            ["highlightLineEaseOutPercent", "Auslauf", 0, 100, 1]
-          ]) {
-            const setting = document.createElement("label");
-            setting.className = "lfs-analysis-toolbar-line-range";
-            const text = document.createElement("span");
-            text.textContent = rangeLabel;
-            const output = document.createElement("output");
-            const input = document.createElement("input");
-            input.type = "range";
-            input.min = String(minimum);
-            input.max = String(maximum);
-            input.step = String(step);
-            input.setAttribute("aria-label", rangeLabel);
-            input.addEventListener("input", () => {
-              const value = Number(input.value);
-              settings = normalize({ ...settings, [rangeKey]: value });
-              output.value = `${settings[rangeKey]}${rangeKey.endsWith("Ms") ? " ms" : "%"}`;
-              apply(document.documentElement);
-            });
-            input.addEventListener("change", () => {
-              chrome.storage.local.set({ [rangeKey]: Number(input.value) });
-            });
-            setting.append(text, output, input);
-            (rangeKey === "defenseHighlightDurationMs" || rangeKey.startsWith("defenseHighlightLine")
-              || rangeKey === "highlightLineOpacityPercent" ? lineControls : advancedControls).append(setting);
-            analysisRangeControls.set(rangeKey, { input, output });
-            analysisRows.set(rangeKey, { label: analysisLineSettings, parentKey: key });
-          }
-          const previewTitle = document.createElement("span");
-          previewTitle.className = "lfs-analysis-toolbar-line-preview-title";
-          previewTitle.textContent = "Vorschau";
-          const preview = document.createElement("div");
-          preview.className = "lfs-analysis-toolbar-line-preview";
-          analysisLineSettings.append(previewTitle, preview);
-          featureList.append(analysisLineSettings);
-          globalThis.LichessHighlightLinePreview.mount(preview, () => settings, (piece, color, values) => {
-            const asset = values.pieceSet === "cage" ? `cage/cage_${piece}.svg` : `${values.pieceSet}/${color}${piece}.svg`;
-            return chrome.runtime.getURL(asset);
-          }, values => {
-            const activeTheme = document.body?.dataset.theme;
-            const isLight = activeTheme === "system" ? matchMedia("(prefers-color-scheme: light)").matches
-              : activeTheme ? activeTheme.includes("light")
-                : document.documentElement.classList.contains("light") || document.body?.classList.contains("light");
-            const theme = isLight ? "Light" : "Dark";
-            return {
-              gap: values[`boardGap${theme}`],
-              light: values[`boardLight${theme}`],
-              dark: values[`boardDark${theme}`]
-            };
-          });
-        }
       }
-
-      const modeLabel = document.createElement("label");
-      modeLabel.className = "lfs-analysis-toolbar-feature lfs-analysis-toolbar-child lfs-analysis-toolbar-select-setting";
-      const modeText = document.createElement("span");
-      modeText.textContent = "Bedrohte Bewegungsfelder";
-      moveFieldDisplaySelect = document.createElement("select");
-      for (const [value, text] of [["both", "Linien und Schraffur"], ["lines", "Nur Linien"], ["hatch", "Nur Schraffur"], ["none", "Aus"]]) {
-        moveFieldDisplaySelect.append(new Option(text, value));
-      }
-      moveFieldDisplaySelect.addEventListener("change", () => {
-        const value = moveFieldDisplaySelect.value;
-        settings = normalize({ ...settings, threatMoveFieldDisplayMode: value });
-        apply(document.documentElement);
-        chrome.storage.local.set({ threatMoveFieldDisplayMode: value });
-      });
-      modeLabel.append(modeText, moveFieldDisplaySelect);
-      featureList.append(modeLabel);
-      analysisRows.set("threatMoveFieldDisplayMode", { label: modeLabel, parentKey: "threatenedPieceOutlineEnabled" });
-
 
       document.documentElement.append(zenToggle, analysisToolbar);
     }
 
     analysisEnabledInput.checked = settings.analysisEnabled;
     for (const [key, input] of analysisInputs) input.checked = settings[key];
-    for (const [key, { input, output }] of analysisRangeControls) {
-      input.value = settings[key];
-      output.value = `${settings[key]}${key.endsWith("Ms") ? " ms" : "%"}`;
-    }
-    moveFieldDisplaySelect.value = settings.threatMoveFieldDisplayMode;
 
     for (const [key, { label, parentKey }] of analysisRows) label.hidden = Boolean(parentKey) && !settings[parentKey];
-    if (analysisLineSettings && !settings.highlightCascadesEnabled) analysisLineSettings.hidden = true;
   }
 
   function syncBoardLayout() {

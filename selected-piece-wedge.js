@@ -28,6 +28,7 @@
   let hatchScrollDistance = 0;
   let defenseHighlightFilterId = 0;
   let defenseHighlightLineId = 0;
+  let defenseHighlightMaskId = 0;
 
 
   function scheduleRender(board) {
@@ -1793,7 +1794,7 @@
 
     function updateLineRadii(line) {
       const configuredRadius = Math.sqrt(Math.max(0, settings.threatLineRadius ** 2 - line.offset ** 2));
-      const usesBoundingSquare = line.type === "knight" || line.type === "queen";
+      const usesBoundingSquare = line.type === "queen" || (line.type === "knight" && settings.pieceSet !== "cage");
       if (usesBoundingSquare && !boundingSquareHalfSizes.has(line.type)) {
         boundingSquareHalfSizes.set(line.type, getFigureBoundingSquareHalfSize(line.outline));
       }
@@ -2101,14 +2102,16 @@
     );
   }
 
-  function getHighlightLineState(line, run, timestamp) {
-    const state = globalThis.LichessHighlightLinePreview.getLineMotion(settings, line.depth, run.startedAt, timestamp);
+  function getHighlightLineState(line, run, timestamp, holdAtEnd = line.held) {
+    const state = globalThis.LichessHighlightLinePreview.getLineMotion(settings, line.depth, run.startedAt, timestamp, holdAtEnd);
     if (line.fadeOut) {
       const progress = Math.max(0, Math.min(1, (timestamp - line.fadeOut.startedAt) / line.fadeOut.duration));
+      const easedProgress = progress * progress * (3 - 2 * progress);
       return {
-        progress: state.progress,
-        opacity: Math.min(state.opacity, line.fadeOut.opacity * (1 - progress * progress * (3 - 2 * progress))),
-        finished: state.finished || progress >= 1
+        progress: line.fadeOut.reverse ? line.fadeOut.progress * (1 - easedProgress) : state.progress,
+        opacity: line.fadeOut.opacity * (1 - easedProgress),
+        shrinking: line.fadeOut.reverse,
+        finished: progress >= 1
       };
     }
     return state;
@@ -2123,7 +2126,132 @@
     globalThis.LichessHighlightLinePreview.updateLine(line, state, settings, 0.01);
   }
 
-  function endPreviousDefenseWaves(entry, timestamp = performance.now()) {
+  function holdHighlightLine(line) {
+    const opacity = globalThis.LichessHighlightLinePreview.getHighlightMix(
+      0.5, line.depth, settings.highlightLineOpacityPercent, settings.highlightLineDecayPercent
+    );
+    updateHighlightLine(line, { progress: 1, opacity, holding: true });
+    line.held = true;
+  }
+
+  function syncHighlightLineMaskBlur(resource, boardRect) {
+    const blurPx = settings.defenseHighlightLineMaskBlurPx;
+    const key = `${blurPx}:${boardRect.width}:${boardRect.height}`;
+    if (resource.blurKey === key) return;
+    resource.blurKey = key;
+    resource.blur.setAttribute("stdDeviation", `${boardRect.width ? blurPx * 8 / boardRect.width : 0} ${boardRect.height ? blurPx * 8 / boardRect.height : 0}`);
+  }
+
+  function syncHighlightLineMasks(entry, board) {
+    const resources = entry.highlightLineMaskCache?.values();
+    if (!resources) return;
+    const boardRect = board.getBoundingClientRect();
+    for (const resource of resources) syncHighlightLineMaskBlur(resource, boardRect);
+  }
+
+  function createHighlightLineMask(entry, board, position, blackOrientation) {
+    if (settings.pieceSet !== "cage") return null;
+    const positionKey = position.map(rank => rank.map(piece => piece ? `${piece.color}${piece.type}` : "-").join(",")).join(";");
+    const key = `${blackOrientation}:${positionKey}`;
+    entry.highlightLineMaskCache ??= new Map();
+    let resource = entry.highlightLineMaskCache.get(key);
+    if (resource) {
+      resource.references++;
+      syncHighlightLineMaskBlur(resource, board.getBoundingClientRect());
+      return resource;
+    }
+
+    const id = `lfs-highlight-mask-${++defenseHighlightMaskId}`;
+    const filterId = `${id}-blur`;
+    const filter = document.createElementNS(svgNamespace, "filter");
+    filter.id = filterId;
+    filter.setAttribute("x", "-4");
+    filter.setAttribute("y", "-4");
+    filter.setAttribute("width", "16");
+    filter.setAttribute("height", "16");
+    filter.setAttribute("filterUnits", "userSpaceOnUse");
+    filter.setAttribute("primitiveUnits", "userSpaceOnUse");
+    const blacken = document.createElementNS(svgNamespace, "feColorMatrix");
+    blacken.setAttribute("type", "matrix");
+    blacken.setAttribute("values", "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0");
+    blacken.setAttribute("result", "black-shapes");
+    const blur = document.createElementNS(svgNamespace, "feGaussianBlur");
+    blur.setAttribute("in", "black-shapes");
+    filter.append(blacken, blur);
+
+    const mask = document.createElementNS(svgNamespace, "mask");
+    mask.id = id;
+    mask.setAttribute("x", "-4");
+    mask.setAttribute("y", "-4");
+    mask.setAttribute("width", "16");
+    mask.setAttribute("height", "16");
+    mask.setAttribute("maskUnits", "userSpaceOnUse");
+    mask.setAttribute("maskContentUnits", "userSpaceOnUse");
+    mask.setAttribute("mask-type", "luminance");
+    mask.style.setProperty("mask-type", "luminance");
+    mask.append(document.createElementNS(svgNamespace, "rect"));
+    const background = mask.firstElementChild;
+    background.setAttribute("x", "-4");
+    background.setAttribute("y", "-4");
+    background.setAttribute("width", "16");
+    background.setAttribute("height", "16");
+    background.setAttribute("fill", "white");
+
+    const figures = document.createElementNS(svgNamespace, "g");
+    figures.setAttribute("filter", `url(#${filterId})`);
+    for (let row = 0; row < position.length; row++) {
+      for (let col = 0; col < position[row].length; col++) {
+        const piece = position[row][col];
+        const letter = piece && figureAssetLetters[piece.type];
+        if (!letter || piece.type === "king") continue;
+        const image = document.createElementNS(svgNamespace, "image");
+        image.setAttribute("x", String(col));
+        image.setAttribute("y", String(row));
+        image.setAttribute("width", "1");
+        image.setAttribute("height", "1");
+        image.setAttribute("preserveAspectRatio", "xMidYMid meet");
+        image.setAttribute("href", chrome.runtime.getURL(`cage/cage_${letter}.svg`));
+        if (isPieceRotated(piece.color, blackOrientation)) {
+          image.setAttribute("transform", `rotate(180 ${col + 0.5} ${row + 0.5})`);
+        }
+        figures.append(image);
+      }
+    }
+    mask.append(figures);
+    entry.highlightLineDefs.append(filter, mask);
+    resource = { key, mask, filter, blur, references: 1, blurKey: "" };
+    entry.highlightLineMaskCache.set(key, resource);
+    if (typeof ResizeObserver === "function" && !entry.highlightLineMaskResizeObserver) {
+      entry.highlightLineMaskResizeObserver = new ResizeObserver(() => syncHighlightLineMasks(entry, board));
+      entry.highlightLineMaskResizeObserver.observe(board);
+    }
+    syncHighlightLineMaskBlur(resource, board.getBoundingClientRect());
+    return resource;
+  }
+
+  function releaseHighlightLineMask(entry, resource) {
+    if (!resource || --resource.references > 0) return;
+    resource.mask.remove();
+    resource.filter.remove();
+    entry.highlightLineMaskCache?.delete(resource.key);
+    if (!entry.highlightLineMaskCache?.size) {
+      entry.highlightLineMaskResizeObserver?.disconnect();
+      entry.highlightLineMaskResizeObserver = null;
+    }
+  }
+
+  function releaseRemovedDefenseLineRuns(entry, previousRuns, nextRuns) {
+    for (const run of previousRuns) {
+      if (nextRuns.includes(run)) continue;
+      run.lineGroup?.remove();
+      releaseHighlightLineMask(entry, run.lineMask);
+      run.lineMask = null;
+    }
+  }
+
+  function endPreviousDefenseWaves(entry, timestamp = performance.now(), preserveLines = Boolean(
+    settings.highlightCascadeLinesHoldEnabled && entry.defenseLineHoldRoot
+  )) {
     const runs = [];
     for (const run of entry.defenseHighlightRuns ?? []) {
       const activeNodes = [];
@@ -2136,25 +2264,45 @@
         node.fadeOut ??= { startedAt: timestamp, mix, duration: 180 };
         activeNodes.push(node);
       }
+      const retainLines = preserveLines && !run.lines.some(line => line.fadeOut);
+      // A context change can precede both the preview threshold and its first visible frame.
+      run.retiring ||= !retainLines || run.root.row !== entry.defenseLineHoldRoot.row
+        || run.root.col !== entry.defenseLineHoldRoot.col;
+      run.waitingForReplacement = retainLines && run.retiring;
       for (const line of run.lines ?? []) {
-        const state = getHighlightLineState(line, run, timestamp);
-        if (state.opacity <= 0) {
+        const state = getHighlightLineState(line, run, timestamp, Boolean(retainLines || run.holding || line.held));
+        if (!retainLines && state.opacity <= 0) {
           removeHighlightLine(line);
           continue;
         }
-        line.fadeOut ??= { startedAt: timestamp, opacity: state.opacity, duration: 180 };
+        if (!retainLines) line.fadeOut ??= { startedAt: timestamp, opacity: state.opacity, progress: state.progress,
+          duration: 180, reverse: Boolean(run.holding || line.held) };
         activeLines.push(line);
       }
       if (!activeNodes.length && !activeLines.length) continue;
       run.nodes = activeNodes;
       run.lines = activeLines;
       run.endAt = Math.max(
+        retainLines ? run.endAt : 0,
         ...activeNodes.map(node => node.fadeOut.startedAt + node.fadeOut.duration),
-        ...activeLines.map(line => line.fadeOut.startedAt + line.fadeOut.duration)
+        ...activeLines.filter(line => line.fadeOut).map(line => line.fadeOut.startedAt + line.fadeOut.duration)
       );
+      run.held = false;
       runs.push(run);
     }
+    releaseRemovedDefenseLineRuns(entry, entry.defenseHighlightRuns ?? [], runs);
     entry.defenseHighlightRuns = runs;
+    if (!runs.some(run => run.lines?.length)) {
+      entry.highlightLineSvg?.remove();
+      entry.highlightLineSvg = null;
+      entry.highlightLineDefs = null;
+    }
+    if (runs.length && !entry.defenseHighlightFrame) {
+      entry.defenseHighlightFrame = requestAnimationFrame(nextTimestamp => {
+        entry.defenseHighlightFrame = 0;
+        advanceDefenseCascade(entry, nextTimestamp);
+      });
+    }
   }
 
   function setDefenseCascadeContext(entry, key) {
@@ -2162,6 +2310,12 @@
     entry.defenseCascadeContextKey = key;
     endPreviousDefenseWaves(entry);
     return true;
+  }
+
+  function setDefenseLineHoldRoot(entry, root) {
+    const previous = entry.defenseLineHoldRoot;
+    entry.defenseLineHoldRoot = root;
+    if (previous && (previous.row !== root?.row || previous.col !== root?.col)) endPreviousDefenseWaves(entry);
   }
 
   function clearDefenseHighlights(entry) {
@@ -2176,6 +2330,9 @@
     entry.highlightLineSvg?.remove();
     entry.highlightLineSvg = null;
     entry.highlightLineDefs = null;
+    entry.highlightLineMaskResizeObserver?.disconnect();
+    entry.highlightLineMaskResizeObserver = null;
+    entry.highlightLineMaskCache?.clear();
     for (const piece of entry.defenseHighlightedPieces ?? []) {
       piece.removeAttribute("data-lfs-defense-highlight");
       piece.style.removeProperty("--lfs-defense-highlight-mix");
@@ -2186,6 +2343,8 @@
     entry.defenseHoverKey = null;
     entry.defenseHoverStartedKey = null;
     entry.defenseCascadeContextKey = null;
+    entry.defenseLineHoldRoot = null;
+    entry.defenseLineHoldPendingRoot = null;
     entry.defensePreviewSourceKey = null;
     entry.defensePreviewLastTargetKey = null;
     entry.defensePlayedMoveKeys.clear();
@@ -2238,7 +2397,10 @@
       cascades.push({ layers: getAttackCascadeLayers(position, root, blackOrientation, settings.defenseHighlightDepth), isAttack: true });
     }
     const activeCascades = cascades.filter(cascade => cascade.layers.length);
-    if (!activeCascades.length) return false;
+    if (!activeCascades.length) {
+      if (settings.highlightCascadeLinesHoldEnabled) endPreviousDefenseWaves(entry, performance.now(), false);
+      return false;
+    }
     const startedAt = performance.now();
     entry.defenseHighlightRuns ??= [];
     const previousRunCount = entry.defenseHighlightRuns.length;
@@ -2258,6 +2420,8 @@
         ? getHighlightCascadeConnections(position, layers, isAttack, blackOrientation)
         : [];
       const lines = [];
+      let lineGroup = null;
+      let lineMask = null;
       if (lineEdges.length) {
         if (!entry.highlightLineSvg) {
           entry.highlightLineSvg = document.createElementNS(svgNamespace, "svg");
@@ -2267,6 +2431,10 @@
           entry.highlightLineSvg.append(entry.highlightLineDefs);
         }
         globalThis.LichessBoardOverlay.place(board, entry.highlightLineSvg, "between-pieces");
+        lineMask = createHighlightLineMask(entry, board, position, blackOrientation);
+        lineGroup = document.createElementNS(svgNamespace, "g");
+        if (lineMask) lineGroup.setAttribute("mask", `url(#${lineMask.mask.id})`);
+        entry.highlightLineSvg.append(lineGroup);
         for (const { from, to, depth } of lineEdges) {
           const piece = position[to.row][to.col];
           const color = piece.color === "w" ? settings.whitePieceColor : settings.blackPieceColor;
@@ -2274,7 +2442,7 @@
           const gradient = document.createElementNS(svgNamespace, "linearGradient");
           gradient.setAttribute("id", id);
           gradient.setAttribute("gradientUnits", "userSpaceOnUse");
-          const stops = Array.from({ length: 9 }, () => document.createElementNS(svgNamespace, "stop"));
+          const stops = Array.from({ length: 10 }, () => document.createElementNS(svgNamespace, "stop"));
           for (const stop of stops) stop.setAttribute("stop-color", color);
           gradient.append(...stops);
           entry.highlightLineDefs.append(gradient);
@@ -2289,8 +2457,9 @@
           path.setAttribute("visibility", "hidden");
           path.setAttribute("stroke-linecap", "round");
           path.setAttribute("pointer-events", "none");
-          entry.highlightLineSvg.append(path);
+          lineGroup.append(path);
           lines.push({ path, gradient, stops, color, depth,
+            lineMask,
             fromX: from.col + 0.5, fromY: from.row + 0.5,
             toX: to.col + 0.5, toY: to.row + 0.5,
             length: Math.hypot(to.col - from.col, to.row - from.row) });
@@ -2300,11 +2469,23 @@
       entry.defenseHighlightRuns.push({
         nodes,
         lines,
+        lineGroup,
+        lineMask,
+        root: { row: root.row, col: root.col },
+        held: false,
         startedAt,
         endAt: startedAt + (layers.length - 1) * settings.defenseHighlightWaveIntervalMs + settings.defenseHighlightDurationMs
       });
     }
     if (entry.defenseHighlightRuns.length === previousRunCount) return false;
+    if (settings.highlightCascadeLinesHoldEnabled) {
+      for (const run of entry.defenseHighlightRuns.slice(0, previousRunCount)) {
+        if (!run.lines.length || run.lines.some(line => line.fadeOut)) continue;
+        run.retiring = true;
+        run.waitingForReplacement = true;
+        run.held = false;
+      }
+    }
     if (!entry.defenseHighlightFrame) {
       entry.defenseHighlightFrame = requestAnimationFrame(timestamp => {
         entry.defenseHighlightFrame = 0;
@@ -2318,8 +2499,29 @@
     const mixByPiece = new Map();
     let previewMix = 0;
     const runs = [];
+    const previousRuns = entry.defenseHighlightRuns;
+    const replacements = entry.defenseHighlightRuns.filter(run => !run.retiring);
+    const replacementVisible = settings.highlightCascadeLinesHoldEnabled && replacements.length
+      && replacements.every(run => run.lines.every(line => {
+        const state = getHighlightLineState(line, run, timestamp, settings.highlightCascadeLinesHoldEnabled);
+        return state.progress > 0 && (state.opacity > 0 || state.finished);
+      }));
     for (const run of entry.defenseHighlightRuns) {
-      if (timestamp < run.endAt) runs.push(run);
+      if (run.waitingForReplacement && replacementVisible) {
+        for (const line of run.lines) {
+          const state = getHighlightLineState(line, run, timestamp, true);
+          line.fadeOut = { startedAt: timestamp, opacity: state.opacity, progress: state.progress,
+            duration: 180, reverse: true };
+        }
+        run.waitingForReplacement = false;
+        run.endAt = timestamp + 180;
+      }
+      const holdLines = settings.highlightCascadeLinesHoldEnabled
+        && (run.waitingForReplacement || (!run.retiring
+          && entry.defenseLineHoldRoot?.row === run.root.row
+          && entry.defenseLineHoldRoot?.col === run.root.col));
+      run.holding = holdLines;
+      let keepRun = timestamp < run.endAt;
       for (const node of run.nodes) {
         const mix = getDefenseNodeMix(node, run, timestamp);
         if (mix <= 0) continue;
@@ -2327,8 +2529,12 @@
         else if (node.element) mixByPiece.set(node.element, Math.max(mixByPiece.get(node.element) ?? 0, mix));
       }
       run.lines = run.lines.filter(line => {
-        const state = getHighlightLineState(line, run, timestamp);
+        const state = getHighlightLineState(line, run, timestamp, holdLines || line.held);
         if (state.finished) {
+          if (holdLines && !line.fadeOut) {
+            holdHighlightLine(line);
+            return true;
+          }
           removeHighlightLine(line);
           return false;
         }
@@ -2336,9 +2542,16 @@
         return true;
       });
       if (timestamp >= run.endAt) {
-        for (const line of run.lines) removeHighlightLine(line);
-        run.lines = [];
+        if (holdLines && run.lines.length) {
+          run.nodes = [];
+          run.held = !run.waitingForReplacement;
+          keepRun = true;
+        } else {
+          for (const line of run.lines) removeHighlightLine(line);
+          run.lines = [];
+        }
       }
+      if (keepRun) runs.push(run);
     }
     for (const piece of entry.defenseHighlightedPieces) {
       if (mixByPiece.has(piece)) continue;
@@ -2352,13 +2565,14 @@
     entry.defenseHighlightedPieces = new Set(mixByPiece.keys());
     entry.defensePreviewMix = previewMix;
     syncPreviewDefenseFilter(entry);
+    releaseRemovedDefenseLineRuns(entry, previousRuns, runs);
     entry.defenseHighlightRuns = runs;
     if (!runs.some(run => run.lines.length)) {
       entry.highlightLineSvg?.remove();
       entry.highlightLineSvg = null;
       entry.highlightLineDefs = null;
     }
-    if (runs.length) {
+    if (runs.some(run => !run.held)) {
       entry.defenseHighlightFrame = requestAnimationFrame(timestamp => {
         entry.defenseHighlightFrame = 0;
         advanceDefenseCascade(entry, timestamp);
@@ -2377,31 +2591,40 @@
       settings.highlightCascadesEnabled,
       settings.defenseHighlightEnabled,
       settings.attackHighlightEnabled,
-      settings.highlightCascadeLinesEnabled
+      settings.highlightCascadeLinesEnabled,
+      settings.highlightCascadeLinesHoldEnabled,
+      settings.pieceSet
     ].join(":");
     if (entry.defenseHighlightSettingsKey !== undefined
       && entry.defenseHighlightSettingsKey !== highlightSettingsKey) clearDefenseHighlights(entry);
     entry.defenseHighlightSettingsKey = highlightSettingsKey;
 
-    let selectedPosition = parsed.position;
-    let selectedRoot = parsed.selected;
-    if (preview?.isHoverPreview) {
-      const base = readDragPreview({ ...preview, position: preview.basePosition, target: preview.source, legal: false });
-      selectedPosition = base.position;
-      selectedRoot = base.selected;
-    }
+    const selectedPosition = parsed.position;
+    const selectedRoot = parsed.selected;
     const selectedPiece = selectedRoot && selectedPosition[selectedRoot.row]?.[selectedRoot.col];
     const selectedKey = selectedPiece
       ? `selected:${selectedRoot.row},${selectedRoot.col}:${selectedPiece.color}${selectedPiece.type}`
       : null;
-    if (selectedPiece) {
+    const nextHoldRoot = getDefenseLineHoldRoot(board, entry, parsed.position, selectedRoot, selectedPiece, preview);
+    if (preview?.isHoverPreview && preview.legal) {
+      entry.defenseLineHoldPendingRoot = nextHoldRoot;
+    } else {
+      entry.defenseLineHoldPendingRoot = null;
+      setDefenseLineHoldRoot(entry, nextHoldRoot);
+    }
+    if (preview?.isHoverPreview && preview.legal) {
+      clearDefenseHoverTimer(entry);
+      entry.defenseHoverKey = null;
+      entry.defenseHoverStartedKey = null;
+    } else if (selectedPiece) {
       clearDefenseHoverTimer(entry);
       entry.defenseHoverKey = null;
       entry.defenseHoverStartedKey = null;
       if (entry.defenseSelectedKey !== selectedKey) {
         entry.defenseSelectedKey = selectedKey;
         setDefenseCascadeContext(entry, selectedKey);
-        const started = startHighlightCascades(board, entry, selectedPosition, selectedRoot, parsed.blackOrientation);
+        const started = (!settings.highlightCascadeLinesHoldEnabled || nextHoldRoot)
+          && startHighlightCascades(board, entry, selectedPosition, selectedRoot, parsed.blackOrientation);
         if (started && preview && !preview.isHoverPreview) markPreviewMovePlayed(entry, preview);
       } else if (!preview?.isHoverPreview && !entry.defenseCascadeContextKey?.startsWith("move:")) {
         setDefenseCascadeContext(entry, selectedKey);
@@ -2488,10 +2711,15 @@
     if (preview.source.row === preview.target.row && preview.source.col === preview.target.col) {
       clearDefensePreviewTimer(entry);
       entry.defensePreviewLastTargetKey = targetKey;
+      setDefenseLineHoldRoot(entry, entry.defenseLineHoldPendingRoot ?? nextHoldRoot);
+      entry.defenseLineHoldPendingRoot = null;
       setDefenseCascadeContext(entry, selectedKey);
+      if (settings.highlightCascadeLinesHoldEnabled && !entry.defenseHighlightRuns.some(run => !run.retiring
+        && run.root.row === selectedRoot.row && run.root.col === selectedRoot.col)) {
+        startHighlightCascades(board, entry, selectedPosition, selectedRoot, parsed.blackOrientation, preview);
+      }
       return;
     }
-    setDefenseCascadeContext(entry, `preview:${targetKey}`);
     if (isNewDefensePreviewTarget(entry, targetKey)) {
       clearDefensePreviewTimer(entry);
       entry.defensePreviewPendingKey = targetKey;
@@ -2510,9 +2738,25 @@
       return;
     }
     clearDefensePreviewTimer(entry);
+    setDefenseLineHoldRoot(entry, entry.defenseLineHoldPendingRoot ?? nextHoldRoot);
+    entry.defenseLineHoldPendingRoot = null;
+    setDefenseCascadeContext(entry, `preview:${targetKey}`);
     if (startHighlightCascades(board, entry, parsed.position, parsed.selected, parsed.blackOrientation, preview)) {
       markPreviewMovePlayed(entry, preview);
     }
+  }
+
+  function getDefenseLineHoldRoot(board, entry, position, selectedRoot, selectedPiece, preview) {
+    if (!settings.highlightCascadeLinesHoldEnabled || !settings.highlightCascadeLinesEnabled) return null;
+    if (selectedPiece) {
+      const hoveredRoot = entry.hoveredSquare?.row === selectedRoot.row && entry.hoveredSquare?.col === selectedRoot.col;
+      const previewRoot = Boolean(preview);
+      return hoveredRoot || previewRoot || getDraggingPiece(board)
+        ? { row: selectedRoot.row, col: selectedRoot.col }
+        : null;
+    }
+    const square = entry.hoveredSquare;
+    return position[square?.row]?.[square?.col] ? { row: square.row, col: square.col } : null;
   }
 
   function clearMovePreviewPiece(board, entry) {
@@ -3449,6 +3693,7 @@
       defenseHoverStartedKey: null,
       defenseCascadeContextKey: null,
       defenseHighlightRuns: [],
+      defenseLineHoldRoot: null,
       defenseHighlightedPieces: new Set(),
       defensePreviewLastTargetKey: null,
       defenseLastMoveKey: null,
@@ -3536,6 +3781,7 @@
       advanceHatchScroll();
       settings = nextSettings;
       scanBoards();
+      for (const [board, entry] of observedBoards) syncHighlightLineMasks(entry, board);
       for (const board of observedBoards.keys()) scheduleRender(board);
       syncHatchAnimation();
     }

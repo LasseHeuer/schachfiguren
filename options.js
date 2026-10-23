@@ -159,11 +159,20 @@
     saveBounceCurve,
     previewDuration
   );
-  globalThis.LichessHighlightLinePreview.mount(
+  const linePreview = globalThis.LichessHighlightLinePreview.mount(
     document.querySelector("[data-highlight-line-preview]"),
     () => currentSettings,
-    previewPieceUrl
+    previewPieceUrl,
+    settings => ({ gap: settings.boardGapDark, light: settings.boardLightDark, dark: settings.boardDarkDark })
   );
+  const lineSettingKeys = new Set([
+    "defenseHighlightLineWidthPercent", "defenseHighlightLineLengthPercent",
+    "defenseHighlightLineBlurPercent", "highlightLineOpacityPercent", "highlightLineDecayPercent",
+    "highlightLineHoldStartOpacityPercent", "defenseHighlightLineMaskBlurPx"
+  ]);
+  for (const control of controls) {
+    if (lineSettingKeys.has(control.dataset.setting)) control.addEventListener("change", () => linePreview.play());
+  }
   for (const tab of curveTabs) tab.addEventListener("click", () => setCurveTab(tab.dataset.curveTab));
 
   for (const control of controls) {

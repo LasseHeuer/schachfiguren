@@ -9,21 +9,31 @@
     return element;
   }
 
-  function getLineMotion(settings, depth, startedAt, timestamp) {
+  function getLineMotion(settings, depth, startedAt, timestamp, holdAtEnd = settings.highlightCascadeLinesHoldEnabled) {
     const waveInterval = settings.defenseHighlightWaveIntervalMs;
+    const duration = settings.defenseHighlightDurationMs;
     const startAt = startedAt + (depth - 1) * waveInterval;
-    const endAt = startAt + settings.defenseHighlightDurationMs;
+    const targetAt = startAt + waveInterval;
+    const travelDuration = holdAtEnd && waveInterval > 0 ? waveInterval : duration;
+    const endAt = holdAtEnd ? targetAt + duration : startAt + duration;
     if (timestamp < startAt) return { progress: 0, opacity: 0, finished: false };
-    if (timestamp >= endAt || endAt <= startAt) return { progress: 1, opacity: 0, finished: true };
-    const linearProgress = (timestamp - startAt) / (endAt - startAt);
+    if (timestamp >= endAt || endAt <= startAt) return {
+      progress: 1,
+      opacity: holdAtEnd
+        ? getHighlightMix(0.5, depth, settings.highlightLineOpacityPercent, settings.highlightLineDecayPercent)
+        : 0,
+      finished: true,
+      ...(holdAtEnd ? { holding: true } : {})
+    };
+    const linearProgress = holdAtEnd && waveInterval === 0 ? 1
+      : Math.min(1, (timestamp - startAt) / travelDuration);
     let progress = linearProgress;
-    if (settings.highlightLineEaseInPercent || settings.highlightLineEaseOutPercent) {
+    if (!holdAtEnd && (settings.highlightLineEaseInPercent || settings.highlightLineEaseOutPercent)) {
       const x1 = settings.highlightLineEaseInPercent / 100 * 0.85;
       const x2 = 1 - settings.highlightLineEaseOutPercent / 100 * 0.85;
       let lower = 0;
       let upper = 1;
       let parameter = linearProgress;
-      // Invert the time axis of the Bezier curve, just like CSS cubic-bezier().
       for (let iteration = 0; iteration < 20; iteration++) {
         const inverse = 1 - parameter;
         const time = 3 * inverse * inverse * parameter * x1
@@ -35,45 +45,80 @@
       }
       progress = parameter * parameter * (3 - 2 * parameter);
     }
+    const targetPhase = (timestamp - targetAt) / duration;
+    let opacity;
+    if (holdAtEnd) {
+      const fadeProgress = Math.max(0, Math.min(1, (targetPhase - 0.5) * 2));
+      const fadeMix = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
+      const finalOpacity = getHighlightMix(0.5, depth, settings.highlightLineOpacityPercent, settings.highlightLineDecayPercent);
+      const initialOpacity = settings.highlightLineHoldStartOpacityPercent / 100;
+      opacity = initialOpacity + (finalOpacity - initialOpacity) * fadeMix;
+    } else {
+      opacity = getHighlightMix(linearProgress, depth,
+        settings.highlightLineOpacityPercent, settings.highlightLineDecayPercent);
+    }
     return {
       progress,
-      opacity: getHighlightMix(linearProgress, depth, settings.highlightLineOpacityPercent, settings.highlightLineDecayPercent),
-      finished: false
+      opacity,
+      finished: false,
+      ...(holdAtEnd ? { holding: true } : {})
     };
   }
 
   function updateLine(line, state, settings, unitScale = 1) {
     const segmentLength = line.length * settings.defenseHighlightLineLengthPercent / 100;
-    // Seed the pulse near the source silhouette so easing cannot hide its entrance inside the piece.
-    const initialHead = Math.min(line.length * 0.6, Math.max(line.length * 0.12, unitScale * 60));
-    const startLength = (line.length + segmentLength - initialHead) * state.progress - segmentLength + initialHead;
+    const visibleLength = line.length * state.progress;
+    const holding = Boolean(state.holding || line.held);
+    const span = state.shrinking || holding ? visibleLength : Math.min(visibleLength, segmentLength);
+    const startLength = state.shrinking ? line.length - visibleLength : visibleLength - span;
     const dx = (line.toX - line.fromX) / line.length;
     const dy = (line.toY - line.fromY) / line.length;
     const styleKey = [segmentLength, settings.defenseHighlightLineWidthPercent,
-      settings.defenseHighlightLineBlurPercent, line.color].join(":");
+      settings.defenseHighlightLineBlurPercent, line.color, Boolean(state.shrinking), holding].join(":");
     if (line.styleKey !== styleKey) {
       line.styleKey = styleKey;
       line.path.setAttribute("stroke-width", String(settings.defenseHighlightLineWidthPercent * unitScale));
-      // A gap longer than the whole path prevents a second dash from wrapping into view.
-      line.path.setAttribute("stroke-dasharray", `${segmentLength} ${line.length + segmentLength + 1}`);
-      line.gradient.setAttribute("x1", String(line.fromX));
-      line.gradient.setAttribute("y1", String(line.fromY));
-      line.gradient.setAttribute("x2", String(line.fromX + dx * segmentLength));
-      line.gradient.setAttribute("y2", String(line.fromY + dy * segmentLength));
-      const blur = settings.defenseHighlightLineBlurPercent / 100;
+      const fadeLength = segmentLength * settings.defenseHighlightLineBlurPercent / 50;
+      const fadeRatio = settings.defenseHighlightLineBlurPercent / 100;
+      line.gradient.setAttribute("x1", "0");
+      line.gradient.setAttribute("y1", "0");
+      line.gradient.setAttribute("x2", "1");
+      line.gradient.setAttribute("y2", "0");
+      const edgeSteps = Math.floor((line.stops.length - 1) / 2);
       line.stops.forEach((stop, index) => {
-        const fraction = index / (line.stops.length - 1);
-        const offset = fraction <= 0.5 ? fraction * 2 * blur : 1 - (1 - fraction) * 2 * blur;
-        const ramp = Math.min(1, fraction * 2, (1 - fraction) * 2);
+        if (holding) {
+          const fraction = index / (line.stops.length - 1);
+          const fadeStart = fadeLength === 0 ? 1 : Math.max(0, 1 - fadeLength / line.length);
+          const progress = state.shrinking ? Math.min(1, fraction / (1 - fadeStart || 1))
+            : Math.min(1, (1 - fraction) / (1 - fadeStart || 1));
+          stop.setAttribute("offset", String(fraction));
+          stop.setAttribute("stop-opacity", String(fadeLength === 0 ? 1 : progress * progress * (3 - 2 * progress)));
+          stop.setAttribute("stop-color", line.color);
+          return;
+        }
+        const fadeProgress = Math.min(1, Math.min(index, line.stops.length - 1 - index) / edgeSteps);
+        const offset = index <= edgeSteps ? index / edgeSteps * fadeRatio
+          : 1 - (line.stops.length - 1 - index) / edgeSteps * fadeRatio;
+        const easedFade = fadeProgress * fadeProgress * (3 - 2 * fadeProgress);
         stop.setAttribute("offset", String(offset));
-        stop.setAttribute("stop-opacity", String(blur === 0 ? 1 : ramp * ramp * (3 - 2 * ramp)));
+        stop.setAttribute("stop-opacity", String(fadeRatio === 0 ? 1 : easedFade));
         stop.setAttribute("stop-color", line.color);
       });
-      line.path.setAttribute("visibility", "visible");
     }
-    line.gradient.setAttribute("gradientTransform", `translate(${dx * startLength} ${dy * startLength})`);
+    const fadeLength = segmentLength * settings.defenseHighlightLineBlurPercent / 50;
+    const gradientLength = Math.max(holding ? fadeLength : span, 0.000001);
+    const gradientStart = holding
+      ? state.shrinking ? line.length - visibleLength : Math.max(0, visibleLength - fadeLength)
+      : startLength;
+    line.gradient.setAttribute("gradientTransform", `matrix(${dx * gradientLength} ${dy * gradientLength} ${-dy} ${dx} ${line.fromX + dx * gradientStart} ${line.fromY + dy * gradientStart})`);
+    line.path.setAttribute("stroke-dasharray", span >= line.length ? "none" : `${span} ${line.length + 1}`);
     line.path.setAttribute("stroke-dashoffset", String(-startLength));
     line.path.setAttribute("stroke-opacity", String(state.opacity));
+    const visible = state.opacity > 0;
+    if (line.visible !== visible) {
+      line.visible = visible;
+      line.path.setAttribute("visibility", String(visible ? "visible" : "hidden"));
+    }
   }
 
   function getHighlightMix(phase, depth, strengthPercent, decayPercent) {
@@ -89,55 +134,55 @@
 
     const previewId = ++nextPreviewId;
     const svg = createSvgElement("svg", {
-      viewBox: "0 0 360 120",
+      viewBox: "0 0 300 90",
       role: "img",
       "aria-label": "Animierte Highlight-Linien zwischen drei Figuren"
     });
     svg.classList.add("lfs-highlight-line-preview-svg");
 
-    const background = createSvgElement("rect", { x: 0, y: 0, width: 360, height: 120 });
+    const background = createSvgElement("rect", { x: 0, y: 0, width: 300, height: 90 });
     background.classList.add("lfs-highlight-line-preview-background");
     const definitions = createSvgElement("defs");
-    const centers = [60, 180, 300];
+    const centers = [50, 150, 250];
     const pieceTypes = ["r", "n", "b"];
     const pieceColors = ["w", "b", "w"];
     const nodes = centers.map((x, depth) => {
-      const cell = createSvgElement("rect", { x: depth * 120, y: 0, width: 120, height: 120 });
+      const cell = createSvgElement("rect", { x: depth * 100, y: 0, width: 100, height: 90 });
       cell.classList.add("lfs-highlight-line-preview-cell", `lfs-highlight-line-preview-cell-${depth}`);
       const maskId = `lfs-highlight-line-preview-mask-${previewId}-${depth}`;
       const mask = createSvgElement("mask", {
         id: maskId,
-        x: x - 48,
-        y: 12,
-        width: 96,
-        height: 96,
+        x: x - 40,
+        y: 5,
+        width: 80,
+        height: 80,
         maskUnits: "userSpaceOnUse",
         "mask-type": "alpha"
       });
       mask.style.maskType = "alpha";
       const maskImage = createSvgElement("image", {
-        x: x - 42,
-        y: 18,
-        width: 84,
-        height: 84,
+        x: x - 35,
+        y: 10,
+        width: 70,
+        height: 70,
         preserveAspectRatio: "xMidYMid meet"
       });
       mask.append(maskImage);
       definitions.append(mask);
       const maskUrl = `url(#${maskId})`;
       const piece = createSvgElement("rect", {
-        x: x - 42,
-        y: 18,
-        width: 84,
-        height: 84,
+        x: x - 35,
+        y: 10,
+        width: 70,
+        height: 70,
         mask: maskUrl
       });
       piece.classList.add("lfs-highlight-line-preview-piece");
       const highlight = createSvgElement("rect", {
-        x: x - 42,
-        y: 18,
-        width: 84,
-        height: 84,
+        x: x - 35,
+        y: 10,
+        width: 70,
+        height: 70,
         fill: "white",
         opacity: 0,
         mask: maskUrl
@@ -145,14 +190,14 @@
       return { depth, color: pieceColors[depth], type: pieceTypes[depth], cell, maskImage, piece, highlight };
     });
     const lines = [
-      { depth: 1, fromX: 60, fromY: 60, toX: 180, toY: 60 },
-      { depth: 2, fromX: 180, fromY: 60, toX: 300, toY: 60 }
+      { depth: 1, fromX: 50, fromY: 45, toX: 150, toY: 45 },
+      { depth: 2, fromX: 150, fromY: 45, toX: 250, toY: 45 }
     ].map(({ depth, fromX, fromY, toX, toY }) => {
       const gradient = createSvgElement("linearGradient", {
         id: `lfs-highlight-line-preview-${previewId}-${depth}`,
         gradientUnits: "userSpaceOnUse"
       });
-      const stops = Array.from({ length: 9 }, () => createSvgElement("stop"));
+      const stops = Array.from({ length: 10 }, () => createSvgElement("stop"));
       gradient.append(...stops);
       definitions.append(gradient);
 
@@ -175,16 +220,27 @@
     let visible = !globalThis.IntersectionObserver;
     let frame = 0;
     let disposed = false;
-    const startedAt = performance.now();
+    let startedAt = 0;
+    let animationEndsAt = 0;
+    let lastGapColor;
 
-    function render(timestamp) {
+    function clearPreview() {
+      for (const node of nodes) node.highlight.setAttribute("opacity", "0");
+      for (const line of lines) {
+        line.path.setAttribute("stroke-opacity", "0");
+        line.path.setAttribute("visibility", "hidden");
+        line.visible = false;
+      }
+    }
+
+    function render(timestamp, initial = false) {
       frame = 0;
       if (disposed) return;
       if (!container.isConnected) {
         dispose();
         return;
       }
-      if (!visible || document.hidden) return;
+      if (!initial && (!visible || document.hidden)) return;
 
       const settings = getSettings();
       const pieceSet = settings.pieceSet;
@@ -199,13 +255,14 @@
 
       const waveInterval = Math.max(0, settings.defenseHighlightWaveIntervalMs);
       const highlightDuration = Math.max(1, settings.defenseHighlightDurationMs);
-      const cycleDuration = highlightDuration + 2 * waveInterval + 250;
-      const elapsed = (timestamp - startedAt) % cycleDuration;
-      const cycleStartedAt = timestamp - elapsed;
+      const elapsed = timestamp - startedAt;
       const boardColors = getBoardColors(settings);
-      container.style.setProperty("background", boardColors.gap, "important");
-      background.setAttribute("fill", boardColors.gap);
-      background.style.setProperty("fill", boardColors.gap, "important");
+      if (boardColors.gap !== lastGapColor) {
+        lastGapColor = boardColors.gap;
+        container.style.setProperty("background", boardColors.gap, "important");
+        background.setAttribute("fill", boardColors.gap);
+        background.style.setProperty("fill", boardColors.gap, "important");
+      }
       for (const node of nodes) {
         const phase = (elapsed - node.depth * waveInterval) / highlightDuration;
         const mix = phase < 0 || phase > 1 ? 0
@@ -213,29 +270,50 @@
         const pieceColor = node.color === "w" ? settings.whitePieceColor : settings.blackPieceColor;
         const tileColor = settings.monochromeBoard ? boardColors.light
           : node.depth % 2 === 0 ? boardColors.light : boardColors.dark;
-        node.cell.setAttribute("fill", tileColor);
-        node.cell.style.setProperty("fill", tileColor, "important");
-        node.cell.setAttribute("stroke", settings.squareOutline ? boardColors.gap : "none");
-        node.cell.setAttribute("stroke-width", settings.squareOutline ? "1" : "0");
-        node.piece.setAttribute("fill", pieceColor);
+        if (node.tileColor !== tileColor) {
+          node.tileColor = tileColor;
+          node.cell.setAttribute("fill", tileColor);
+          node.cell.style.setProperty("fill", tileColor, "important");
+        }
+        const outlineColor = settings.squareOutline ? boardColors.gap : "none";
+        const outlineWidth = settings.squareOutline ? "1" : "0";
+        if (node.outlineColor !== outlineColor) {
+          node.outlineColor = outlineColor;
+          node.cell.setAttribute("stroke", outlineColor);
+        }
+        if (node.outlineWidth !== outlineWidth) {
+          node.outlineWidth = outlineWidth;
+          node.cell.setAttribute("stroke-width", outlineWidth);
+        }
+        if (node.pieceColor !== pieceColor) {
+          node.pieceColor = pieceColor;
+          node.piece.setAttribute("fill", pieceColor);
+        }
         node.highlight.setAttribute("opacity", String(mix));
       }
       for (const line of lines) {
-        const state = getLineMotion(settings, line.depth, cycleStartedAt, timestamp);
+        const state = getLineMotion(settings, line.depth, startedAt, timestamp);
         line.color = nodes[line.depth].color === "w" ? settings.whitePieceColor : settings.blackPieceColor;
         updateLine(line, state, settings, 1.2);
       }
-      frame = requestAnimationFrame(render);
+      if (timestamp < animationEndsAt) frame = requestAnimationFrame(render);
+      else {
+        frame = 0;
+        animationEndsAt = 0;
+        clearPreview();
+      }
     }
 
     function schedule() {
-      if (!disposed && visible && !document.hidden && !frame) frame = requestAnimationFrame(render);
+      if (!disposed && visible && !document.hidden && animationEndsAt && !frame) frame = requestAnimationFrame(render);
     }
 
     function onVisibilityChange() {
       if (document.hidden && frame) {
         cancelAnimationFrame(frame);
         frame = 0;
+        animationEndsAt = 0;
+        clearPreview();
       } else {
         schedule();
       }
@@ -255,13 +333,27 @@
         else if (frame) {
           cancelAnimationFrame(frame);
           frame = 0;
+          animationEndsAt = 0;
+          clearPreview();
         }
       })
       : null;
+    render(performance.now(), true);
+    clearPreview();
     observer?.observe(container);
     document.addEventListener("visibilitychange", onVisibilityChange);
-    schedule();
-    return dispose;
+    return {
+      play() {
+        if (disposed) return;
+        const settings = getSettings();
+        startedAt = performance.now();
+        animationEndsAt = startedAt + settings.defenseHighlightDurationMs
+          + 2 * settings.defenseHighlightWaveIntervalMs;
+        clearPreview();
+        schedule();
+      },
+      dispose
+    };
   }
 
   globalThis.LichessHighlightLinePreview = { getHighlightMix, getLineMotion, updateLine, mount };
