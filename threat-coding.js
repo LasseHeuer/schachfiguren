@@ -840,7 +840,7 @@
         pieceInteractionActive = true;
         activePieceDrag = { board, position: parsed.position, source, clientX: event.clientX, clientY: event.clientY };
       }, true);
-      document.addEventListener("pointermove", event => {
+      const updatePointerPosition = event => {
         lastPointerPosition = { x: event.clientX, y: event.clientY };
         if (pieceInteractionActive && activePieceDrag) {
           activePieceDrag.clientX = event.clientX;
@@ -852,17 +852,22 @@
           const selected = document.querySelector(selectedSquareSelector);
           if (selected) document.dispatchEvent(new CustomEvent("lfs-hover-preview-change", { detail: selected.parentElement }));
         }
-      }, true);
+      };
+      document.addEventListener("pointermove", updatePointerPosition, true);
+      document.addEventListener("pointerover", updatePointerPosition, true);
       const finishPieceInteraction = event => {
         pieceInteractionActive = false;
         activePieceDrag = null;
-        if (event.type === "blur" || event.type === "pointercancel") lastPointerPosition = null;
+        if (event.type === "blur" || event.type === "pointercancel" || event.type === "pointerout") lastPointerPosition = null;
         for (const board of observedBoards.keys()) {
           document.dispatchEvent(new CustomEvent("lfs-hover-preview-change", { detail: board }));
         }
       };
       document.addEventListener("pointerup", finishPieceInteraction, true);
       document.addEventListener("pointercancel", finishPieceInteraction, true);
+      document.addEventListener("pointerout", event => {
+        if (!event.relatedTarget && !pieceInteractionActive) finishPieceInteraction(event);
+      }, true);
       window.addEventListener("blur", finishPieceInteraction);
       interactionListenersAdded = true;
     }

@@ -1088,6 +1088,27 @@ test("hover previews ignore stale move keys and respect active move animations",
   const preview = context.threatTesting.getInteractionPreview(historyBoard, 45, 45);
   assert.deepEqual({ ...preview.source }, { row: 4, col: 3 }, "history navigation must use the piece's current square instead of its stale key");
   assert.deepEqual({ ...preview.target }, { row: 4, col: 4 }, "the selected piece must preview the hovered legal field after history navigation");
+
+  const listeners = {};
+  const interactionContext = vm.createContext({
+    document: {
+      addEventListener: (name, callback) => { listeners[name] = callback; },
+      querySelector: () => null,
+      dispatchEvent() {}
+    },
+    window: { addEventListener: (name, callback) => { listeners[name] = callback; } },
+    requestAnimationFrame: () => 1
+  });
+  vm.runInContext(threatSource.replace("    if (!documentObserver) {", "    return;\n    if (!documentObserver) {"), interactionContext);
+  const interaction = interactionContext.LichessThreatCoding;
+  interaction.update(settings.normalize({ enabled: true }));
+  listeners.pointermove({ clientX: 45, clientY: 45 });
+  assert.deepEqual({ ...interaction.getInteractionPreview(historyBoard).target }, { row: 4, col: 4 });
+  listeners.pointerout({ type: "pointerout", relatedTarget: null });
+  assert.equal(interaction.getInteractionPreview(historyBoard), null, "leaving the window clears the move preview");
+  listeners.pointerover({ clientX: 45, clientY: 45 });
+  assert.deepEqual({ ...interaction.getInteractionPreview(historyBoard).target }, { row: 4, col: 4 },
+    "re-entering the window restores the move preview without pointermove");
 });
 
 test("highlight cascades only follow recaptures on the root square and reveal vacated lines", () => {
@@ -1809,6 +1830,72 @@ test("held SVG lines survive selection, preview waits and replacement before ret
   frame(11320);
   assert.ok(transient.every(line => !line.path.parent), "hold disabled still removes the completed animation");
   assert.equal(entry.highlightLineSvg, null);
+
+  for (const slowClick of [false, true]) {
+    api.clearDefenseHighlights(entry);
+    if (slowClick) update(12000, null, { row: 4, col: 4 });
+    update(12016, preview(4, 4));
+    assert.ok(entry.defenseHighlightRuns.length, "both quick and slow selection start the source preview without line holding");
+    const selectedRun = entry.defenseHighlightRuns[0];
+    update(12032, preview(4, 4));
+    assert.equal(entry.defenseHighlightRuns[0], selectedRun, "remaining on the source must not restart the preview");
+    frame(13200);
+    assert.equal(entry.defenseHighlightRuns.length, 0);
+    update(13216, preview(4, 4));
+    assert.equal(entry.defenseHighlightRuns.length, 0, "completed source previews must not loop");
+    update(13400, preview(3, 4));
+    update(13600, preview(3, 4));
+    frame(14800);
+    update(14816, preview(4, 4));
+    assert.ok(entry.defenseHighlightRuns.some(run => run.root.row === 4 && run.root.col === 4),
+      "returning from a move destination starts the current figure's preview again");
+  }
+});
+
+test("hover state follows scrolling, window exit and re-entry without pointer movement", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const listeners = {};
+  let top = 0;
+  const board = {
+    closest: () => board, querySelector: () => null,
+    getBoundingClientRect: () => ({ left: 0, top, right: 800, bottom: top + 800, width: 800, height: 800 })
+  };
+  const context = vm.createContext({
+    document: {
+      addEventListener: (name, callback) => { listeners[name] = callback; },
+      elementFromPoint: () => board
+    },
+    addEventListener: (name, callback) => { listeners[name] = callback; },
+    requestAnimationFrame: () => 1,
+    clearTimeout() {}
+  });
+  vm.runInContext(readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8")
+    .replace("  documentObserver = new MutationObserver", `
+      globalThis.testing = { observedBoards };
+      return;
+      documentObserver = new MutationObserver`), context);
+  const entry = {};
+  context.testing.observedBoards.set(board, entry);
+  const event = { clientX: 450, clientY: 450, target: board };
+  listeners.pointermove(event);
+  assert.deepEqual({ ...entry.hoveredSquare }, { row: 4, col: 4 });
+  entry.previewPointerMotion = { smooth: true };
+  top = -100;
+  listeners.scroll();
+  assert.deepEqual({ ...entry.hoveredSquare }, { row: 5, col: 4 }, "scrolling must recompute the square under the stationary pointer");
+  assert.equal(entry.previewPointerMotion, null, "scrolling is not pointer anticipation");
+  entry.defenseHoverStartedKey = "hover:5,4:wrook";
+  listeners.pointerout({ relatedTarget: null });
+  assert.equal(entry.hoveredSquare, null);
+  assert.equal(entry.defenseHoverStartedKey, null);
+  listeners.pointerover(event);
+  assert.deepEqual({ ...entry.hoveredSquare }, { row: 5, col: 4 }, "re-entry must restore hover without pointermove");
+  listeners.blur();
+  assert.equal(entry.hoveredSquare, null);
+  listeners.scroll();
+  assert.equal(entry.hoveredSquare, null, "scrolling after blur must not restore stale hover");
 });
 
 test("hover anticipation waits for sustained motion and zero restores field animations", () => {
@@ -2070,6 +2157,7 @@ test("board SVG rendering preserves piece masks and round king fields", { skip: 
   const testSource = source.replace(marker, `
     globalThis.testing = {
       readPosition,
+      renderMoveOutline,
       renderMovePreviewPiece,
       createHighlightLineMask,
       updateDefenseHighlight,
@@ -2201,6 +2289,28 @@ ${marker}`);
       await new Promise(resolve => setTimeout(resolve, 50));
     }
     assert.equal(await evaluate("Boolean(window.testing)"), true, "the browser loaded the production renderer");
+    await t.test("rook outlines include occupied a6 destinations from a2 for moves and premoves", async () => {
+      for (const destinationClass of ["move-dest", "premove-dest"]) {
+        const result = await evaluate(`(() => {
+          const board = document.querySelector('cg-board');
+          const previous = board.innerHTML;
+          const entry = {};
+          testing.configure(LichessSettings.normalize({ enabled: true, moveIndicatorMode: 'outline', boardBevelEnabled: false }));
+          board.innerHTML = '<square class="selected" style="left:0;top:75%"></square>'
+            + '<piece class="white rook" style="left:0;top:75%"></piece>'
+            + '<piece class="black pawn" style="left:0;top:25%"></piece>'
+            + [2, 3, 4, 5].map(row => '<square class="${destinationClass}' + (row === 2 ? ' oc' : '')
+              + '" style="left:0;top:' + row * 12.5 + '%"></square>').join('');
+          testing.renderMoveOutline(board, entry, 'w');
+          const path = entry.moveOutlineSvg?.querySelector('path[fill="none"]')?.getAttribute('d');
+          board.innerHTML = previous;
+          return path;
+        })()`);
+        assert.ok(result?.includes("M0 2L1 2"), `${destinationClass}: the outline must enclose the pawn on a6`);
+        assert.ok(!result.includes("M0 3L1 3"), `${destinationClass}: no dividing edge below a6`);
+        assert.ok(!result.includes("M0 1L1 1"), `${destinationClass}: no field beyond the capture`);
+      }
+    });
     const options = settings.normalize({
       pieceSet: "cage", highlightCascadesEnabled: true, defenseHighlightEnabled: true, attackHighlightEnabled: false,
       highlightCascadeLinesEnabled: true, highlightCascadeLinesHoldEnabled: true, defenseHighlightDepth: 2,

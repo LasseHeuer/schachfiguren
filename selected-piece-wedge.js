@@ -22,6 +22,7 @@
   const maxPositionAnalysisCacheSize = 128;
   let settings = null;
   let pointerOverBoard = null;
+  let lastPointerPosition = null;
   let documentObserver = null;
   let hatchAnimationFrame = 0;
   let hatchScrollLastTime = null;
@@ -87,7 +88,8 @@
 
   document.addEventListener("lfs-hover-preview-change", event => scheduleRender(event.detail));
 
-  document.addEventListener("pointermove", event => {
+  function updatePointerPosition(event) {
+    lastPointerPosition = { x: event.clientX, y: event.clientY };
     const eventBoard = typeof event.target?.closest === "function"
       ? event.target.closest(boardSelector)
       : null;
@@ -164,7 +166,36 @@
         scheduleRender(board);
       }
     }
+  }
+
+  document.addEventListener("pointermove", updatePointerPosition, true);
+  document.addEventListener("pointerover", event => {
+    if (event.target?.closest?.(boardSelector) !== pointerOverBoard) updatePointerPosition(event);
   }, true);
+  document.addEventListener("scroll", () => {
+    if (!lastPointerPosition) return;
+    const { x, y } = lastPointerPosition;
+    for (const entry of observedBoards.values()) entry.previewPointerMotion = null;
+    updatePointerPosition({ clientX: x, clientY: y, target: document.elementFromPoint(x, y) });
+  }, true);
+
+  function clearPointerPosition() {
+    lastPointerPosition = null;
+    pointerOverBoard = null;
+    for (const [board, entry] of observedBoards) {
+      entry.hoveredSquare = null;
+      entry.previewPointerMotion = null;
+      clearDefenseHoverTimer(entry);
+      entry.defenseHoverKey = null;
+      entry.defenseHoverStartedKey = null;
+      scheduleRender(board);
+    }
+  }
+
+  document.addEventListener("pointerout", event => {
+    if (!event.relatedTarget) clearPointerPosition();
+  }, true);
+  globalThis.addEventListener?.("blur", clearPointerPosition);
 
 
   function getScreenSquare(element, board, boardRect) {
@@ -2806,7 +2837,7 @@
       clearDefenseHoverTimer(entry);
       entry.defenseHoverKey = null;
       entry.defenseHoverStartedKey = null;
-      if (entry.defenseSelectedKey !== selectedKey) {
+      if (entry.defenseSelectedKey !== selectedKey || entry.defenseCascadeContextKey?.startsWith("preview:")) {
         entry.defenseSelectedKey = selectedKey;
         setDefenseCascadeContext(entry, selectedKey);
         const started = (!settings.highlightCascadeLinesHoldEnabled || nextHoldRoot)
@@ -2895,13 +2926,17 @@
     }
     const targetKey = `${sourceKey}:${preview.target.row},${preview.target.col}`;
     if (preview.source.row === preview.target.row && preview.source.col === preview.target.col) {
+      const sourceChanged = entry.defenseSelectedKey !== selectedKey
+        || entry.defensePreviewLastTargetKey !== targetKey;
       clearDefensePreviewTimer(entry);
       entry.defensePreviewLastTargetKey = targetKey;
+      entry.defenseSelectedKey = selectedKey;
       setDefenseLineHoldRoot(entry, entry.defenseLineHoldPendingRoot ?? nextHoldRoot);
       entry.defenseLineHoldPendingRoot = null;
       setDefenseCascadeContext(entry, selectedKey);
-      if (settings.highlightCascadeLinesHoldEnabled && !entry.defenseHighlightRuns.some(run => !run.retiring
-        && run.root.row === selectedRoot.row && run.root.col === selectedRoot.col)) {
+      const hasSourceRun = entry.defenseHighlightRuns.some(run => !run.retiring
+        && run.root.row === selectedRoot.row && run.root.col === selectedRoot.col);
+      if (!hasSourceRun && (settings.highlightCascadeLinesHoldEnabled || sourceChanged)) {
         startHighlightCascades(board, entry, selectedPosition, selectedRoot, parsed.blackOrientation, preview);
       }
       return;
@@ -3286,7 +3321,7 @@
   // are kept as the connection between diagonal squares and dropped where three or four squares meet.
   function renderMoveOutline(board, entry, selectedColor) {
     const targets = settings?.enabled && settings.moveIndicatorMode === "outline" && board.closest(".is2d")
-      ? board.querySelectorAll(":scope > square.move-dest, :scope > square.premove-dest:not(.oc)")
+      ? board.querySelectorAll(":scope > square.move-dest, :scope > square.premove-dest")
       : [];
     const cells = targets.length
       ? [...targets, ...board.querySelectorAll(":scope > square.selected")]
