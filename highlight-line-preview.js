@@ -9,6 +9,10 @@
     return element;
   }
 
+  function getAttribute(element, name) {
+    return typeof element.getAttribute === "function" ? element.getAttribute(name) : element.attributes?.[name] ?? null;
+  }
+
   function getLineMotion(settings, depth, startedAt, timestamp, holdAtEnd = settings.highlightCascadeLinesHoldEnabled,
     wave = depth, startWave = wave - 1) {
     const waveInterval = settings.defenseHighlightWaveIntervalMs;
@@ -111,10 +115,14 @@
     const gradientStart = holding
       ? state.shrinking ? line.length - visibleLength : Math.max(0, visibleLength - fadeLength)
       : startLength;
-    line.gradient.setAttribute("gradientTransform", `matrix(${dx * gradientLength} ${dy * gradientLength} ${-dy} ${dx} ${line.fromX + dx * gradientStart} ${line.fromY + dy * gradientStart})`);
-    line.path.setAttribute("stroke-dasharray", span >= line.length ? "none" : `${span} ${line.length + 1}`);
-    line.path.setAttribute("stroke-dashoffset", String(-startLength));
-    line.path.setAttribute("stroke-opacity", String(state.opacity));
+    const gradientTransform = `matrix(${dx * gradientLength} ${dy * gradientLength} ${-dy} ${dx} ${line.fromX + dx * gradientStart} ${line.fromY + dy * gradientStart})`;
+    const dashArray = span >= line.length ? "none" : `${span} ${line.length + 1}`;
+    const dashOffset = String(-startLength);
+    const opacity = String(state.opacity);
+    if (getAttribute(line.gradient, "gradientTransform") !== gradientTransform) line.gradient.setAttribute("gradientTransform", gradientTransform);
+    if (getAttribute(line.path, "stroke-dasharray") !== dashArray) line.path.setAttribute("stroke-dasharray", dashArray);
+    if (getAttribute(line.path, "stroke-dashoffset") !== dashOffset) line.path.setAttribute("stroke-dashoffset", dashOffset);
+    if (getAttribute(line.path, "stroke-opacity") !== opacity) line.path.setAttribute("stroke-opacity", opacity);
     const visible = state.opacity > 0;
     if (line.visible !== visible) {
       line.visible = visible;

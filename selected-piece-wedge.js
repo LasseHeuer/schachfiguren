@@ -167,15 +167,15 @@
   }, true);
 
 
-  function getScreenSquare(element, board) {
+  function getScreenSquare(element, board, boardRect) {
     const style = getComputedStyle(element);
     if (style.display === "none" || style.visibility === "hidden") return null;
-    const boardRect = board.getBoundingClientRect();
-    if (!boardRect.width || !boardRect.height) return null;
+    const rectForBoard = boardRect ?? board.getBoundingClientRect();
+    if (!rectForBoard.width || !rectForBoard.height) return null;
     const rect = element.getBoundingClientRect();
     if (!rect.width || !rect.height) return null;
-    const screenCol = Math.floor(((rect.left + rect.width / 2 - boardRect.left) / boardRect.width) * 8);
-    const screenRow = Math.floor(((rect.top + rect.height / 2 - boardRect.top) / boardRect.height) * 8);
+    const screenCol = Math.floor(((rect.left + rect.width / 2 - rectForBoard.left) / rectForBoard.width) * 8);
+    const screenRow = Math.floor(((rect.top + rect.height / 2 - rectForBoard.top) / rectForBoard.height) * 8);
     if (screenRow < 0 || screenRow > 7 || screenCol < 0 || screenCol > 7) return null;
     return { row: screenRow, col: screenCol };
   }
@@ -187,30 +187,31 @@
     return { color, type, element };
   }
 
-  function getPieceScreenSquare(element, board, blackOrientation) {
+  function getPieceScreenSquare(element, board, blackOrientation, boardRect) {
     const moveKey = (globalThis.LichessMoveAnimation?.getDestinationKey(element)
       ?? (element.classList.contains("anim") ? element.getAttribute("data-lfs-move-key") : null))?.toLowerCase();
     const match = /^([a-h])([1-8])$/.exec(moveKey ?? "");
     if (match) {
       return logicalToScreen({ row: 8 - Number(match[2]), col: match[1].charCodeAt(0) - 97 }, blackOrientation);
     }
-    return getScreenSquare(element, board);
+    return getScreenSquare(element, board, boardRect);
   }
 
   function readPosition(board) {
     const blackOrientation = board.closest(".cg-wrap")?.classList.contains("orientation-black") ?? false;
+    const boardRect = board.getBoundingClientRect();
     const position = Array.from({ length: 8 }, () => Array(8).fill(null));
 
     for (const element of board.querySelectorAll(":scope > piece")) {
       if (element.classList.contains("ghost") || element.classList.contains("fading")) continue;
       const piece = getPiece(element);
-      const square = getPieceScreenSquare(element, board, blackOrientation);
+      const square = getPieceScreenSquare(element, board, blackOrientation, boardRect);
       if (!piece || !square || position[square.row][square.col]) return null;
       position[square.row][square.col] = piece;
     }
 
     const selected = [...board.querySelectorAll(":scope > square.selected")]
-      .map(square => getScreenSquare(square, board)).find(Boolean) ?? null;
+      .map(square => getScreenSquare(square, board, boardRect)).find(Boolean) ?? null;
     return { position, selected, blackOrientation };
   }
 
@@ -3511,7 +3512,9 @@
         }))
       : [];
     // Move field lines use the unmoved board, so they show without hovering. While dragging, the unmoved position from the drag state is used.
-    const idleParsed = dragPreview && !dragPreview.isHoverPreview ? wedgeParsed : readPosition(board);
+    const idleParsed = dragPreview && !dragPreview.isHoverPreview
+      ? wedgeParsed
+      : dragPreview?.isHoverPreview ? readPosition(board) : parsed;
     const rawMoveDestinationLines = idleParsed?.selected
       && (settings.threatenedPieceOutlineEnabled || settings.defenseCirclesEnabled)
       ? getMoveDestinationLines(board, idleParsed.position, idleParsed.selected, idleParsed.blackOrientation)

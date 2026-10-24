@@ -814,7 +814,12 @@ test("highlight pulses remain continuous with zero wave spacing and reuse static
     animation.updateLine(line, { progress: 0.4, opacity: 0.6 }, values, 0.01);
     writes.length = 0;
     animation.updateLine(line, { progress: 0.5, opacity: 0.8 }, values, 0.01);
-    assert.deepEqual(writes, ["gradientTransform", "stroke-dasharray", "stroke-dashoffset", "stroke-opacity"]);
+    assert.deepEqual(writes, [
+      "gradientTransform",
+      ...(length === 1 ? [] : ["stroke-dasharray"]),
+      ...(length === 1 ? ["stroke-dashoffset"] : []),
+      "stroke-opacity"
+    ]);
     assert.ok(Math.abs(Number(line.path.attributes["stroke-dasharray"].split(" ")[0]) - Math.min(2.5, 5 * length / 100)) < 1e-12);
     animation.updateLine(line, { progress: 1, opacity: 0 }, values, 0.01);
     assert.equal(line.path.attributes["stroke-dasharray"], length === 100 ? "none" : `${5 * length / 100} 6`);

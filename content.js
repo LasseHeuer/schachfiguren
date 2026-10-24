@@ -590,9 +590,8 @@
     pvPreviewFrame = requestAnimationFrame(syncPvPreview);
   }
 
-  function previewPvMove(slider, index) {
+  function previewPvMove(slider, index, moves = [...(slider._lfsPvRow?.querySelectorAll(":scope > .pv-san") ?? [])]) {
     const row = slider._lfsPvRow;
-    const moves = row ? [...row.querySelectorAll(":scope > .pv-san")] : [];
     const move = moves[index];
     if (!move) return;
 
@@ -632,10 +631,11 @@
     if (!moves.length) return;
     const rect = slider.getBoundingClientRect();
     const progress = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    previewPvMove(slider, Math.round(progress * (moves.length - 1)));
+    previewPvMove(slider, Math.round(progress * (moves.length - 1)), moves);
   }
 
   function syncPvLineSliders() {
+    const slidersToPosition = [];
     for (const box of document.querySelectorAll(".pv_box")) {
       const rows = [...box.querySelectorAll(":scope > .pv")];
       let container = box.querySelector(":scope > [data-lfs-pv-slider-container]");
@@ -684,15 +684,33 @@
           slider.dataset.moveCount = String(moves.length);
         }
 
-        const rowRect = row.getBoundingClientRect();
-        const boxRect = box.getBoundingClientRect();
         const score = row.querySelector(":scope > strong");
-        const start = score ? score.getBoundingClientRect().right - boxRect.left + 6 : rowRect.left - boxRect.left + 8;
-        const end = rowRect.right - boxRect.left - 8;
-        slider.style.left = `${start}px`;
-        slider.style.top = `${rowRect.top - boxRect.top + rowRect.height / 2 - 11}px`;
-        slider.style.width = `${Math.max(24, end - start)}px`;
+        slidersToPosition.push({ slider, row, box, score });
       }
+    }
+
+    const boxRects = new Map();
+    const positions = slidersToPosition.map(({ slider, row, box, score }) => {
+      let boxRect = boxRects.get(box);
+      if (!boxRect) {
+        boxRect = box.getBoundingClientRect();
+        boxRects.set(box, boxRect);
+      }
+      const rowRect = row.getBoundingClientRect();
+      const scoreRight = score?.getBoundingClientRect().right;
+      const start = score ? scoreRight - boxRect.left + 6 : rowRect.left - boxRect.left + 8;
+      const end = rowRect.right - boxRect.left - 8;
+      return {
+        slider,
+        left: `${start}px`,
+        top: `${rowRect.top - boxRect.top + rowRect.height / 2 - 11}px`,
+        width: `${Math.max(24, end - start)}px`
+      };
+    });
+    for (const { slider, left, top, width } of positions) {
+      if (slider.style.left !== left) slider.style.left = left;
+      if (slider.style.top !== top) slider.style.top = top;
+      if (slider.style.width !== width) slider.style.width = width;
     }
   }
 
@@ -1208,6 +1226,11 @@
   });
 
   // One observer for both jobs; play time is only re-formatted while a profile page is present.
+  const boardMountSelector = ".cg-wrap, .puzzle__board cg-board, .analyse__board cg-board, .main-board cg-board, .bot-game__board cg-board, .study__board cg-board, main cg-board";
+  const profileSelector = "#us_profile, .perf-stat";
+  const containsMatchingElement = (node, selector) => node.nodeType === Node.ELEMENT_NODE
+    && (node.matches(selector) || Boolean(node.querySelector(selector)));
+
   new MutationObserver(records => {
     const targetElement = record => record.target.nodeType === Node.ELEMENT_NODE ? record.target : record.target.parentElement;
     const isZenClockMutation = record => Boolean(targetElement(record)?.closest(".rclock, .clock"));
@@ -1239,14 +1262,19 @@
 
     const zenMode = document.documentElement.hasAttribute("data-lfs-zen-mode");
     const hasPreviewMutation = records.some(record => {
-      const hasChangedNodes = record.addedNodes.length || record.removedNodes.length;
-      if (!zenMode) return hasChangedNodes || record.type === "characterData";
-      if (isZenClockMutation(record) || isZenMaterialMutation(record) || isZenOverlayMutation(record)) return false;
-      return hasChangedNodes || record.type === "characterData";
+      const target = targetElement(record);
+      if (target?.closest(".pv_box")) return true;
+      if (record.type === "attributes" && record.attributeName === "class" && target?.matches(".cg-wrap")) return true;
+      return [...record.addedNodes, ...record.removedNodes].some(node => containsMatchingElement(node, `${boardMountSelector}, .pv_box`));
     });
     if (hasPreviewMutation) schedulePvPreviewSync();
-    const hasLayoutMutation = records.some(record => (record.addedNodes.length || record.removedNodes.length)
-      && (!zenMode || !isZenClockMutation(record) && !isZenMaterialMutation(record) && !isZenOverlayMutation(record)));
+    const hasLayoutMutation = records.some(record => {
+      if (!record.addedNodes.length && !record.removedNodes.length) return false;
+      const target = targetElement(record);
+      const isBoardLayout = Boolean(target?.closest(".puzzle, .analyse, .round__app, .bot-game, .study__main, main"))
+        || [...record.addedNodes, ...record.removedNodes].some(node => containsMatchingElement(node, boardMountSelector));
+      return isBoardLayout && (!zenMode || !isZenClockMutation(record) && !isZenMaterialMutation(record) && !isZenOverlayMutation(record));
+    });
     if (hasLayoutMutation) {
       syncBoardLayout();
       if (zenMode) scheduleZenCenter();
@@ -1256,7 +1284,12 @@
       if (records.some(isZenClockMutation)) scheduleZenClockUpdate();
       if (records.some(isZenMaterialMutation)) scheduleZenSideUpdate();
     }
-    if (document.querySelector("#us_profile, .perf-stat")) queuePlayTimeUpdate();
+    const hasPlayTimeMutation = records.some(record => {
+      const target = targetElement(record);
+      if (target?.closest(profileSelector)) return true;
+      return [...record.addedNodes, ...record.removedNodes].some(node => containsMatchingElement(node, profileSelector));
+    });
+    if (hasPlayTimeMutation) queuePlayTimeUpdate();
     for (const record of records) {
       for (const node of record.addedNodes) {
         if (node.nodeType !== Node.ELEMENT_NODE) continue;

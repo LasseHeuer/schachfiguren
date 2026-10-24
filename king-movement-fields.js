@@ -4,6 +4,7 @@
   const pieceTypes = ["pawn", "knight", "bishop", "rook", "queen", "king"];
   const pieceCodes = { pawn: "P", knight: "N", bishop: "B", rook: "R", queen: "Q", king: "K" };
   const observedBoards = new Map();
+  const renderedOverlayKeys = new WeakMap();
   let settings = null;
   let documentObserver = null;
 
@@ -202,11 +203,15 @@
         appendCell(paths, rowOffset * orientationSign, colOffset * orientationSign, getDestinationState(position, king, target));
       }
     }
+    const pathData = paths.join("");
+    const color = paths.length ? (king.color === "w" ? settings.whitePieceColor : settings.blackPieceColor) : "";
+    const renderKey = JSON.stringify([pathData, color, settings.pieceSet]);
+    if (renderedOverlayKeys.get(svg) === renderKey) return;
+    renderedOverlayKeys.set(svg, renderKey);
     svg.replaceChildren();
     if (paths.length) {
-      const color = king.color === "w" ? settings.whitePieceColor : settings.blackPieceColor;
       svg.append(createSvgElement("path", {
-        d: paths.join(""),
+        d: pathData,
         fill: color,
         stroke: color,
         "stroke-width": "0.02",

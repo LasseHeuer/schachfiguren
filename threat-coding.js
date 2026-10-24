@@ -33,6 +33,8 @@
   let documentObserver = null;
   let themeObserver = null;
   const threatImageCache = new Map();
+  const threatMapCache = new Map();
+  const parsedColorCache = new Map();
   let threatCanvas = null;
   const displayedThreatKeys = new WeakMap();
   const pendingThreatKeys = new WeakMap();
@@ -181,9 +183,39 @@
   }
 
   function parseHexColor(hex) {
+    const cached = parsedColorCache.get(hex);
+    if (cached) {
+      parsedColorCache.delete(hex);
+      parsedColorCache.set(hex, cached);
+      return [...cached];
+    }
     const channels = globalThis.LichessColors.toRgb(hex);
     // Remove conversion noise from legacy RGB8 colors without quantizing picker colors.
-    return channels ? channels.map(channel => Math.abs(channel - Math.round(channel)) < 0.001 ? Math.round(channel) : channel) : [255, 255, 255];
+    const parsed = channels ? channels.map(channel => Math.abs(channel - Math.round(channel)) < 0.001 ? Math.round(channel) : channel) : [255, 255, 255];
+    parsedColorCache.set(hex, parsed);
+    if (parsedColorCache.size > 64) parsedColorCache.delete(parsedColorCache.keys().next().value);
+    return [...parsed];
+  }
+
+  function getCachedThreatMap(position, options) {
+    const cacheKey = JSON.stringify([
+      position,
+      options.threatMoveDepth,
+      options.threatDepthFactor,
+      options.threatOwnSeeThrough,
+      options.threatOpponentSeeThrough,
+      options.threatPieceValueInfluencePercent
+    ]);
+    const cached = threatMapCache.get(cacheKey);
+    if (cached) {
+      threatMapCache.delete(cacheKey);
+      threatMapCache.set(cacheKey, cached);
+      return cached;
+    }
+    const threatMap = calculateThreatMap(position, options);
+    threatMapCache.set(cacheKey, threatMap);
+    if (threatMapCache.size > 32) threatMapCache.delete(threatMapCache.keys().next().value);
+    return threatMap;
   }
 
   function toRgbString(rgb) {
@@ -483,17 +515,22 @@
   }
 
   function renderPosition(board, position, blackOrientation) {
-    const threatMap = calculateThreatMap(position, settings);
+    const threatMap = getCachedThreatMap(position, settings);
     const colors = Array.from({ length: 8 }, () => Array(8));
     const fieldShapePercent = settings.boardFieldShape === "round" ? settings.boardRoundPercent : settings.boardBevelPercent;
     const bevelEnabled = settings.boardBevelEnabled && fieldShapePercent > 0;
     const gapColors = bevelEnabled ? Array.from({ length: 8 }, () => Array(8)) : null;
+    const lightTheme = document.documentElement.classList.contains("light");
+    const lightSquareColor = parseHexColor(lightTheme ? settings.boardLightLight : settings.boardLightDark);
+    const darkSquareColor = settings.monochromeBoard
+      ? lightSquareColor
+      : parseHexColor(lightTheme ? settings.boardDarkLight : settings.boardDarkDark);
     const gapBase = bevelEnabled ? parseHexColor(document.documentElement.classList.contains("light") ? settings.boardGapLight : settings.boardGapDark) : null;
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
         const screenRow = blackOrientation ? 7 - row : row;
         const screenCol = blackOrientation ? 7 - col : col;
-        const baseColor = getBoardBaseColor(row, col, settings);
+        const baseColor = settings.monochromeBoard || (row + col) % 2 === 0 ? lightSquareColor : darkSquareColor;
         colors[screenRow][screenCol] = getOpacityRgb(threatMap[row][col], settings, baseColor);
         if (gapColors) gapColors[screenRow][screenCol] = getOpacityRgb(threatMap[row][col], settings, gapBase);
       }

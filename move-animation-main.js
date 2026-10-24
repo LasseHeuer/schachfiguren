@@ -1,7 +1,21 @@
 (() => {
   const engineArrowLines = '.cg-wrap :is(.cg-shapes, .cg-shapes-below) line[marker-end^="url(#arrowhead-pb"], .cg-wrap :is(.cg-shapes, .cg-shapes-below) line[marker-end^="url(#arrowhead-pg"], .cg-wrap :is(.cg-shapes, .cg-shapes-below) line[marker-end^="url(#arrowhead-pr"]';
+  const extensionOverlaySelector = '[data-lfs-board-overlay], [data-lfs-engine-arrow-path], .lfs-selected-piece-wedge, .lfs-threat-arc, .lfs-threat-center-outline, .lfs-move-preview-piece, .lfs-king-movement-group, .lfs-king-preview-fields';
   const outlines = new WeakMap();
   const sources = new WeakMap();
+
+  function setAttributeIfChanged(element, name, value) {
+    const text = String(value);
+    if (element.getAttribute(name) !== text) element.setAttribute(name, text);
+  }
+
+  function isExtensionOverlayMutation(record) {
+    const target = record.target instanceof Element ? record.target : record.target.parentElement;
+    if (target?.closest(extensionOverlaySelector)) return true;
+    const changedNodes = [...record.addedNodes, ...record.removedNodes];
+    return changedNodes.length > 0 && changedNodes.every(node => node.nodeType === Node.ELEMENT_NODE
+      && (node.matches(extensionOverlaySelector) || node.closest(extensionOverlaySelector)));
+  }
 
   function syncEngineArrowAppearance() {
     const root = document.documentElement;
@@ -9,7 +23,7 @@
 
     const turnColor = window.lichess?.chessground?.()?.state?.turnColor;
     if (turnColor === "white" || turnColor === "black") {
-      root.setAttribute("data-lfs-engine-turn-color", turnColor);
+      setAttributeIfChanged(root, "data-lfs-engine-turn-color", turnColor);
     }
 
     const enabled = root.hasAttribute("data-lfs-engine-arrow-outline");
@@ -55,20 +69,21 @@
         sources.set(path, line);
       }
       // One open contour keeps the shaft and arrowhead hollow, without a seam.
-      path.setAttribute("d", points.map(([along, across], index) =>
+      const pathData = points.map(([along, across], index) =>
         `${index ? "L" : "M"}${x1 + ux * along - uy * across},${y1 + uy * along + ux * across}`
-      ).join(" "));
-      path.setAttribute("stroke-width", String(outlineWidth));
+      ).join(" ");
+      setAttributeIfChanged(path, "d", pathData);
+      setAttributeIfChanged(path, "stroke-width", outlineWidth);
       // Pale green marks the best alternative to the previous move, not the current turn.
       const previousMove = /^url\(#arrowhead-pg(?!r)/.test(line.getAttribute("marker-end") || "");
       const arrowColor = previousMove && (turnColor === "white" || turnColor === "black")
         ? (turnColor === "white" ? "black" : "white") : turnColor;
       if (arrowColor === "white" || arrowColor === "black") {
-        path.setAttribute("data-lfs-engine-arrow-color", arrowColor);
-      } else {
+        setAttributeIfChanged(path, "data-lfs-engine-arrow-color", arrowColor);
+      } else if (path.hasAttribute("data-lfs-engine-arrow-color")) {
         path.removeAttribute("data-lfs-engine-arrow-color");
       }
-      path.setAttribute("opacity", line.getAttribute("opacity") || "1");
+      setAttributeIfChanged(path, "opacity", line.getAttribute("opacity") || "1");
       if (path.parentElement !== line.parentElement) line.parentElement.appendChild(path);
     }
   }
@@ -76,6 +91,7 @@
   new MutationObserver(records => {
     let needsAppearanceSync = false;
     for (const record of records) {
+      if (isExtensionOverlayMutation(record)) continue;
       if (record.type === "childList") {
         const target = record.target instanceof Element ? record.target : record.target.parentElement;
         if (record.target === document || target?.closest(".cg-wrap")) needsAppearanceSync = true;
