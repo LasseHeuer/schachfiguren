@@ -929,7 +929,8 @@ html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board::before {
   background-image:
     linear-gradient(45deg in srgb, var(--lfs-board-light) 25%, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) 25%, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) 75%, var(--lfs-board-light) 75%),
     linear-gradient(45deg in srgb, var(--lfs-board-light) 25%, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) 25%, oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) 75%, var(--lfs-board-light) 75%) !important;
-  background-position: 0 0, 16.666667% 16.666667% !important;
+  /* Offset the base pattern by one square so a1 stays dark without threat colors. */
+  background-position: 16.666667% 0, 33.333333% 16.666667% !important;
   background-repeat: repeat, repeat !important;
   background-size: 25% 25% !important;
 }

@@ -8,6 +8,50 @@ const colors = globalThis.LichessColors;
 const settings = globalThis.LichessSettings;
 const threats = globalThis.LichessThreatCoding;
 
+test("promotion preview cycles through promotion pieces at its configured interval", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const timers = new Map();
+  let nextTimer = 0;
+  const context = vm.createContext({
+    document: { addEventListener() {} },
+    LichessSettings: settings,
+    chrome: { runtime: { getURL: path => path } },
+    setInterval(callback, interval) {
+      const id = ++nextTimer;
+      timers.set(id, { callback, interval });
+      return id;
+    },
+    clearInterval: id => timers.delete(id)
+  });
+  const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
+  const marker = "  documentObserver = new MutationObserver";
+  assert.ok(source.includes(marker));
+  vm.runInContext(source.replace(marker, `
+    globalThis.testing = { updatePromotionPreview, configure(value) { settings = value; } };
+    return;
+${marker}`), context);
+  const api = context.testing;
+  const options = settings.normalize({ pieceSet: "system_eckig", promotionPreviewIntervalMs: 320 });
+  api.configure(options);
+  const image = { attributes: {}, setAttribute(name, value) { this.attributes[name] = value; } };
+  const entry = { previewPieceImage: image };
+  const sourceSquare = { row: 1, col: 4 };
+  const targetSquare = { row: 0, col: 4 };
+
+  assert.equal(api.updatePromotionPreview(entry, "w", "wP", sourceSquare, targetSquare, true), "Q");
+  assert.equal([...timers.values()][0].interval, 320);
+  for (const expected of ["R", "B", "N", "Q"]) {
+    [...timers.values()][0].callback();
+    assert.equal(api.updatePromotionPreview(entry, "w", "wP", sourceSquare, targetSquare, true), expected);
+  }
+  assert.equal(image.attributes.href, "system_eckig/wq.svg");
+  assert.equal(api.updatePromotionPreview(entry, "w", "wN", sourceSquare, targetSquare, true), null);
+  assert.equal(timers.size, 0);
+  assert.equal(settings.normalize({ promotionPreviewIntervalMs: 5000 }).promotionPreviewIntervalMs, 2000);
+});
+
 test("threat wedges point at the piece and share line placement in both display roles", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");
@@ -2114,6 +2158,31 @@ test("threat mixing retains equal perceptual board contrast for both player colo
   }
 });
 
+test("threat board base colors keep a1 dark in both themes", () => {
+  const previousDocument = globalThis.document;
+  try {
+    for (const theme of ["light", "dark"]) {
+      globalThis.document = {
+        documentElement: { classList: { contains: name => name === "light" && theme === "light" } }
+      };
+      const options = settings.defaults;
+      const themeName = theme === "light" ? "Light" : "Dark";
+      const light = options[`boardLight${themeName}`];
+      const dark = options[`boardDark${themeName}`];
+      const assertBoardColor = (row, col, expected) => {
+        const actual = threats.getBoardBaseColor(row, col, options);
+        colors.toRgb(expected).forEach((channel, index) => assert.ok(Math.abs(actual[index] - channel) < 0.001));
+      };
+      assertBoardColor(7, 0, dark);
+      assertBoardColor(7, 1, light);
+      assertBoardColor(6, 0, light);
+    }
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+  }
+});
+
 test("threat mixing preserves endpoints and accepts RGB board colors", () => {
   const options = { ...settings.defaults, threatMaxMixPercent: 100 };
   for (const base of ["#424240", "#dedae6", "#12abef"]) {
@@ -2257,6 +2326,7 @@ test("board SVG rendering preserves piece masks and round king fields", { skip: 
       readPosition,
       renderMoveOutline,
       renderMovePreviewPiece,
+      clearMovePreviewPiece,
       createHighlightLineMask,
       updateDefenseHighlight,
       advanceDefenseCascade,
@@ -2770,6 +2840,36 @@ ${clockMarker}`));
         })()`);
         assert.deepEqual(result, { source: { row: 4, col: 3 }, target: { row: 4, col: 5 },
           started: true, finished: true, x: blackOrientation ? -2 : 2, y: 0, opacity: 1 });
+      }
+      assert.deepEqual(runtimeErrors, []);
+    });
+    await t.test("promotion previews cycle during hover and drag", async () => {
+      for (const interaction of ["hover", "drag"]) {
+        const result = await evaluate(`(async () => {
+          const board = document.querySelector("cg-board");
+          board.replaceChildren();
+          const wrapper = board.closest(".cg-wrap");
+          wrapper.className = "cg-wrap orientation-white";
+          const basePosition = Array.from({ length: 8 }, () => Array(8).fill(""));
+          basePosition[1][4] = "wP";
+          const position = basePosition.map(rank => [...rank]);
+          position[1][4] = "";
+          position[0][4] = "wQ";
+          const options = LichessSettings.normalize({ pieceSet: "system_rund", promotionPreviewIntervalMs: 100,
+            movePreviewAnticipationPercent: 0, disableAnimations: false });
+          testing.configure(options);
+          const entry = {};
+          testing.renderMovePreviewPiece(board, entry, { basePosition, position,
+            source: { row: 1, col: 4 }, target: { row: 0, col: 4 }, blackOrientation: false, legal: true,
+            isHoverPreview: ${interaction === "hover"}, isDragging: ${interaction === "drag"} });
+          const initial = entry.previewPieceImage.getAttribute("href");
+          await new Promise(resolve => setTimeout(resolve, 125));
+          const next = entry.previewPieceImage.getAttribute("href");
+          testing.clearMovePreviewPiece(board, entry);
+          return { initial, next };
+        })()`);
+        assert.ok(result.initial.endsWith("system_rund/bq.svg"), `${interaction}: ${result.initial}`);
+        assert.ok(result.next.endsWith("system_rund/br.svg"), `${interaction}: ${result.next}`);
       }
       assert.deepEqual(runtimeErrors, []);
     });

@@ -58,7 +58,7 @@
       output.value = `${Number(control.value).toFixed(2)} Felder/s`;
       return;
     }
-    if (["pieceBounceTiming", "pieceBounceDuration", "pieceBounceWiggleDuration", "defenseHighlightWaveIntervalMs", "defenseHighlightDurationMs", "defensePreviewThresholdMs"].includes(control.dataset.setting)) {
+    if (["pieceBounceTiming", "pieceBounceDuration", "pieceBounceWiggleDuration", "promotionPreviewIntervalMs", "defenseHighlightWaveIntervalMs", "defenseHighlightDurationMs", "defensePreviewThresholdMs"].includes(control.dataset.setting)) {
       output.value = `${control.value} ms`;
       return;
     }

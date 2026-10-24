@@ -109,6 +109,7 @@
     pieceBounceWiggleCurve: [0.19302565710885183, -14.182400356993378, 0.628528912862142, -88.51132028846204],
     moveAnimationLichessSpeed: false,
     moveAnimationDuration: 150,
+    promotionPreviewIntervalMs: 500,
     movePreviewOriginOpacity: 0.1,
     movePreviewCorridorWidthPercent: 185,
     movePreviewAnticipationPercent: 40,
@@ -307,6 +308,7 @@
     pieceBounceDuration: [200, 1500],
     pieceBounceWiggleDuration: [200, 1500],
     moveAnimationDuration: [0, 500],
+    promotionPreviewIntervalMs: [100, 2000],
     movePreviewOriginOpacity: [0, 1],
     movePreviewCorridorWidthPercent: [0, 200],
     movePreviewAnticipationPercent: [0, 100],
@@ -455,6 +457,7 @@
     result.pieceBounceDuration = Math.round(result.pieceBounceDuration / 10) * 10;
     result.pieceBounceWiggleDuration = Math.round(result.pieceBounceWiggleDuration / 10) * 10;
     result.moveAnimationDuration = Math.round(result.moveAnimationDuration / 10) * 10;
+    result.promotionPreviewIntervalMs = Math.round(result.promotionPreviewIntervalMs / 10) * 10;
     result.moveAnimationDistanceFactor = Number((Math.round(result.moveAnimationDistanceFactor / 0.05) * 0.05).toFixed(2));
     for (const key of ["pieceBounceCurve", "pieceBounceWiggleCurve", "moveAnimationCurve"]) {
       const curve = Array.isArray(result[key]) ? result[key].map(Number) : null;

@@ -522,17 +522,12 @@
     const fieldShapePercent = settings.boardFieldShape === "round" ? settings.boardRoundPercent : settings.boardBevelPercent;
     const bevelEnabled = settings.boardBevelEnabled && fieldShapePercent > 0;
     const gapColors = bevelEnabled ? Array.from({ length: 8 }, () => Array(8)) : null;
-    const lightTheme = document.documentElement.classList.contains("light");
-    const lightSquareColor = parseHexColor(lightTheme ? settings.boardLightLight : settings.boardLightDark);
-    const darkSquareColor = settings.monochromeBoard
-      ? lightSquareColor
-      : parseHexColor(lightTheme ? settings.boardDarkLight : settings.boardDarkDark);
     const gapBase = bevelEnabled ? parseHexColor(document.documentElement.classList.contains("light") ? settings.boardGapLight : settings.boardGapDark) : null;
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
         const screenRow = blackOrientation ? 7 - row : row;
         const screenCol = blackOrientation ? 7 - col : col;
-        const baseColor = settings.monochromeBoard || (row + col) % 2 === 0 ? lightSquareColor : darkSquareColor;
+        const baseColor = getBoardBaseColor(row, col, settings);
         colors[screenRow][screenCol] = getOpacityRgb(threatMap[row][col], settings, baseColor);
         if (gapColors) gapColors[screenRow][screenCol] = getOpacityRgb(threatMap[row][col], settings, gapBase);
       }
@@ -591,7 +586,8 @@
       legal: Boolean(position),
       basePosition: activePieceDrag.position,
       blackOrientation,
-      isHoverPreview: false
+      isHoverPreview: false,
+      isDragging: true
     };
   }
 

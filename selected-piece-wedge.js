@@ -16,6 +16,7 @@
     king: [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]
   };
   const pieceNamesByLetter = { P: "pawn", N: "knight", B: "bishop", R: "rook", Q: "queen", K: "king" };
+  const promotionPreviewPieces = ["Q", "R", "B", "N"];
   const observedBoards = new Map();
   const moveDestinationPreviewCache = new WeakMap();
   const positionAnalysisCache = new Map();
@@ -2997,6 +2998,7 @@
     entry.previewSourceKey = null;
     entry.previewPointerMotion = null;
     entry.defensePreviewMix = 0;
+    clearPromotionPreview(entry);
     syncPreviewDefenseFilter(entry);
     if (!entry.previewPieceSvg) return;
     entry.previewPieceSvg.remove();
@@ -3004,6 +3006,38 @@
     entry.previewPieceGroup = null;
     entry.previewPieceImage = null;
     entry.previewDefenseFilter = null;
+  }
+
+  function clearPromotionPreview(entry) {
+    if (entry.promotionPreview?.timer != null) clearInterval(entry.promotionPreview.timer);
+    entry.promotionPreview = null;
+  }
+
+  function updatePromotionPreview(entry, color, sourcePiece, source, target, active) {
+    const promotionRow = color === "w" ? 0 : 7;
+    const interval = settings.promotionPreviewIntervalMs;
+    const isPromotion = active && settings.enabled && !settings.disableAnimations
+      && sourcePiece === `${color}P` && target.row === promotionRow
+      && (source.row !== target.row || source.col !== target.col);
+    if (!isPromotion) {
+      clearPromotionPreview(entry);
+      return null;
+    }
+
+    const key = `${color}:${source.row},${source.col}:${target.row},${target.col}`;
+    if (entry.promotionPreview?.key !== key || entry.promotionPreview.interval !== interval) {
+      clearPromotionPreview(entry);
+      const state = { key, interval, index: 0, timer: null };
+      state.timer = setInterval(() => {
+        if (entry.promotionPreview !== state) return;
+        state.index = (state.index + 1) % promotionPreviewPieces.length;
+        if (entry.previewPieceImage) {
+          entry.previewPieceImage.setAttribute("href", getPieceAssetUrl(color, pieceNamesByLetter[promotionPreviewPieces[state.index]]));
+        }
+      }, interval);
+      entry.promotionPreview = state;
+    }
+    return promotionPreviewPieces[entry.promotionPreview.index];
   }
 
   function bezierCoordinate(t, firstControl, secondControl) {
@@ -3202,7 +3236,7 @@
       piece.removeAttribute("data-lfs-move-preview-origin");
       if (!piece.classList.contains("fading")) piece.removeAttribute("data-lfs-move-preview-hidden");
     }
-    if (!preview?.isHoverPreview || !preview.legal) {
+    if (!preview || (!preview.isHoverPreview && !preview.isDragging) || !preview.legal) {
       clearMovePreviewPiece(board, entry);
       return;
     }
@@ -3266,7 +3300,10 @@
 
     const movedPiece = position[preview.target.row][preview.target.col];
     const color = movedPiece[0];
-    const type = pieceNamesByLetter[movedPiece[1]];
+    const sourcePiece = basePosition[preview.source.row][preview.source.col];
+    const promotionLetter = updatePromotionPreview(entry, color, sourcePiece, preview.source, preview.target,
+      preview.isHoverPreview || preview.isDragging);
+    const type = pieceNamesByLetter[promotionLetter ?? movedPiece[1]];
     entry.previewPieceColor = color;
     entry.previewPieceImage.setAttribute("x", String(sourceSquare.col));
     entry.previewPieceImage.setAttribute("y", String(sourceSquare.row));
