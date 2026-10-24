@@ -910,7 +910,8 @@
     root.dataset.lfsEngineArrowEndOffset = settings.engineArrowEndOffsetPercent;
     root.toggleAttribute("data-lfs-monochrome-board", settings.monochromeBoard);
     root.toggleAttribute("data-lfs-square-outline", settings.squareOutline);
-    root.toggleAttribute("data-lfs-board-bevel", settings.boardBevelEnabled && settings.boardBevelPercent > 0);
+    const boardShapePercent = settings.boardFieldShape === "round" ? settings.boardRoundPercent : settings.boardBevelPercent;
+    root.toggleAttribute("data-lfs-board-bevel", settings.boardBevelEnabled && boardShapePercent > 0);
     root.toggleAttribute("data-lfs-rund-comic", settings.pieceSet === "rund_comic");
     const analysisSettings = settings.analysisEnabled ? settings : {
       ...settings,
@@ -933,13 +934,20 @@
 
     globalThis.LichessSelectedPieceWedge?.update(analysisSettings);
 
-    // 100% bevel reaches halfway along each edge of a square.
+    // 100% bevel reaches halfway along each edge; 100% rounding makes a circle.
     const bevel = settings.boardBevelPercent / 2;
     const bevelPoints = `${bevel},0 ${100 - bevel},0 100,${bevel} 100,${100 - bevel} ${100 - bevel},100 ${bevel},100 0,${100 - bevel} 0,${bevel}`;
-    const bevelMask = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><polygon points="${bevelPoints}" fill="white"/></svg>`;
+    const roundRadius = settings.boardRoundPercent / 2;
+    const rounded = settings.boardFieldShape === "round";
+    const bevelMaskShape = rounded
+      ? `<rect width="100" height="100" rx="${roundRadius}" fill="white"/>`
+      : `<polygon points="${bevelPoints}" fill="white"/>`;
+    const bevelClip = rounded ? `inset(0 round ${roundRadius}%)`
+      : `polygon(${bevelPoints.split(" ").map(point => point.split(",").map(value => `${value}%`).join(" ")).join(", ")})`;
+    const bevelMask = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${bevelMaskShape}</svg>`;
     const variables = {
       "--lfs-board-bevel-mask": `url("data:image/svg+xml,${encodeURIComponent(bevelMask)}")`,
-      "--lfs-board-bevel-clip": `polygon(${bevelPoints.split(" ").map(point => point.split(",").map(value => `${value}%`).join(" ")).join(", ")})`,
+      "--lfs-board-bevel-clip": bevelClip,
       "--lfs-idle-mix-percent": `${settings.idleMixPercent}%`,
       "--lfs-hover-mix-percent": `${settings.hoverMixPercent}%`,
       "--lfs-hover-desaturation-setting": `${settings.hoverDesaturation}%`,
@@ -979,15 +987,9 @@
 
     for (const [name, value] of Object.entries(variables)) root.style.setProperty(name, value);
 
-    const base = chrome.runtime.getURL(`${settings.pieceSet}/`);
-    const complexPawnSet = settings.complexPawn && ["system_pixel", "system_eckig"].includes(settings.pieceSet);
     for (const piece of pieceNames) {
-      const asset = settings.pieceSet === "cage"
-        ? `cage_${piece[1]}`
-        : complexPawnSet && ["wp", "bp"].includes(piece)
-          ? `${piece}_2`
-          : piece;
-      root.style.setProperty(`--lfs-piece-${piece}`, `url("${base}${asset}.svg")`);
+      const asset = globalThis.LichessSettings.getPieceAsset(settings, piece[0], piece[1]);
+      root.style.setProperty(`--lfs-piece-${piece}`, `url("${chrome.runtime.getURL(asset)}")`);
     }
 
     root.toggleAttribute("data-lfs-ready", true);

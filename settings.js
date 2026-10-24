@@ -9,7 +9,9 @@
     monochromeBoard: false,
     squareOutline: false,
     boardBevelEnabled: true,
+    boardFieldShape: "bevel",
     boardBevelPercent: 40,
+    boardRoundPercent: 0,
     boardScalePercent: 83,
     boardVerticalOffset: 0,
     boardTopGapPercent: 8,
@@ -185,6 +187,8 @@
     threatSquareFigureMargin: 0.05,
     threatLineRadius: 0.35,
     threatLineLength: 0.16,
+    threatWedgeLengthPercent: 16,
+    threatWedgeWidthPercent: 10,
     threatLineThickness: 0.035,
     threatLineGap: 0.03,
     threatLineGapPercent: 29,
@@ -213,6 +217,7 @@
 
   const ranges = {
     boardBevelPercent: [0, 100],
+    boardRoundPercent: [0, 100],
     boardTopGapPercent: [0, 30],
     zenBoardUpPercent: [0, 30],
     zenClockFontSizePx: [16, 80],
@@ -260,6 +265,8 @@
     threatSquareFigureMargin: [0, 0.2],
     threatLineRadius: [0.1, 0.5],
     threatLineLength: [0, 0.3],
+    threatWedgeLengthPercent: [1, 30],
+    threatWedgeWidthPercent: [1, 30],
     threatLineThickness: [0.005, 0.1],
     threatLineGap: [0, 0.2],
     threatLineGapPercent: [0, 50],
@@ -366,8 +373,11 @@
       result.pieceBounceWiggleCurve = values.pieceBounceCurve ?? defaults.pieceBounceWiggleCurve;
     }
 
-    if (!["system_pixel", "system_eckig", "rund", "rund_comic", "cage"].includes(result.pieceSet)) {
+    if (!["system_pixel", "system_eckig", "system_rund", "rund", "rund_comic", "cage"].includes(result.pieceSet)) {
       result.pieceSet = defaults.pieceSet;
+    }
+    if (!["bevel", "round"].includes(result.boardFieldShape)) {
+      result.boardFieldShape = defaults.boardFieldShape;
     }
     if (!["rotate-wiggle", "wiggle-only"].includes(result.pieceBounceStyle)) {
       result.pieceBounceStyle = defaults.pieceBounceStyle;
@@ -388,7 +398,7 @@
     if (!["both", "lines", "hatch", "none"].includes(result.threatMoveFieldDisplayMode)) {
       result.threatMoveFieldDisplayMode = defaults.threatMoveFieldDisplayMode;
     }
-    const displayModes = ["segments", "lines", "square"];
+    const displayModes = ["segments", "lines", "square", "wedge"];
     const legacyDisplayMode = displayModes.includes(values.threatDisplayMode) ? values.threatDisplayMode : defaults.threatAttackDisplayMode;
     for (const key of ["threatAttackDisplayMode", "threatDefenseDisplayMode"]) {
       result[key] = displayModes.includes(values[key]) ? values[key] : legacyDisplayMode;
@@ -563,5 +573,14 @@
     }
   }
 
-  globalThis.LichessSettings = { defaults, normalize, bindFineInputs };
+  function getPieceAsset(settings, color, letter) {
+    const { pieceSet, complexPawn } = settings;
+    if (pieceSet === "cage") return `cage/cage_${letter}.svg`;
+    // System Rund shares one shape per piece between both colors.
+    if (pieceSet === "system_rund") return `${pieceSet}/b${letter}${letter === "p" ? "_2" : ""}.svg`;
+    const suffix = letter === "p" && complexPawn && ["system_pixel", "system_eckig"].includes(pieceSet) ? "_2" : "";
+    return `${pieceSet}/${color}${letter}${suffix}.svg`;
+  }
+
+  globalThis.LichessSettings = { defaults, normalize, bindFineInputs, getPieceAsset };
 })();

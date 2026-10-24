@@ -36,6 +36,7 @@
       "resources": [
         "system_pixel/*.svg",
         "system_eckig/*.svg",
+        "system_rund/*.svg",
         "rund/*.svg",
         "rund_comic/*.svg",
         "cage/*.svg",

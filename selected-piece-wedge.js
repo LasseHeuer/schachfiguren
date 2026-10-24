@@ -426,19 +426,37 @@
     const simulated = position.map(row => row.slice());
     let color = isAttack ? rootPiece.color === "w" ? "b" : "w" : rootPiece.color;
     const layers = [[root]];
+    let exchangeKing;
     for (let level = 0; level < depth; level++) {
       const next = [];
+      const kings = [];
       for (let row = 0; row < 8; row++) {
         for (let col = 0; col < 8; col++) {
           if (row === root.row && col === root.col) continue;
           if (simulated[row][col]?.color !== color) continue;
           const source = { row, col };
           if (!canReach(simulated, source, root, blackOrientation)) continue;
+          if (simulated[row][col].type === "king") kings.push(source);
+          else next.push(source);
+        }
+      }
+      // A king must finish the exchange, never vacate its square for a later recapture.
+      if (!next.length) {
+        for (const source of kings) {
+          const capture = applyExchangeCapture(simulated, source, root, blackOrientation).position;
+          const opponent = color === "w" ? "b" : "w";
+          // Resolve individual captures, not whole waves: other attackers may still remain.
+          if (exchangeKing === undefined) exchangeKing = getFinalExchangeKing(position, root, blackOrientation);
+          const finishesExchange = exchangeKing?.row === source.row && exchangeKing.col === source.col;
+          const unopposedDefense = !isAttack && !isSquareAttacked(position, root, opponent, blackOrientation);
+          if (!finishesExchange && !unopposedDefense) continue;
+          if (isSquareAttacked(capture, root, opponent, blackOrientation) && !finishesExchange) continue;
           next.push(source);
         }
       }
       if (!next.length) break;
       layers.push(next);
+      if (kings.some(king => next.includes(king))) break;
       // Vacated source squares reveal batteries; every later wave still targets the original square.
       for (const source of next) simulated[source.row][source.col] = null;
       if (isAttack) color = color === "w" ? "b" : "w";
@@ -578,6 +596,19 @@
       }
     }
     return leastValuable;
+  }
+
+  function getFinalExchangeKing(position, target, blackOrientation) {
+    let simulated = position;
+    let color = position[target.row][target.col].color === "w" ? "b" : "w";
+    while (true) {
+      const attacker = getLeastValuableAttacker(simulated, target, color, blackOrientation);
+      if (!attacker) return null;
+      const piece = simulated[attacker.source.row][attacker.source.col];
+      if (piece.type === "king") return attacker.source;
+      simulated = applyExchangeCapture(simulated, attacker.source, target, blackOrientation).position;
+      color = color === "w" ? "b" : "w";
+    }
   }
 
   // Evaluate captures on one square, allowing either side to stop the exchange.
@@ -1214,6 +1245,7 @@
   }
 
   const figureAssetLetters = { pawn: "p", knight: "n", bishop: "b", rook: "r", queen: "q", king: "k" };
+  const roundKingInnerRadius = 5 / 14;
   // Normalized visible-content bounds from each cage SVG after its nested transforms.
   const cagePieceBounds = {
     p: [0.19615882, 0.29301634, 0.79673710, 0.74636993],
@@ -1230,9 +1262,13 @@
       const radii = new Map();
       figureRadiiCache.set(pieceSet, radii);
       const figures = Object.entries(figureAssetLetters).filter(([type]) => pieceSet !== "cage" || type !== "king");
-      const colors = pieceSet === "cage" ? ["w"] : ["w", "b"];
+      const colors = ["cage", "system_rund"].includes(pieceSet) ? ["w"] : ["w", "b"];
       Promise.all(figures.flatMap(([type, letter]) => colors.map(async color => {
-        const response = await fetch(chrome.runtime.getURL(pieceSet === "cage" ? `cage/cage_${letter}.svg` : `${pieceSet}/${color}${letter}.svg`));
+        if (pieceSet === "system_rund" && type !== "pawn") {
+          radii.set(type, Array(720).fill(roundKingInnerRadius));
+          return;
+        }
+        const response = await fetch(chrome.runtime.getURL(globalThis.LichessSettings.getPieceAsset({ pieceSet }, color, letter)));
         const measured = measureOutlineRadii(await response.text());
         const previous = radii.get(type);
         radii.set(type, previous ? measured.map((radius, index) => Math.max(radius, previous[index])) : measured);
@@ -1744,6 +1780,7 @@
     const control = getKnightCurveControlPoint(start, end, center, line.outline, line.angle, innerRadius);
     const path = document.createElementNS(svgNamespace, "path");
     const [curveStart, curveControl, curveEnd] = pushCurveFromFigure([start, control, end], center, line.outline, settings.threatLineFigureMargin + settings.threatLineThickness / 2);
+    line.outerPoint = curveStart;
     path.setAttribute("d", `M ${curveStart.x} ${curveStart.y} Q ${curveControl.x} ${curveControl.y} ${curveEnd.x} ${curveEnd.y}`);
     path.setAttribute("fill", "none");
     path.setAttribute("stroke", line.color);
@@ -1753,7 +1790,7 @@
     return path;
   }
 
-  function renderLineSet(svg, segments, figureRadii) {
+  function renderLineSet(svg, segments, figureRadii, highlightEndpoints) {
     const linesByDirection = new Map();
     const boundingSquareHalfSizes = new Map();
     for (const segment of segments) {
@@ -1787,6 +1824,8 @@
           outline: figureRadii.get(segment.type),
           figureBlend: segment.figureBlend,
           color: segment.color,
+          wedge: segment.wedge,
+          length: segment.wedge ? settings.threatWedgeLengthPercent / 100 : settings.threatLineLength,
           direction,
           normal,
           offset,
@@ -1804,7 +1843,8 @@
 
     function updateLineRadii(line) {
       const configuredRadius = Math.sqrt(Math.max(0, settings.threatLineRadius ** 2 - line.offset ** 2));
-      const usesBoundingSquare = line.type === "queen" || (line.type === "knight" && settings.pieceSet !== "cage");
+      const usesBoundingSquare = settings.pieceSet !== "system_rund"
+        && (line.type === "queen" || (line.type === "knight" && settings.pieceSet !== "cage"));
       if (usesBoundingSquare && !boundingSquareHalfSizes.has(line.type)) {
         boundingSquareHalfSizes.set(line.type, getFigureBoundingSquareHalfSize(line.outline));
       }
@@ -1817,7 +1857,7 @@
         usesBoundingSquare ? boundingSquareHalfSizes.get(line.type) : undefined
       );
       line.innerRadius = blendRadius(configuredRadius, Math.max(configuredRadius, collisionRadius), line);
-      line.outerRadius = line.innerRadius + settings.threatLineLength;
+      line.outerRadius = line.innerRadius + line.length;
     }
 
     // Proximity is measured from the natural, unshifted line spans.
@@ -1959,7 +1999,8 @@
       const distance = distanceX * line.direction.x + distanceY * line.direction.y;
       const lineLimit = (2 * distance + line.innerRadius - 2 * partner.innerRadius) / 3;
       const partnerLimit = (2 * distance + partner.innerRadius - 2 * line.innerRadius) / 3;
-      if (lineLimit < line.innerRadius + settings.threatLineThickness || partnerLimit < partner.innerRadius + settings.threatLineThickness) {
+      if (lineLimit <= line.innerRadius + (line.wedge ? 0 : settings.threatLineThickness)
+        || partnerLimit <= partner.innerRadius + (partner.wedge ? 0 : settings.threatLineThickness)) {
         line.suppressed = true;
         partner.suppressed = true;
       } else {
@@ -1984,8 +2025,8 @@
       const candidateLength = partnerLengths.length
         ? Math.min(...partnerLengths)
         : Math.min(...active.map(line => line.outerRadius - line.innerRadius));
-      const commonLength = Math.min(settings.threatLineLength, candidateLength);
-      if (commonLength < settings.threatLineThickness) {
+      const commonLength = Math.min(...active.map(line => line.length), candidateLength);
+      if (commonLength <= 0 || active.some(line => !line.wedge && commonLength < settings.threatLineThickness)) {
         for (const line of active) {
           line.suppressed = true;
           if (line.partner) line.partner.suppressed = true;
@@ -2034,10 +2075,10 @@
       const active = members.filter(line => !line.suppressed);
       if (!active.length) continue;
       const commonLength = Math.min(
-        settings.threatLineLength,
+        ...active.map(line => line.length),
         ...active.map(line => line.finalOuter - line.finalInner)
       );
-      if (commonLength < settings.threatLineThickness) {
+      if (commonLength <= 0 || active.some(line => !line.wedge && commonLength < settings.threatLineThickness)) {
         for (const line of active) {
           line.suppressed = true;
           if (line.partner) line.partner.suppressed = true;
@@ -2051,9 +2092,27 @@
       if (line.suppressed) continue;
       const { center, direction, normal, offset } = line;
       const innerRadius = line.finalInner;
-      const outerRadius = Math.min(line.finalOuter, innerRadius + settings.threatLineLength);
-      if (line.curved) {
+      const outerRadius = Math.min(line.finalOuter, innerRadius + line.length);
+      line.outerPoint = {
+        x: center.x + direction.x * outerRadius + normal.x * offset,
+        y: center.y + direction.y * outerRadius + normal.y * offset
+      };
+      if (line.curved && !line.wedge) {
         svg.append(createKnightCurvePath(line, innerRadius, outerRadius));
+      }
+      if (line.sourceKey) highlightEndpoints?.set(`${line.targetKey}:${line.sourceKey}`, line.outerPoint);
+      if (line.curved && !line.wedge) continue;
+      if (line.wedge) {
+        const tipX = center.x + direction.x * innerRadius + normal.x * offset;
+        const tipY = center.y + direction.y * innerRadius + normal.y * offset;
+        const baseX = center.x + direction.x * outerRadius + normal.x * offset;
+        const baseY = center.y + direction.y * outerRadius + normal.y * offset;
+        const halfWidth = settings.threatWedgeWidthPercent / 200;
+        const triangle = document.createElementNS(svgNamespace, "polygon");
+        triangle.setAttribute("points", `${tipX},${tipY} ${baseX + normal.x * halfWidth},${baseY + normal.y * halfWidth} ${baseX - normal.x * halfWidth},${baseY - normal.y * halfWidth}`);
+        triangle.setAttribute("fill", line.color);
+        triangle.setAttribute("pointer-events", "none");
+        svg.append(triangle);
         continue;
       }
       const element = document.createElementNS(svgNamespace, "line");
@@ -2140,6 +2199,29 @@
     globalThis.LichessHighlightLinePreview.updateLine(line, state, settings, 0.01);
   }
 
+  function syncHighlightLineEndpoints(entry) {
+    for (const run of entry.defenseHighlightRuns ?? []) {
+      if (run.retiring) continue;
+      for (const line of run.lines) {
+        if (line.fadeOut) continue;
+        const { startSquare: start, endSquare: end } = line;
+        const from = entry.highlightLineEndpoints?.get(`${start.row},${start.col}:${end.row},${end.col}`);
+        const to = entry.highlightLineEndpoints?.get(`${end.row},${end.col}:${start.row},${start.col}`);
+        const fromX = from?.x ?? start.col + 0.5;
+        const fromY = from?.y ?? start.row + 0.5;
+        const toX = to?.x ?? end.col + 0.5;
+        const toY = to?.y ?? end.row + 0.5;
+        if (line.fromX === fromX && line.fromY === fromY && line.toX === toX && line.toY === toY) continue;
+        Object.assign(line, { fromX, fromY, toX, toY, length: Math.max(0.000001, Math.hypot(toX - fromX, toY - fromY)) });
+        line.styleKey = null;
+        line.path.setAttribute("d", `M ${fromX} ${fromY} L ${toX} ${toY}`);
+        line.path.setAttribute("stroke-linecap", from || to ? "butt" : "round");
+        updateHighlightLine(line, getHighlightLineState(line, run, performance.now(),
+          line.held || (run.holding ?? settings.highlightCascadeLinesHoldEnabled)));
+      }
+    }
+  }
+
   function holdHighlightLine(line) {
     const opacity = globalThis.LichessHighlightLinePreview.getHighlightMix(
       0.5, line.depth, settings.highlightLineOpacityPercent, settings.highlightLineDecayPercent
@@ -2164,9 +2246,9 @@
   }
 
   function createHighlightLineMask(entry, board, position, blackOrientation) {
-    if (settings.pieceSet !== "cage") return null;
+    if (!["cage", "system_rund"].includes(settings.pieceSet)) return null;
     const positionKey = position.map(rank => rank.map(piece => piece ? `${piece.color}${piece.type}` : "-").join(",")).join(";");
-    const key = `${blackOrientation}:${positionKey}`;
+    const key = `${settings.pieceSet}:${blackOrientation}:${positionKey}`;
     entry.highlightLineMaskCache ??= new Map();
     let resource = entry.highlightLineMaskCache.get(key);
     if (resource) {
@@ -2213,6 +2295,16 @@
       for (let col = 0; col < position[row].length; col++) {
         const piece = position[row][col];
         const letter = piece && figureAssetLetters[piece.type];
+        if (settings.pieceSet === "system_rund") {
+          if (!letter || piece.type === "pawn") continue;
+          const circle = document.createElementNS(svgNamespace, "circle");
+          circle.setAttribute("cx", String(col + 0.5));
+          circle.setAttribute("cy", String(row + 0.5));
+          circle.setAttribute("r", String(roundKingInnerRadius));
+          circle.setAttribute("fill", "black");
+          figures.append(circle);
+          continue;
+        }
         const bounds = cagePieceBounds[letter];
         if (!bounds) continue;
         const [left, top, right, bottom] = bounds;
@@ -2363,14 +2455,27 @@
     syncPreviewDefenseFilter(entry);
   }
 
+  function createPreviewColorFilter(id) {
+    const filter = document.createElementNS(svgNamespace, "filter");
+    filter.setAttribute("id", id);
+    filter.setAttribute("color-interpolation-filters", "sRGB");
+    const flood = document.createElementNS(svgNamespace, "feFlood");
+    flood.setAttribute("result", "piece-color");
+    const composite = document.createElementNS(svgNamespace, "feComposite");
+    composite.setAttribute("in", "piece-color");
+    composite.setAttribute("in2", "SourceAlpha");
+    composite.setAttribute("operator", "in");
+    composite.setAttribute("result", "piece-color");
+    filter.append(flood, composite);
+    return { id, filter, flood };
+  }
+
   function ensurePreviewDefenseFilter(entry) {
     if (entry.previewDefenseFilter || !entry.previewPieceSvg) return;
     const defs = document.createElementNS(svgNamespace, "defs");
     defs.setAttribute("data-lfs-defense-highlight-filter", "");
-    const filter = document.createElementNS(svgNamespace, "filter");
     const id = `lfs-defense-preview-${++defenseHighlightFilterId}`;
-    filter.setAttribute("id", id);
-    filter.setAttribute("color-interpolation-filters", "sRGB");
+    const { filter, flood } = createPreviewColorFilter(id);
     const transfer = document.createElementNS(svgNamespace, "feComponentTransfer");
     const channels = ["R", "G", "B"].map(channel => {
       const func = document.createElementNS(svgNamespace, `feFunc${channel}`);
@@ -2380,19 +2485,31 @@
     });
     filter.append(transfer);
     defs.append(filter);
+    const colors = {};
+    for (const side of ["w", "b"]) {
+      colors[side] = createPreviewColorFilter(`${id}-${side}`);
+      defs.append(colors[side].filter);
+    }
     entry.previewPieceSvg.insertBefore(defs, entry.previewPieceSvg.firstChild);
-    entry.previewDefenseFilter = { id, channels };
+    entry.previewDefenseFilter = { id, channels, flood, transfer, colors };
   }
 
   function syncPreviewDefenseFilter(entry) {
     if (!entry.previewPieceImage) return;
     const mix = Math.max(0, Math.min(1, entry.defensePreviewMix ?? 0));
-    if (!mix) {
+    const recolor = settings.pieceSet !== "rund_comic";
+    if (!mix && !recolor) {
       entry.previewPieceImage.removeAttribute("filter");
       return;
     }
     ensurePreviewDefenseFilter(entry);
     if (!entry.previewDefenseFilter) return;
+    const { flood, transfer, colors } = entry.previewDefenseFilter;
+    transfer.setAttribute("in", recolor ? "piece-color" : "SourceGraphic");
+    flood.setAttribute("flood-color", entry.previewPieceColor === "b" ? settings.blackPieceColor : settings.whitePieceColor);
+    for (const side of ["w", "b"]) {
+      colors[side].flood.setAttribute("flood-color", side === "w" ? settings.whitePieceColor : settings.blackPieceColor);
+    }
     entry.previewPieceImage.setAttribute("filter", `url(#${entry.previewDefenseFilter.id})`);
     for (const channel of entry.previewDefenseFilter.channels) {
       channel.setAttribute("slope", String(1 - mix));
@@ -2434,6 +2551,9 @@
     }
     const reverse = settings.highlightCascadeReverseEnabled;
     const maxDepth = Math.max(...[...squares.values()].map(node => node.depth));
+    for (const node of squares.values()) {
+      if (node.depth && position[node.square.row][node.square.col].type === "king") node.depth = maxDepth;
+    }
     const nodeWave = depth => reverse ? maxDepth - depth : depth;
     const nodes = [];
     for (const { square, depth } of squares.values()) {
@@ -2488,6 +2608,7 @@
         lineGroup.append(path);
         lines.push({ path, gradient, stops, color, depth, wave: nodeWave(depth),
           lineMask,
+          startSquare: start, endSquare: end,
           fromX: start.col + 0.5, fromY: start.row + 0.5,
           toX: end.col + 0.5, toY: end.row + 0.5,
           length: Math.hypot(to.col - from.col, to.row - from.row) });
@@ -3077,6 +3198,7 @@
     const movedPiece = position[preview.target.row][preview.target.col];
     const color = movedPiece[0];
     const type = pieceNamesByLetter[movedPiece[1]];
+    entry.previewPieceColor = color;
     entry.previewPieceImage.setAttribute("x", String(sourceSquare.col));
     entry.previewPieceImage.setAttribute("y", String(sourceSquare.row));
     entry.previewPieceImage.setAttribute("href", getPieceAssetUrl(color, type));
@@ -3101,6 +3223,9 @@
       image.setAttribute("height", "1");
       image.setAttribute("preserveAspectRatio", "xMidYMid meet");
       image.setAttribute("href", getPieceAssetUrl(otherColor, otherType));
+      if (settings.pieceSet !== "rund_comic") {
+        image.setAttribute("filter", `url(#${entry.previewDefenseFilter.colors[otherColor].id})`);
+      }
       image.setAttribute("pointer-events", "none");
       if (isPieceRotated(otherColor, blackOrientation)) {
         image.setAttribute("transform", `rotate(180 ${square.col + 0.5} ${square.row + 0.5})`);
@@ -3142,26 +3267,73 @@
     const set = new Set(cells.map(({ row, col }) => `${row},${col}`));
     const has = (row, col) => set.has(`${row},${col}`);
     const pointCount = (x, y) => [has(y - 1, x - 1), has(y - 1, x), has(y, x - 1), has(y, x)].filter(Boolean).length;
-    const bevel = settings.boardBevelEnabled ? settings.boardBevelPercent / 200 : 0;
+    const round = settings.boardBevelEnabled && settings.boardFieldShape === "round" ? settings.boardRoundPercent / 200 : 0;
+    const bevel = settings.boardBevelEnabled && settings.boardFieldShape === "bevel" ? settings.boardBevelPercent / 200 : 0;
+    const isGapFilled = (x, y) => {
+      const count = pointCount(x, y);
+      return count >= 3 || (count === 2 && ((has(y - 1, x - 1) && has(y, x)) || (has(y - 1, x) && has(y, x - 1))));
+    };
+    const connectRoundedFields = round > 0;
     const segments = [];
     const shapes = [];
+    const roundPaths = [];
     for (const { row, col } of cells) {
       const x0 = col;
       const y0 = row;
       const x1 = col + 1;
       const y1 = row + 1;
+      if (round) {
+        // Only exposed ends are rounded; adjacent fields keep a straight shared boundary.
+        const top = !has(row - 1, col);
+        const right = !has(row, col + 1);
+        const bottom = !has(row + 1, col);
+        const left = !has(row, col - 1);
+        const tl = (top && left) || isGapFilled(x0, y0) ? round : 0;
+        const tr = (top && right) || isGapFilled(x1, y0) ? round : 0;
+        const br = (bottom && right) || isGapFilled(x1, y1) ? round : 0;
+        const bl = (bottom && left) || isGapFilled(x0, y1) ? round : 0;
+        const topRight = tr ? `A${tr} ${tr} 0 0 1 ${x1} ${y0 + tr}` : `L${x1} ${y0}`;
+        const bottomRight = br ? `A${br} ${br} 0 0 1 ${x1 - br} ${y1}` : `L${x1} ${y1}`;
+        const bottomLeft = bl ? `A${bl} ${bl} 0 0 1 ${x0} ${y1 - bl}` : `L${x0} ${y1}`;
+        const topLeft = tl ? `A${tl} ${tl} 0 0 1 ${x0 + tl} ${y0}` : `L${x0} ${y0}`;
+        shapes.push(`<path d="M${x0 + tl} ${y0}H${x1 - tr}${topRight}V${y1 - br}${bottomRight}H${x0 + bl}${bottomLeft}V${y0 + tl}${topLeft}Z"/>`);
+        if (top) roundPaths.push(`M${x0 + tl} ${y0}H${x1 - tr}`);
+        if (tr && !isGapFilled(x1, y0)) roundPaths.push(`M${x1 - tr} ${y0}${topRight}`);
+        if (right) roundPaths.push(`M${x1} ${y0 + tr}V${y1 - br}`);
+        if (br && !isGapFilled(x1, y1)) roundPaths.push(`M${x1} ${y1 - br}${bottomRight}`);
+        if (bottom) roundPaths.push(`M${x1 - br} ${y1}H${x0 + bl}`);
+        if (bl && !isGapFilled(x0, y1)) roundPaths.push(`M${x0 + bl} ${y1}${bottomLeft}`);
+        if (left) roundPaths.push(`M${x0} ${y1 - bl}V${y0 + tl}`);
+        if (tl && !isGapFilled(x0, y0)) roundPaths.push(`M${x0} ${y0 + tl}${topLeft}`);
+        continue;
+      }
       shapes.push([[x0 + bevel, y0], [x1 - bevel, y0], [x1, y0 + bevel], [x1, y1 - bevel], [x1 - bevel, y1], [x0 + bevel, y1], [x0, y1 - bevel], [x0, y0 + bevel]]);
       if (!has(row - 1, col)) segments.push([x0 + bevel, y0, x1 - bevel, y0]);
       if (!has(row, col + 1)) segments.push([x1, y0 + bevel, x1, y1 - bevel]);
       if (!has(row + 1, col)) segments.push([x1 - bevel, y1, x0 + bevel, y1]);
       if (!has(row, col - 1)) segments.push([x0, y1 - bevel, x0, y0 + bevel]);
     }
-    // Bevel gaps (diamonds) at grid points: filled when three or four squares meet or two diagonal squares
+    // Bridge rounded corners with matching curves when fields meet at a point or diagonally.
+    if (connectRoundedFields) {
+      for (let x = 0; x <= 8; x++) {
+        for (let y = 0; y <= 8; y++) {
+          if (!isGapFilled(x, y)) continue;
+          shapes.push(`<path d="M${x} ${y - round}A${round} ${round} 0 0 1 ${x + round} ${y}A${round} ${round} 0 0 1 ${x} ${y + round}A${round} ${round} 0 0 1 ${x - round} ${y}A${round} ${round} 0 0 1 ${x} ${y - round}Z"/>`);
+          const corners = [
+            { row: y, col: x, path: `M${x} ${y + round}A${round} ${round} 0 0 1 ${x + round} ${y}` },
+            { row: y - 1, col: x, path: `M${x + round} ${y}A${round} ${round} 0 0 1 ${x} ${y - round}` },
+            { row: y, col: x - 1, path: `M${x - round} ${y}A${round} ${round} 0 0 1 ${x} ${y + round}` },
+            { row: y - 1, col: x - 1, path: `M${x} ${y - round}A${round} ${round} 0 0 1 ${x - round} ${y}` }
+          ];
+          for (const { row, col, path } of corners) {
+            if (!has(row, col)) roundPaths.push(path);
+          }
+        }
+      }
+    }
+
+    // Bevel gaps (diamonds) at grid points are filled when three or four squares meet or two diagonal squares
     // connect. Their chamfers are drawn only for the squares that are not filled, so the gap is bridged.
-    const isGapFilled = (x, y) => {
-      const count = pointCount(x, y);
-      return count >= 3 || (count === 2 && ((has(y - 1, x - 1) && has(y, x)) || (has(y - 1, x) && has(y, x - 1))));
-    };
     for (let x = 0; bevel && x <= 8; x++) {
       for (let y = 0; y <= 8; y++) {
         const filled = isGapFilled(x, y);
@@ -3182,8 +3354,10 @@
       ? (selectedColor === "w" ? settings.whitePieceColor : settings.blackPieceColor)
       : settings.moveOutlineColor;
     const id = `lfs-move-outline-${[...observedBoards.keys()].indexOf(board)}`;
-    const d = segments.map(([x1, y1, x2, y2]) => `M${x1} ${y1}L${x2} ${y2}`).join("");
-    const clipPolygons = shapes.map(points => `<polygon points="${points.map(point => point.join(",")).join(" ")}"/>`).join("");
+    const d = roundPaths.join("") + segments.map(([x1, y1, x2, y2]) => `M${x1} ${y1}L${x2} ${y2}`).join("");
+    const clipPolygons = shapes.map(shape => Array.isArray(shape)
+      ? `<polygon points="${shape.map(point => point.join(",")).join(" ")}"/>`
+      : shape).join("");
     const blur = Math.max(settings.moveGlowRadiusPercent / 100, 0.001);
     const line = `fill="none" stroke="${color}" stroke-width="${settings.moveOutlineWidthPx}" stroke-linecap="round" vector-effect="non-scaling-stroke"`;
 
@@ -3475,9 +3649,11 @@
 
   }
 
-  function renderThreatDisplaySet(svg, segments, figureRadii, displayMode) {
+  function renderThreatDisplaySet(svg, segments, figureRadii, displayMode, highlightEndpoints) {
     if (!segments.length) return;
-    if (displayMode === "lines") renderLineSet(svg, segments, figureRadii);
+    if (displayMode === "lines" || displayMode === "wedge") {
+      renderLineSet(svg, segments.map(segment => ({ ...segment, wedge: displayMode === "wedge" })), figureRadii, highlightEndpoints);
+    }
     else if (displayMode === "square") renderSquareSegmentSet(svg, segments, figureRadii);
     else renderSegmentSet(svg, segments, figureRadii);
   }
@@ -3504,11 +3680,7 @@
 
   function getPieceAssetUrl(color, type) {
     const letter = figureAssetLetters[type];
-    const complexPawn = type === "pawn" && settings.complexPawn
-      && ["system_pixel", "system_eckig"].includes(settings.pieceSet);
-    const asset = settings.pieceSet === "cage"
-      ? `cage/cage_${letter}.svg`
-      : `${settings.pieceSet}/${color}${letter}${complexPawn ? "_2" : ""}.svg`;
+    const asset = globalThis.LichessSettings.getPieceAsset(settings, color, letter);
     return chrome.runtime.getURL(asset);
   }
 
@@ -3541,14 +3713,21 @@
   }
 
   function renderThreatSegmentsInto(svg, attackSegments, defenseSegments, attackDisplayMode, defenseDisplayMode) {
+    const highlightEndpoints = new Map();
     const preparedDefenseSegments = defenseSegments.map(segment => ({ ...segment, category: "defense" }));
     const figureRadii = getFigureRadii(settings.pieceSet);
-    if (attackDisplayMode === defenseDisplayMode) {
-      renderThreatDisplaySet(svg, [...attackSegments, ...preparedDefenseSegments], figureRadii, attackDisplayMode);
+    if ([attackDisplayMode, defenseDisplayMode].every(mode => mode === "lines" || mode === "wedge")) {
+      renderLineSet(svg, [
+        ...attackSegments.map(segment => ({ ...segment, wedge: attackDisplayMode === "wedge" })),
+        ...preparedDefenseSegments.map(segment => ({ ...segment, wedge: defenseDisplayMode === "wedge" }))
+      ], figureRadii, highlightEndpoints);
+    } else if (attackDisplayMode === defenseDisplayMode) {
+      renderThreatDisplaySet(svg, [...attackSegments, ...preparedDefenseSegments], figureRadii, attackDisplayMode, highlightEndpoints);
     } else {
-      renderThreatDisplaySet(svg, attackSegments, figureRadii, attackDisplayMode);
-      renderThreatDisplaySet(svg, preparedDefenseSegments, figureRadii, defenseDisplayMode);
+      renderThreatDisplaySet(svg, attackSegments, figureRadii, attackDisplayMode, highlightEndpoints);
+      renderThreatDisplaySet(svg, preparedDefenseSegments, figureRadii, defenseDisplayMode, highlightEndpoints);
     }
+    return highlightEndpoints;
   }
 
   // Attack and defense segments share one top-layer SVG while retaining their selected display modes.
@@ -3561,7 +3740,9 @@
     attackDisplayMode = "segments",
     defenseDisplayMode = "segments"
   ) {
+    entry.highlightLineEndpoints = null;
     if (!threats.length && !defenseSegments.length && !centerOutlines.length) {
+      syncHighlightLineEndpoints(entry);
       entry.arcSvg?.remove();
       entry.arcSvg = null;
       entry.centerSvg?.remove();
@@ -3585,8 +3766,9 @@
 
     if (entry.arcSvg) {
       entry.arcSvg.replaceChildren();
-      renderThreatSegmentsInto(entry.arcSvg, attackSegments, defenseSegments, attackDisplayMode, defenseDisplayMode);
+      entry.highlightLineEndpoints = renderThreatSegmentsInto(entry.arcSvg, attackSegments, defenseSegments, attackDisplayMode, defenseDisplayMode);
     }
+    syncHighlightLineEndpoints(entry);
 
     if (!centerOutlines.length) {
       entry.centerSvg?.remove();

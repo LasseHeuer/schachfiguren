@@ -24,6 +24,7 @@
       else control.value = value;
       updateOutput(control);
     }
+    updateBoardFieldControls();
     updateThreatDisplayControls();
     updateCenterOutlineControls();
     updateEngineArrowOutlineControls(settings.engineArrowOutlineEnabled);
@@ -31,7 +32,7 @@
 
   function updateOutput(control) {
     if (control.type !== "range") return;
-    const output = document.querySelector(`[data-value-for="${control.dataset.setting}"]`);
+    const output = control.closest("label").querySelector(`[data-value-for="${control.dataset.setting}"]`);
     if (!output) return;
     if (["threatMoveDepth", "defenseHighlightDepth", "wedgePotentialCutoffValue", "wedgePotentialPerPieceCount"].includes(control.dataset.setting)) {
       output.value = control.value;
@@ -78,6 +79,11 @@
         : control.type === "color" ? globalThis.LichessColors.toOklch(control.value)
         : control.value;
     currentSettings[control.dataset.setting] = value;
+    for (const other of controls) {
+      if (other === control || other.dataset.setting !== control.dataset.setting) continue;
+      other.value = control.value;
+      updateOutput(other);
+    }
     chrome.storage.local.set({ [control.dataset.setting]: value }, () => {
       status.textContent = "Einstellungen gespeichert";
     });
@@ -99,7 +105,7 @@
   }
 
   function previewPieceUrl(piece = "r", color = "w", settings = currentSettings) {
-    const asset = settings.pieceSet === "cage" ? `cage/cage_${piece}.svg` : `${settings.pieceSet}/${color}${piece}.svg`;
+    const asset = globalThis.LichessSettings.getPieceAsset(settings, color, piece);
     return chrome.runtime.getURL(asset);
   }
 
@@ -126,6 +132,15 @@
     for (const control of document.querySelectorAll("[data-indicator-mode]")) control.hidden = control.dataset.indicatorMode !== mode;
   }
 
+  function updateBoardFieldControls() {
+    const enabled = document.querySelector('[data-setting="boardBevelEnabled"]').checked;
+    const shape = document.querySelector('[data-setting="boardFieldShape"]').value;
+    document.querySelector("[data-board-field-controls]").hidden = !enabled;
+    for (const control of document.querySelectorAll("[data-board-field-shape]")) {
+      control.hidden = !enabled || control.dataset.boardFieldShape !== shape;
+    }
+  }
+
   function updateEngineArrowOutlineControls(enabled) {
     document.querySelector("[data-engine-arrow-outline-controls]").hidden = !enabled;
   }
@@ -133,7 +148,7 @@
   function updateThreatDisplayControls() {
     const attackMode = document.querySelector('[data-setting="threatAttackDisplayMode"]').value;
     const defenseMode = document.querySelector('[data-setting="threatDefenseDisplayMode"]').value;
-    const modeNames = { segments: "Kreissegment-Einstellungen", lines: "Linieneinstellungen", square: "Eckige Segment-Einstellungen" };
+    const modeNames = { segments: "Kreissegment-Einstellungen", lines: "Linieneinstellungen", square: "Eckige Segment-Einstellungen", wedge: "Keil-Einstellungen" };
     for (const group of threatDisplayGroups) {
       const mode = group.dataset.threatDisplayGroup ?? group.dataset.threatDisplayLabel;
       if (group.dataset.threatDisplayLabel) {
@@ -187,6 +202,7 @@
       if (control.dataset.setting === "threatCenterOutlineStyle") updateCenterOutlineControls();
       if (control.dataset.setting === "engineArrowOutlineEnabled") updateEngineArrowOutlineControls(control.checked);
       if (control.dataset.setting === "moveIndicatorMode") updateIndicatorModeControls(control.value);
+      if (["boardBevelEnabled", "boardFieldShape"].includes(control.dataset.setting)) updateBoardFieldControls();
       if (control.dataset.setting === "enabled") {
         document.body.classList.toggle("extension-disabled", !control.checked);
       }

@@ -8,6 +8,361 @@ const colors = globalThis.LichessColors;
 const settings = globalThis.LichessSettings;
 const threats = globalThis.LichessThreatCoding;
 
+test("threat wedges point at the piece and share line placement in both display roles", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const element = (_, tag) => ({
+    tag, attributes: {}, children: [],
+    setAttribute(key, value) { this.attributes[key] = value; },
+    append(child) { this.children.push(child); }
+  });
+  const context = vm.createContext({ document: { addEventListener() {}, createElementNS: element } });
+  const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
+  vm.runInContext(source.replace("  documentObserver = new MutationObserver", `
+    getFigureRadii = () => new Map([["pawn", Array(720).fill(0.2)]]);
+    globalThis.testing = { renderThreatSegmentsInto, configure(value) { settings = value; } };
+    return;
+    documentObserver = new MutationObserver`), context);
+  const api = context.testing;
+  const options = settings.normalize({ threatAttackDisplayMode: "wedge", threatDefenseDisplayMode: "wedge" });
+  assert.equal(options.threatAttackDisplayMode, "wedge");
+  assert.equal(options.threatDefenseDisplayMode, "wedge");
+  const clamped = settings.normalize({ threatWedgeLengthPercent: -5, threatWedgeWidthPercent: 200 });
+  assert.equal(clamped.threatWedgeLengthPercent, 1);
+  assert.equal(clamped.threatWedgeWidthPercent, 30);
+  const points = polygon => polygon.attributes.points.split(" ").map(point => point.split(",").map(Number));
+  const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-10, `${actual} != ${expected}`);
+  for (const angle of [0, Math.PI / 4, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+    api.configure(options);
+    const segment = { target: { row: 3, col: 3 }, type: "pawn", angle, color: "#20cc60" };
+    for (const role of ["attack", "defense"]) {
+      const attacks = role === "attack" ? [segment] : [];
+      const defenses = role === "defense" ? [segment] : [];
+      const lines = element();
+      api.renderThreatSegmentsInto(lines, attacks, defenses, "lines", "lines");
+      const wedges = element();
+      api.renderThreatSegmentsInto(wedges, attacks, defenses, "wedge", "wedge");
+      assert.equal(wedges.children.length, 1);
+      const triangle = wedges.children[0];
+      assert.equal(triangle.tag, "polygon");
+      assert.equal(triangle.attributes.fill, segment.color);
+      const [tip, left, right] = points(triangle);
+      const line = lines.children[0].attributes;
+      close(tip[0], Number(line.x2));
+      close(tip[1], Number(line.y2));
+      close((left[0] + right[0]) / 2, Number(line.x1));
+      close((left[1] + right[1]) / 2, Number(line.y1));
+      close(Math.hypot(left[0] - right[0], left[1] - right[1]), 0.1);
+    }
+  }
+  const segment = { target: { row: 3, col: 3 }, type: "pawn", angle: 0, color: "#20cc60", sourceType: "knight" };
+  for (const length of [1, 8, 30]) {
+    api.configure(settings.normalize({ ...options, threatWedgeLengthPercent: length, threatWedgeWidthPercent: 18 }));
+    const svg = element();
+    api.renderThreatSegmentsInto(svg, [segment], [], "wedge", "lines");
+    const [tip, left, right] = points(svg.children[0]);
+    close((left[0] + right[0]) / 2 - tip[0], length / 100);
+    close(Math.hypot(left[0] - right[0], left[1] - right[1]), 0.18);
+  }
+  api.configure(options);
+  const lines = element();
+  const mixed = element();
+  api.renderThreatSegmentsInto(lines, [{ ...segment, sourceType: "rook" }], [segment], "lines", "lines");
+  api.renderThreatSegmentsInto(mixed, [segment], [segment], "wedge", "lines");
+  assert.equal(mixed.children.length, 2);
+  close(points(mixed.children[0])[0][1], Number(lines.children[0].attributes.y2));
+  assert.equal(mixed.children[1].tag, "path");
+});
+
+test("highlight lines meet the rendered line or wedge endpoints in either animation direction", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const element = (_, tag) => ({
+    tag, attributes: {}, children: [],
+    setAttribute(key, value) { this.attributes[key] = value; },
+    append(child) { this.children.push(child); }
+  });
+  const context = vm.createContext({
+    document: { addEventListener() {}, createElementNS: element }, performance: { now: () => 500 },
+    LichessHighlightLinePreview: globalThis.LichessHighlightLinePreview
+  });
+  vm.runInContext(readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8")
+    .replace("  documentObserver = new MutationObserver", `
+      getFigureRadii = () => new Map([["pawn", Array(720).fill(0.2)]]);
+      globalThis.testing = { renderThreatSegmentsInto, syncHighlightLineEndpoints, configure(value) { settings = value; } };
+      return;
+      documentObserver = new MutationObserver`), context);
+  const api = context.testing;
+  const root = { row: 3, col: 3 };
+  const source = { row: 3, col: 6 };
+  const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-10, `${actual} != ${expected}`);
+  for (const mode of ["lines", "wedge"]) for (const reverse of [false, true]) {
+    for (const sourceType of ["rook", "knight"]) {
+      api.configure(settings.normalize({ highlightCascadeLinesHoldEnabled: true }));
+      const svg = element();
+      const marker = { target: root, source, type: "pawn", angle: 0, color: "#20cc60", sourceType };
+      const endpoints = api.renderThreatSegmentsInto(svg, [marker], [], mode, "lines");
+      const drawn = svg.children[0];
+      let expected;
+      if (mode === "wedge") {
+        const [, left, right] = drawn.attributes.points.split(" ").map(point => point.split(",").map(Number));
+        expected = { x: (left[0] + right[0]) / 2, y: (left[1] + right[1]) / 2 };
+      } else if (sourceType === "knight") {
+        const [, x, y] = /^M ([\d.e+-]+) ([\d.e+-]+)/.exec(drawn.attributes.d);
+        expected = { x: Number(x), y: Number(y) };
+      } else expected = { x: Number(drawn.attributes.x1), y: Number(drawn.attributes.y1) };
+      const [startSquare, endSquare] = reverse ? [source, root] : [root, source];
+      const line = {
+        path: element(), gradient: element(), stops: Array.from({ length: 10 }, element), color: marker.color,
+        depth: 1, wave: 1, held: true, startSquare, endSquare,
+        fromX: startSquare.col + 0.5, fromY: startSquare.row + 0.5,
+        toX: endSquare.col + 0.5, toY: endSquare.row + 0.5, length: 3
+      };
+      const entry = { highlightLineEndpoints: endpoints,
+        defenseHighlightRuns: [{ lines: [line], startedAt: 0, maxDepth: 1, reverse, holding: true }] };
+      api.syncHighlightLineEndpoints(entry);
+      close(reverse ? line.toX : line.fromX, expected.x);
+      close(reverse ? line.toY : line.fromY, expected.y);
+      close(reverse ? line.fromX : line.toX, source.col + 0.5);
+      close(line.length, Math.hypot(line.toX - line.fromX, line.toY - line.fromY));
+      assert.ok(line.length < 3);
+      assert.equal(line.path.attributes["stroke-linecap"], "butt");
+      assert.ok(!line.gradient.attributes.gradientTransform.includes("NaN"));
+      const geometry = () => JSON.stringify({
+        fromX: line.fromX, fromY: line.fromY, toX: line.toX, toY: line.toY, length: line.length,
+        path: line.path.attributes, gradient: line.gradient.attributes
+      });
+      const previousGeometry = geometry();
+      entry.highlightLineEndpoints = null;
+      const run = entry.defenseHighlightRuns[0];
+      run.retiring = true;
+      run.waitingForReplacement = true;
+      api.syncHighlightLineEndpoints(entry);
+      assert.equal(geometry(), previousGeometry, "held lines retain their geometry while waiting for a new hover preview");
+      run.retiring = false;
+      run.waitingForReplacement = false;
+      line.fadeOut = { startedAt: 400, opacity: 1, progress: 1, duration: 180, reverse: true };
+      api.syncHighlightLineEndpoints(entry);
+      assert.equal(geometry(), previousGeometry, "fading lines must not extend to the center when their marker disappears");
+      entry.highlightLineEndpoints = new Map([[`${root.row},${root.col}:${source.row},${source.col}`, { x: 4.2, y: 3.8 }]]);
+      api.syncHighlightLineEndpoints(entry);
+      assert.equal(geometry(), previousGeometry, "a replacement preview must not move fading lines");
+      delete line.fadeOut;
+      entry.highlightLineEndpoints = null;
+      api.syncHighlightLineEndpoints(entry);
+      close(line.fromX, startSquare.col + 0.5);
+      close(line.toX, endSquare.col + 0.5);
+      close(line.length, 3);
+      assert.equal(line.path.attributes["stroke-linecap"], "round");
+    }
+  }
+});
+
+test("System Rund shares existing SVG assets for both piece colors", () => {
+  const { existsSync } = require("node:fs");
+  const { join } = require("node:path");
+  for (const complexPawn of [false, true]) {
+    const options = settings.normalize({ pieceSet: "system_rund", complexPawn });
+    assert.equal(options.pieceSet, "system_rund");
+    for (const letter of ["p", "n", "b", "r", "q", "k"]) {
+      const asset = settings.getPieceAsset(options, "w", letter);
+      assert.equal(asset, settings.getPieceAsset(options, "b", letter));
+      assert.ok(existsSync(join(__dirname, asset)), asset);
+    }
+    assert.equal(settings.getPieceAsset(options, "w", "p"), "system_rund/bp_2.svg");
+  }
+  for (const pieceSet of ["system_pixel", "system_eckig", "rund", "rund_comic", "cage"]) {
+    for (const color of ["w", "b"]) for (const complexPawn of [false, true]) {
+      for (const letter of ["p", "n", "b", "r", "q", "k"]) {
+        if (pieceSet === "cage" && letter === "k") continue;
+        const options = settings.normalize({ pieceSet, complexPawn });
+        const suffix = complexPawn && letter === "p" && pieceSet.startsWith("system_") ? "_2" : "";
+        const expected = pieceSet === "cage" ? `cage/cage_${letter}.svg` : `${pieceSet}/${color}${letter}${suffix}.svg`;
+        assert.equal(settings.getPieceAsset(options, color, letter), expected);
+      }
+    }
+  }
+});
+
+test("round king movement sectors follow blocked directions and board orientation", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const element = () => ({
+    attributes: {}, children: [],
+    setAttribute(key, value) { this.attributes[key] = value; },
+    append(child) { this.children.push(child); },
+    replaceChildren() { this.children = []; }
+  });
+  const context = vm.createContext({ document: { addEventListener() {}, createElementNS: element } });
+  const source = readFileSync(join(__dirname, "king-movement-fields.js"), "utf8");
+  vm.runInContext(source.replace("  globalThis.LichessKingMovementFields = {", `
+    globalThis.testing = { fillOverlay, getDestinationState, configure(value) { settings = value; } };
+    globalThis.LichessKingMovementFields = {`), context);
+  const api = context.testing;
+  const position = Array.from({ length: 8 }, () => Array(8).fill(""));
+  const king = { row: 4, col: 4, color: "w" };
+  position[4][4] = "wK";
+  position[3][4] = "wP";
+  for (const blackOrientation of [false, true]) {
+    api.configure(settings.normalize({ pieceSet: "system_rund" }));
+    const svg = element();
+    api.fillOverlay(svg, position, king, blackOrientation);
+    const path = svg.children[0].attributes;
+    assert.equal(path["shape-rendering"], "geometricPrecision");
+    assert.equal((path.d.match(/A/g) ?? []).length, 1);
+    const coordinates = /^M0.5 0.5L([\d.e+-]+) ([\d.e+-]+)A([\d.e+-]+)/.exec(path.d);
+    assert.ok(coordinates);
+    const [, x, y, radius] = coordinates.map(Number);
+    assert.ok(Math.abs(Math.hypot(x - 0.5, y - 0.5) - 5 / 14) < 1e-12);
+    assert.ok(Math.abs(radius - 5 / 14) < 1e-12);
+    assert.equal(y > 0.5, blackOrientation);
+  }
+  api.configure(settings.normalize({ pieceSet: "system_eckig" }));
+  const squareSvg = element();
+  api.fillOverlay(squareSvg, position, king, false);
+  assert.equal(squareSvg.children[0].attributes.d, "M0.38 0.14H0.62V0.38H0.38Z");
+  assert.equal(squareSvg.children[0].attributes["shape-rendering"], "crispEdges");
+  api.configure(settings.normalize({ pieceSet: "system_rund" }));
+  position[3][4] = "";
+  const emptySvg = element();
+  api.fillOverlay(emptySvg, position, king, false);
+  assert.equal(emptySvg.children.length, 0);
+  position[0][0] = "wK";
+  position[4][4] = "";
+  const cornerSvg = element();
+  api.fillOverlay(cornerSvg, position, { row: 0, col: 0, color: "w" }, false);
+  assert.equal((cornerSvg.children[0].attributes.d.match(/A/g) ?? []).length, 5);
+  position[4][0] = "bR";
+  assert.equal(api.getDestinationState(position, { row: 0, col: 0, color: "w" }, { row: 1, col: 0 }), "threat");
+  api.fillOverlay(cornerSvg, position, { row: 0, col: 0, color: "w" }, false);
+  assert.equal((cornerSvg.children[0].attributes.d.match(/A/g) ?? []).length, 6);
+});
+
+test("preview filters respect custom piece colors and System Rund uses a circular inner cage", async () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const assets = [];
+  const element = () => ({
+    attributes: {}, children: [],
+    setAttribute(key, value) { this.attributes[key] = value; },
+    removeAttribute(key) { delete this.attributes[key]; },
+    append(...children) { this.children.push(...children); },
+    insertBefore(child) { this.children.unshift(child); }
+  });
+  const context = vm.createContext({
+    document: { addEventListener() {}, createElementNS: element },
+    chrome: { runtime: { getURL: asset => asset } },
+    LichessSettings: settings,
+    fetch: async asset => { assets.push(asset); return { text: async () => "pawn" }; }
+  });
+  const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
+  vm.runInContext(source.replace("  documentObserver = new MutationObserver", `
+    measureOutlineRadii = () => Array(720).fill(0.2);
+    globalThis.cageBounds = [];
+    const originalClearance = getLineFigureClearance;
+    getLineFigureClearance = (...args) => { cageBounds.push(args[5]); return originalClearance(...args); };
+    globalThis.testing = { getFigureRadii, getLineFigureClearance, renderLineSet, syncPreviewDefenseFilter,
+      configure(value) { settings = value; } };
+    return;
+    documentObserver = new MutationObserver`), context);
+  const api = context.testing;
+  for (const pieceSet of ["system_rund", "system_eckig", "system_pixel", "rund", "cage", "rund_comic"]) {
+    const options = settings.normalize({ pieceSet, whitePieceColor: "#20cc60", blackPieceColor: "#c040a0" });
+    api.configure(options);
+    for (const side of ["w", "b"]) {
+      const entry = { previewPieceSvg: element(), previewPieceImage: element(), previewPieceColor: side };
+      api.syncPreviewDefenseFilter(entry);
+      if (pieceSet === "rund_comic") {
+        assert.equal(entry.previewPieceImage.attributes.filter, undefined);
+        entry.defensePreviewMix = 0.5;
+        api.syncPreviewDefenseFilter(entry);
+        assert.equal(entry.previewDefenseFilter.transfer.attributes.in, "SourceGraphic");
+      } else {
+        const { flood, transfer, channels, colors: filters } = entry.previewDefenseFilter;
+        assert.equal(flood.attributes["flood-color"], side === "w" ? options.whitePieceColor : options.blackPieceColor);
+        assert.equal(transfer.attributes.in, "piece-color");
+        assert.equal(filters.w.flood.attributes["flood-color"], options.whitePieceColor);
+        assert.equal(filters.b.flood.attributes["flood-color"], options.blackPieceColor);
+        assert.ok(channels.every(channel => channel.attributes.slope === "1" && channel.attributes.intercept === "0"));
+        entry.defensePreviewMix = 0.5;
+        api.syncPreviewDefenseFilter(entry);
+        assert.ok(channels.every(channel => channel.attributes.slope === "0.5" && channel.attributes.intercept === "0.5"));
+      }
+    }
+  }
+  const radii = api.getFigureRadii("system_rund");
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(assets, ["system_rund/bp_2.svg"]);
+  for (const type of ["knight", "bishop", "rook", "queen", "king"]) {
+    assert.equal(radii.get(type).length, 720);
+    assert.ok(radii.get(type).every(radius => radius === 5 / 14));
+    const clearance = api.getLineFigureClearance(radii.get(type), 0, 0, 0, 0);
+    assert.equal(api.getLineFigureClearance(radii.get(type), Math.PI / 4, 0, 0, 0), clearance);
+  }
+  assert.ok(radii.get("pawn").every(radius => radius === 0.2));
+  api.configure(settings.normalize({ pieceSet: "system_rund" }));
+  context.cageBounds.length = 0;
+  api.renderLineSet(element(), ["queen", "knight"].map((type, index) => ({
+    type, target: { row: index * 3, col: index * 3 }, angle: Math.PI / 4, color: "#20cc60"
+  })), radii);
+  assert.ok(context.cageBounds.length > 0);
+  assert.ok(context.cageBounds.every(bound => bound === undefined), "queens and knights must not use square clearance for System Rund");
+});
+
+test("rounded move outlines connect straight fields and only round their ends", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const context = vm.createContext({
+    document: { addEventListener() {}, createElementNS: () => ({ setAttribute() {} }) },
+    LichessBoardOverlay: { place() {} }
+  });
+  const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
+  vm.runInContext(source.replace("  documentObserver = new MutationObserver", `
+    getScreenSquare = square => square;
+    globalThis.testing = { renderMoveOutline, configure(value) { settings = value; } };
+    return;
+    documentObserver = new MutationObserver`), context);
+  const render = (cells, selected = []) => {
+    const board = { closest: () => true, querySelectorAll: selector => selector.includes("selected") ? selected : cells };
+    const entry = {};
+    context.testing.renderMoveOutline(board, entry, null);
+    const html = entry.moveOutlineSvg.innerHTML;
+    return { html, path: [...html.matchAll(/<path d="([^"]*)" fill="none"/g)][0][1] };
+  };
+  for (const percent of [20, 60, 100]) {
+    context.testing.configure(settings.normalize({
+      enabled: true, boardBevelEnabled: true, boardFieldShape: "round",
+      boardRoundPercent: percent, moveIndicatorMode: "outline"
+    }));
+    const radius = percent / 200;
+    const horizontal = render([{ row: 2, col: 2 }, { row: 2, col: 3 }, { row: 2, col: 4 }]);
+    assert.equal((horizontal.path.match(/A/g) ?? []).length, 4);
+    assert.ok(horizontal.path.includes("M3 2H4"));
+    assert.ok(horizontal.path.includes("M4 3H3"));
+    assert.ok(horizontal.html.includes('<path d="M3 2H4L4 2V3L4 3H3L3 3V2L3 2Z"/>'));
+    const vertical = render([{ row: 2, col: 2 }, { row: 3, col: 2 }, { row: 4, col: 2 }]);
+    assert.equal((vertical.path.match(/A/g) ?? []).length, 4);
+    assert.ok(vertical.path.includes("M3 3V4"));
+    assert.ok(vertical.path.includes("M2 4V3"));
+    const selected = render([{ row: 2, col: 3 }], [{ row: 2, col: 2 }]);
+    assert.equal((selected.path.match(/A/g) ?? []).length, 4);
+    const separate = render([{ row: 2, col: 2 }, { row: 2, col: 4 }]);
+    assert.equal((separate.path.match(/A/g) ?? []).length, 8);
+    const diagonal = render([{ row: 2, col: 2 }, { row: 3, col: 3 }]);
+    assert.equal((diagonal.path.match(/A/g) ?? []).length, 8);
+    const corner = render([{ row: 2, col: 2 }, { row: 2, col: 3 }, { row: 3, col: 2 }]);
+    assert.equal((corner.path.match(/A/g) ?? []).length, 6);
+    assert.ok(corner.path.includes(`M3 ${3 + radius}A${radius} ${radius} 0 0 1 ${3 + radius} 3`));
+    const block = render([{ row: 2, col: 2 }, { row: 2, col: 3 }, { row: 3, col: 2 }, { row: 3, col: 3 }]);
+    assert.equal((block.path.match(/A/g) ?? []).length, 4);
+  }
+});
+
 const previousColors = {
   boardLightLight: "#dedae6", boardDarkLight: "#d6dbd5", lastMoveLight: "#dae0d7",
   selectedLight: "#ffffff", checkSquareLight: "#e57373", engineArrowLight: "#4a4a4a",
@@ -21,9 +376,14 @@ const previousColors = {
 test("board bevel defaults and limits", () => {
   const defaults = settings.normalize();
   assert.equal(defaults.boardBevelEnabled, true);
+  assert.equal(defaults.boardFieldShape, "bevel");
   assert.equal(defaults.boardBevelPercent, 40);
+  assert.equal(defaults.boardRoundPercent, 0);
   assert.equal(settings.normalize({ boardBevelPercent: -10 }).boardBevelPercent, 0);
   assert.equal(settings.normalize({ boardBevelPercent: 120 }).boardBevelPercent, 100);
+  assert.equal(settings.normalize({ boardFieldShape: "unknown" }).boardFieldShape, "bevel");
+  assert.equal(settings.normalize({ boardFieldShape: "round", boardRoundPercent: -10 }).boardRoundPercent, 0);
+  assert.equal(settings.normalize({ boardRoundPercent: 120 }).boardRoundPercent, 100);
   assert.equal(settings.normalize({ boardBevelEnabled: true }).boardBevelEnabled, true);
   for (const key of ["boardGapLight", "boardGapDark"]) {
     assert.equal(colors.parse(defaults[key]).alpha, 1);
@@ -703,6 +1063,58 @@ test("highlight cascades only follow recaptures on the root square and reveal va
     exchangeExpected.map(layer => layer.map(([row, col]) => [7 - row, 7 - col])));
 });
 
+test("cascade kings only participate as safe final capturers", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const context = vm.createContext({ document: { addEventListener() {} } });
+  vm.runInContext(readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8")
+    .replace("  documentObserver = new MutationObserver", `
+      globalThis.testing = { getDefenseCascadeLayers, getAttackCascadeLayers, getHighlightCascadeConnections };
+      return;
+      documentObserver = new MutationObserver`), context);
+  const scenarios = [
+    { pieces: [[5, 4, "w", "king"], [3, 3, "b", "pawn"], [2, 2, "b", "bishop"]],
+      defense: [], attack: [[[4, 4]], [[3, 3]]] },
+    { pieces: [[5, 4, "w", "king"], [3, 3, "b", "pawn"]],
+      defense: [[[4, 4]], [[5, 4]]], attack: [[[4, 4]], [[3, 3]], [[5, 4]]] },
+    { pieces: [[5, 4, "w", "king"], [4, 6, "w", "rook"], [3, 3, "b", "pawn"], [2, 2, "b", "bishop"]],
+      defense: [[[4, 4]], [[4, 6]], [[5, 4]]],
+      attack: [[[4, 4]], [[3, 3]], [[4, 6]], [[2, 2]], [[5, 4]]] },
+    { pieces: [[5, 4, "w", "king"], [4, 6, "w", "rook"], [3, 3, "b", "pawn"], [2, 2, "b", "bishop"], [1, 1, "b", "queen"]],
+      defense: [[[4, 4]], [[4, 6]]], attack: [[[4, 4]], [[3, 3]], [[4, 6]], [[2, 2]]] },
+    { pieces: [[4, 5, "w", "king"], [4, 7, "w", "rook"]],
+      defense: [[[4, 4]], [[4, 5]]], attack: [] },
+    { pieces: [[5, 5, "w", "king"], [6, 6, "b", "bishop"]], defense: [], attack: [] },
+    { pieces: [[5, 4, "w", "king"], [3, 5, "b", "king"]], defense: [], attack: [] },
+    { pieces: [[5, 4, "w", "king"], [2, 5, "b", "knight"], [3, 3, "b", "pawn"]],
+      defense: [], attack: [[[4, 4]], [[2, 5], [3, 3]]] }
+  ];
+  for (const scenario of scenarios) for (const rotated of [false, true]) {
+    const position = Array.from({ length: 8 }, () => Array(8).fill(null));
+    const transform = ([row, col]) => rotated ? [7 - row, 7 - col] : [row, col];
+    for (const [row, col, color, type] of [[4, 4, "w", "knight"], ...scenario.pieces]) {
+      const [r, c] = transform([row, col]);
+      position[r][c] = { color, type };
+    }
+    const [row, col] = transform([4, 4]);
+    const root = { row, col };
+    const unchanged = JSON.stringify(position);
+    for (const isAttack of [false, true]) for (const depth of [1, 6]) {
+      const getLayers = isAttack ? context.testing.getAttackCascadeLayers : context.testing.getDefenseCascadeLayers;
+      const layers = getLayers(position, root, rotated, depth);
+      const expected = (isAttack ? scenario.attack : scenario.defense).slice(0, depth + 1)
+        .map(layer => layer.map(transform).sort((a, b) => a[0] - b[0] || a[1] - b[1]));
+      assert.deepEqual(Array.from(layers, layer => Array.from(layer, square => [square.row, square.col])),
+        expected);
+      const connections = context.testing.getHighlightCascadeConnections(position, layers, isAttack, rotated);
+      assert.deepEqual(Array.from(connections, edge => [edge.to.row, edge.to.col, edge.depth]),
+        expected.slice(1).flatMap((layer, index) => layer.map(square => [...square, index + 1])));
+    }
+    assert.equal(JSON.stringify(position), unchanged);
+  }
+});
+
 test("attack and defense share deduplicated figure and line waves in both directions", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");
@@ -866,6 +1278,30 @@ test("attack and defense share deduplicated figure and line waves in both direct
   api.advanceDefenseCascade(entry, 3150);
   assert.ok(entry.defensePreviewMix > 0, "the replacement preview highlights its root in the final reversed wave");
   api.clearDefenseHighlights(entry);
+
+  const kingPosition = Array.from({ length: 8 }, () => Array(8).fill(null));
+  for (const [row, col, color, type] of [[4, 4, "w", "knight"], [5, 4, "w", "king"],
+    [4, 6, "w", "rook"], [3, 3, "b", "pawn"], [2, 2, "b", "bishop"]]) {
+    kingPosition[row][col] = { color, type, element: element() };
+  }
+  for (const reverse of [false, true]) for (const attack of [false, true]) {
+    api.configure(settings.normalize({ pieceSet: "rund", defenseHighlightDepth: 6,
+      attackHighlightEnabled: attack, highlightCascadeReverseEnabled: reverse }));
+    api.startHighlightCascades(board, entry, kingPosition, root, false);
+    const run = entry.defenseHighlightRuns[0];
+    const king = run.nodes.find(node => node.element === kingPosition[5][4].element);
+    assert.equal(king.depth, run.maxDepth);
+    assert.equal(king.wave, reverse ? 0 : run.maxDepth);
+    const line = run.lines.find(line => (reverse ? line.fromY : line.toY) === 5.5);
+    assert.equal(line.depth, king.depth);
+    assert.equal(line.wave, king.wave);
+    api.clearDefenseHighlights(entry);
+  }
+  kingPosition[1][1] = { color: "b", type: "queen", element: element() };
+  api.startHighlightCascades(board, entry, kingPosition, root, false);
+  assert.ok(entry.defenseHighlightRuns[0].nodes.every(node => node.element !== kingPosition[5][4].element));
+  assert.ok(entry.defenseHighlightRuns[0].lines.every(line => line.fromY !== 5.5));
+  api.clearDefenseHighlights(entry);
 });
 
 test("held SVG lines survive selection, preview waits and replacement before retracting", () => {
@@ -894,6 +1330,7 @@ test("held SVG lines survive selection, preview waits and replacement before ret
   const context = vm.createContext({
     document: { addEventListener() {}, createElementNS: element },
     chrome: { runtime: { getURL: asset => `extension://${asset}` } },
+    LichessSettings: settings,
     performance: { now: () => now },
     requestAnimationFrame: callback => { frames.set(++nextFrame, callback); return nextFrame; },
     cancelAnimationFrame: id => frames.delete(id),
@@ -946,6 +1383,32 @@ test("held SVG lines survive selection, preview waits and replacement before ret
   api.releaseHighlightLineMask(maskEntry, mask);
   assert.equal(mask.mask.parent, maskDefs, "shared mask stays until its last run releases it");
   api.releaseHighlightLineMask(maskEntry, reusedMask);
+  assert.equal(maskDefs.children.length, 0);
+  assert.equal(maskEntry.highlightLineMaskCache.size, 0);
+  api.configure({ ...options, pieceSet: "system_rund", defenseHighlightLineMaskBlurPx: 2 });
+  for (const blackOrientation of [false, true]) {
+    const roundMask = api.createHighlightLineMask(maskEntry, board, maskPosition, blackOrientation);
+    const reusedRoundMask = api.createHighlightLineMask(maskEntry, board, maskPosition, blackOrientation);
+    assert.equal(roundMask, reusedRoundMask);
+    assert.equal(roundMask.blur.attributes.stdDeviation, "0.025 0.025");
+    const circles = roundMask.mask.children[1].children;
+    assert.equal(circles.length, 5, "System Rund masks every figure including the king, but not the pawn");
+    for (const [row, col] of [[2, 4], [3, 2], [4, 4], [6, 2], [7, 4]]) {
+      const circle = circles.find(shape => shape.attributes.cx === String(col + 0.5)
+        && shape.attributes.cy === String(row + 0.5));
+      assert.ok(circle);
+      assert.equal(circle.attributes.r, String(5 / 14));
+      assert.equal(circle.attributes.fill, "black");
+      assert.equal(circle.attributes.transform, undefined);
+    }
+    api.configure({ ...options, pieceSet: "cage" });
+    const cageMask = api.createHighlightLineMask(maskEntry, board, maskPosition, blackOrientation);
+    assert.notEqual(cageMask, roundMask, "different figure sets must not share cached masks");
+    api.releaseHighlightLineMask(maskEntry, cageMask);
+    api.releaseHighlightLineMask(maskEntry, roundMask);
+    api.releaseHighlightLineMask(maskEntry, reusedRoundMask);
+    api.configure({ ...options, pieceSet: "system_rund", defenseHighlightLineMaskBlurPx: 2 });
+  }
   assert.equal(maskDefs.children.length, 0);
   assert.equal(maskEntry.highlightLineMaskCache.size, 0);
   api.configure({ ...options, pieceSet: "cage" });
@@ -1318,11 +1781,11 @@ test("all blend modes produce finite in-gamut colors at black and white boundari
   }
 });
 
-test("Cage mask hides rendered board highlight lines inside the piece silhouette", { skip: ![
+test("board SVG rendering preserves piece masks and round king fields", { skip: ![
   process.env.CHROME_PATH,
   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
   "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
-].some(path => path && require("node:fs").existsSync(path)) }, async () => {
+].some(path => path && require("node:fs").existsSync(path)) }, async t => {
   const { spawn } = require("node:child_process");
   const { createServer } = require("node:http");
   const { existsSync, mkdtempSync, readFileSync, rmSync } = require("node:fs");
@@ -1340,14 +1803,19 @@ test("Cage mask hides rendered board highlight lines inside the piece silhouette
   const testSource = source.replace(marker, `
     globalThis.testing = {
       readPosition,
+      renderMovePreviewPiece,
+      createHighlightLineMask,
       updateDefenseHighlight,
       advanceDefenseCascade,
+      renderThreatSegmentsInto,
+      renderThreatArcs,
+      clearDefenseHighlights,
       configure(value) { settings = value; },
     };
     return;
 ${marker}`);
   const requestedAssets = new Set();
-  const html = `<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/extension.css"><style>
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/extension.css"><style>
     * { box-sizing: border-box; }
     html, body { width: 512px; height: 512px; margin: 0; overflow: hidden; }
     .cg-wrap { position: relative; width: 512px; height: 512px; }
@@ -1363,6 +1831,7 @@ ${marker}`);
   <style>:root { --lfs-white-piece-color:#35608d; --lfs-black-piece-color:#35608d;
     --lfs-piece-wp:url('/cage/cage_p.svg'); --lfs-piece-wn:url('/cage/cage_n.svg'); }</style>
   <script>window.chrome = { runtime: { getURL: path => location.origin + '/' + path } };</script>
+  <script src="/colors.js"></script><script src="/settings.js"></script><script src="/king-movement-fields.js"></script>
   <script src="/board-overlay.js"></script><script src="/highlight-line-preview.js"></script><script src="/selected-piece-wedge.js"></script>
   </body></html>`;
   const server = createServer((request, response) => {
@@ -1373,7 +1842,7 @@ ${marker}`);
       response.end(html);
       return;
     }
-    if (path === "/board-overlay.js" || path === "/highlight-line-preview.js") {
+    if (["/board-overlay.js", "/highlight-line-preview.js", "/colors.js", "/settings.js", "/king-movement-fields.js"].includes(path)) {
       response.setHeader("Content-Type", "text/javascript; charset=utf-8");
       response.end(readFileSync(join(root, path.slice(1))));
       return;
@@ -1388,7 +1857,7 @@ ${marker}`);
       response.end(testSource);
       return;
     }
-    if (/^\/cage\/cage_[pnbrq]\.svg$/.test(path)) {
+    if (/^\/cage\/cage_[pnbrq]\.svg$/.test(path) || /^\/system_rund\/b[kqrbn]\.svg$/.test(path) || path === "/system_rund/bp_2.svg") {
       requestedAssets.add(path);
       response.setHeader("Content-Type", "image/svg+xml");
       response.end(readFileSync(join(root, path.slice(1))));
@@ -1433,8 +1902,10 @@ ${marker}`);
     });
     let nextCommandId = 0;
     const pending = new Map();
+    const runtimeErrors = [];
     socket.addEventListener("message", event => {
       const message = JSON.parse(event.data);
+      if (message.method === "Runtime.exceptionThrown") runtimeErrors.push(message.params.exceptionDetails.text);
       if (!message.id) return;
       const request = pending.get(message.id);
       if (!request) return;
@@ -1455,6 +1926,7 @@ ${marker}`);
     await send("Page.enable");
     await send("Runtime.enable");
     await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
+    await send("Page.navigate", { url: `http://127.0.0.1:${server.address().port}/` });
     for (let attempt = 0; attempt < 100; attempt++) {
       try {
         if (await evaluate("Boolean(window.testing)")) break;
@@ -1469,6 +1941,70 @@ ${marker}`);
       defenseHighlightLineLengthPercent: 100, defenseHighlightLineBlurPercent: 0,
       defenseHighlightLineMaskBlurPx: 1, defenseHighlightWhiteMixPercent: 0, whitePieceColor: "#ff00ff"
     });
+    await t.test("threat wedges render in both roles at desktop and mobile sizes", async () => {
+      for (const size of [512, 320]) {
+        await send("Emulation.setDeviceMetricsOverride", { width: size, height: size, deviceScaleFactor: 1, mobile: size === 320 });
+        const result = await evaluate(`(() => {
+          testing.configure(LichessSettings.normalize({ pieceSet: "system_rund", threatWedgeLengthPercent: 20, threatWedgeWidthPercent: 12 }));
+          const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          svg.setAttribute("viewBox", "0 0 8 8");
+          svg.style.cssText = "position:fixed;inset:0;width:${size}px;height:${size}px";
+          document.body.append(svg);
+          const segment = { target: { row: 3, col: 3 }, type: "rook", angle: 0, color: "#20cc60" };
+          testing.renderThreatSegmentsInto(svg, [segment], [{ ...segment, angle: Math.PI }], "wedge", "wedge");
+          const triangles = [...svg.querySelectorAll("polygon")].map(polygon => {
+            const bounds = polygon.getBoundingClientRect();
+            return { width: bounds.width, height: bounds.height, fill: polygon.getAttribute("fill"), points: polygon.points.length };
+          });
+          svg.remove();
+          return triangles;
+        })()`);
+        assert.equal(result.length, 2);
+        for (const triangle of result) {
+          assert.equal(triangle.points, 3);
+          assert.equal(triangle.fill, "#20cc60");
+          assert.ok(Math.abs(triangle.width - size / 8 * 0.2) < 0.001);
+          assert.ok(Math.abs(triangle.height - size / 8 * 0.12) < 0.001);
+        }
+      }
+      await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
+    });
+    await t.test("board highlights connect to the visible marker instead of the piece center", async () => {
+      for (const mode of ["lines", "wedge"]) for (const reverse of [false, true]) {
+        const result = await evaluate(`(() => {
+          testing.configure(LichessSettings.normalize({ pieceSet: "system_rund", defenseHighlightDepth: 1,
+            defenseHighlightEnabled: true, attackHighlightEnabled: false, threatDefenseDisplayMode: "${mode}",
+            highlightCascadeReverseEnabled: ${reverse}, highlightCascadeLinesHoldEnabled: true }));
+          const board = document.querySelector("cg-board");
+          const parsed = testing.readPosition(board);
+          const entry = { defensePlayedMoveKeys: new Set(), defenseHighlightedPieces: new Set(), hoveredSquare: { row: 4, col: 4 } };
+          testing.updateDefenseHighlight(board, entry, parsed, null);
+          testing.renderThreatArcs(board, entry, [], [{
+            target: { row: 4, col: 4 }, source: { row: 2, col: 5 }, type: "pawn", sourceType: "knight",
+            angle: Math.atan2(-2, 1), color: "#20cc60"
+          }], [], "lines", "${mode}");
+          const line = entry.defenseHighlightRuns[0].lines[0];
+          const marker = entry.arcSvg.querySelector("polygon, path");
+          let expected;
+          if (marker.tagName === "polygon") {
+            const [, left, right] = [...marker.points];
+            expected = [(left.x + right.x) / 2, (left.y + right.y) / 2];
+          } else {
+            const [, x, y] = /^M ([\\d.e+-]+) ([\\d.e+-]+)/.exec(marker.getAttribute("d"));
+            expected = [Number(x), Number(y)];
+          }
+          const actual = ${reverse} ? [line.toX, line.toY] : [line.fromX, line.fromY];
+          const result = { expected, actual, length: line.length, cap: line.path.getAttribute("stroke-linecap") };
+          testing.clearDefenseHighlights(entry);
+          entry.arcSvg.remove();
+          return result;
+        })()`);
+        assert.ok(Math.hypot(result.actual[0] - result.expected[0], result.actual[1] - result.expected[1]) < 1e-6, JSON.stringify({ mode, reverse, ...result }));
+        assert.ok(result.length > 0 && result.length < Math.sqrt(5));
+        assert.equal(result.cap, "butt");
+      }
+    });
+    await t.test("Cage mask hides rendered board highlight lines inside the piece silhouette", async () => {
     const setup = await evaluate(`(() => {
       const board = document.querySelector("cg-board");
       const parsed = testing.readPosition(board);
@@ -1540,6 +2076,220 @@ ${marker}`);
     assert.ok(unmaskedPawn[0] > 180 && unmaskedPawn[2] > 180 && unmaskedPawn[1] < 80,
       `the pixel check must detect the actual line when its mask is removed, got ${unmaskedPawn}`);
     assert.ok(setup.blur.includes("0.015625"), `configured pixel blur must reach the board SVG filter, got ${setup.blur}`);
+    });
+
+    await t.test("System Rund king sectors render at desktop and mobile sizes in both orientations", async () => {
+    const kingOptions = settings.normalize({ pieceSet: "system_rund", kingMovementFieldsEnabled: true, whitePieceColor: "#ff00ff" });
+    await evaluate(`(() => {
+      document.body.dataset.board = "";
+      const board = document.querySelector("cg-board");
+      board.replaceChildren();
+      for (const [type, key] of [["king", "e4"], ["pawn", "e5"]]) {
+        const piece = document.createElement("piece");
+        piece.className = "white " + type;
+        piece.dataset.key = key;
+        piece.style.left = "50%";
+        piece.style.top = key === "e4" ? "50%" : "37.5%";
+        board.append(piece);
+      }
+      document.documentElement.style.setProperty("--lfs-piece-wk", "url('/system_rund/bk.svg')");
+      document.documentElement.style.setProperty("--lfs-piece-wp", "url('/system_rund/bp_2.svg')");
+      document.documentElement.style.setProperty("--lfs-white-piece-color", "#ff00ff");
+      LichessKingMovementFields.update(${JSON.stringify(kingOptions)});
+      return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    })()`);
+    for (const size of [512, 320]) for (const blackOrientation of [false, true]) {
+      await send("Emulation.setDeviceMetricsOverride", { width: size, height: size, deviceScaleFactor: 1, mobile: size === 320 });
+      const kingView = await evaluate(`(async () => {
+        const board = document.querySelector("cg-board");
+        const wrapper = board.closest(".cg-wrap");
+        wrapper.className = "cg-wrap orientation-${blackOrientation ? "black" : "white"}";
+        for (const node of [document.documentElement, document.body, wrapper, board]) {
+          node.style.width = "${size}px"; node.style.height = "${size}px";
+        }
+        for (const piece of board.querySelectorAll("piece")) {
+          piece.style.left = "${blackOrientation ? 37.5 : 50}%";
+          piece.style.top = piece.classList.contains("king") ? "${blackOrientation ? 37.5 : 50}%" : "${blackOrientation ? 50 : 37.5}%";
+        }
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const svg = board.querySelector(".lfs-king-movement-fields");
+        const rect = svg.getBoundingClientRect();
+        return { left: rect.left, top: rect.top, width: rect.width, paths: svg.querySelectorAll("path").length,
+          d: svg.querySelector("path").getAttribute("d"), mask: getComputedStyle(svg.parentElement, "::before").maskImage };
+      })()`);
+      assert.equal(kingView.width, size / 8);
+      assert.equal(kingView.paths, 1);
+      assert.equal((kingView.d.match(/A/g) ?? []).length, 1);
+      assert.ok(kingView.mask.includes("system_rund/bk.svg"), kingView.mask);
+      const screenshot = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+      const pixels = await evaluate(`new Promise(resolve => {
+        const image = new Image();
+        image.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+          const context = canvas.getContext("2d");
+          context.drawImage(image, 0, 0);
+          const centerX = ${kingView.left + kingView.width / 2};
+          const centerY = ${kingView.top + kingView.width / 2};
+          const offset = ${size} / 40;
+          resolve([-offset, offset].map(dy => [...context.getImageData(centerX, centerY + dy, 1, 1).data].slice(0, 3)));
+        };
+        image.src = ${JSON.stringify(`data:image/png;base64,${screenshot.data}`)};
+      })`);
+      const blocked = pixels[blackOrientation ? 1 : 0];
+      const open = pixels[blackOrientation ? 0 : 1];
+      assert.ok(blocked[0] > 240 && blocked[1] < 20 && blocked[2] > 240, `blocked sector: ${blocked}, ${JSON.stringify(kingView)}`);
+      assert.ok(open.every(channel => channel > 200 && channel < 235), `open sector: ${open}`);
+    }
+    assert.ok(requestedAssets.has("/system_rund/bk.svg"));
+    assert.deepEqual(runtimeErrors, []);
+    });
+    await t.test("System Rund cage masks follow the king inner circle, not its bounding square", async () => {
+      await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
+      await evaluate(`(() => {
+        LichessKingMovementFields.update({ enabled: false });
+        const board = document.querySelector("cg-board");
+        const wrapper = board.closest(".cg-wrap");
+        for (const node of [document.documentElement, document.body, wrapper, board]) {
+          node.style.width = "512px"; node.style.height = "512px";
+        }
+        board.replaceChildren();
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 8 8");
+        svg.setAttribute("data-lfs-board-overlay", "");
+        const defs = document.createElementNS(svg.namespaceURI, "defs"); svg.append(defs);
+        const position = Array.from({ length: 8 }, () => Array(8).fill(null));
+        position[3][3] = { color: "w", type: "queen" }; position[3][4] = { color: "b", type: "pawn" };
+        testing.configure(LichessSettings.normalize({ pieceSet: "system_rund", defenseHighlightLineMaskBlurPx: 0 }));
+        const mask = testing.createHighlightLineMask({ highlightLineDefs: defs }, board, position, false);
+        const rect = document.createElementNS(svg.namespaceURI, "rect");
+        rect.setAttribute("width", "8"); rect.setAttribute("height", "8"); rect.setAttribute("fill", "#f00000");
+        rect.setAttribute("mask", "url(#" + mask.mask.id + ")"); svg.append(rect); board.append(svg);
+      })()`);
+      const screenshot = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+      const pixels = await evaluate(`new Promise(resolve => {
+        const image = new Image(); image.onload = () => {
+          const canvas = document.createElement("canvas"); canvas.width = 512; canvas.height = 512;
+          const context = canvas.getContext("2d"); context.drawImage(image, 0, 0);
+          resolve([[3.5, 3.5], [3.8, 3.5], [3.8, 3.8], [4.5, 3.5]].map(([x, y]) =>
+            [...context.getImageData(x * 64, y * 64, 1, 1).data].slice(0, 3)));
+        }; image.src = ${JSON.stringify(`data:image/png;base64,${screenshot.data}`)};
+      })`);
+      assert.deepEqual(pixels, [[221, 221, 221], [221, 221, 221], [240, 0, 0], [240, 0, 0]]);
+    });
+    await t.test("move previews recolor both sides, castling, captures and promotions", async () => {
+      await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
+      for (const side of ["w", "b"]) for (const blackOrientation of [false, true]) {
+        for (const move of ["capture", "castle", "promotion", "en-passant"]) {
+          const previewCells = await evaluate(`(async () => {
+            LichessKingMovementFields.update({ enabled: false });
+            const board = document.querySelector("cg-board");
+            const wrapper = board.closest(".cg-wrap");
+            wrapper.className = "cg-wrap orientation-${blackOrientation ? "black" : "white"}";
+            for (const node of [document.documentElement, document.body, wrapper, board]) {
+              node.style.width = "512px"; node.style.height = "512px";
+            }
+            board.replaceChildren();
+            const side = ${JSON.stringify(side)}, move = ${JSON.stringify(move)};
+            const enemy = side === "w" ? "b" : "w";
+            const basePosition = Array.from({ length: 8 }, () => Array(8).fill(""));
+            const home = side === "w" ? 7 : 0;
+            const source = move === "castle" ? { row: home, col: 4 }
+              : move === "promotion" ? { row: side === "w" ? 1 : 6, col: 0 }
+              : { row: side === "w" ? 3 : 4, col: 4 };
+            const target = move === "castle" ? { row: home, col: 6 }
+              : move === "promotion" ? { row: side === "w" ? 0 : 7, col: 0 }
+              : { row: side === "w" ? 2 : 5, col: 3 };
+            basePosition[source.row][source.col] = side + (move === "castle" ? "K" : move === "capture" ? "N" : "P");
+            if (move === "castle") basePosition[home][7] = side + "R";
+            if (move === "capture") basePosition[target.row][target.col] = enemy + "R";
+            if (move === "en-passant") basePosition[source.row][target.col] = enemy + "P";
+            const position = basePosition.map(rank => [...rank]);
+            position[source.row][source.col] = "";
+            position[target.row][target.col] = side + (move === "castle" ? "K" : move === "promotion" ? "Q" : move === "capture" ? "N" : "P");
+            if (move === "castle") { position[home][7] = ""; position[home][5] = side + "R"; }
+            if (move === "en-passant") position[source.row][target.col] = "";
+            const options = LichessSettings.normalize({ pieceSet: "system_rund", disableAnimations: true,
+              whitePieceColor: "#20cc60", blackPieceColor: "#c040a0", kingMovementFieldsEnabled: false });
+            testing.configure(options);
+            const entry = { defensePreviewMix: move === "capture" ? 0.5 : 0 };
+            testing.renderMovePreviewPiece(board, entry, { basePosition, position, source, target,
+              blackOrientation: ${blackOrientation}, isHoverPreview: true, legal: true });
+            await Promise.all([...entry.previewPieceSvg.querySelectorAll("image")].map(image => new Promise((resolve, reject) => {
+              const asset = new Image(); asset.onload = resolve; asset.onerror = reject; asset.src = image.getAttribute("href");
+            })));
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            const screen = square => ${blackOrientation} ? { row: 7 - square.row, col: 7 - square.col } : square;
+            return [{ ...screen(target), mix: entry.defensePreviewMix },
+              ...(move === "castle" ? [{ ...screen({ row: home, col: 5 }), mix: 0 }] : [])];
+          })()`);
+          const screenshot = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+          const counts = await evaluate(`new Promise(resolve => {
+            const image = new Image();
+            image.onload = () => {
+              const canvas = document.createElement("canvas"); canvas.width = 512; canvas.height = 512;
+              const context = canvas.getContext("2d"); context.drawImage(image, 0, 0);
+              const color = ${JSON.stringify(side === "w" ? [32, 204, 96] : [192, 64, 160])};
+              resolve(${JSON.stringify(previewCells)}.map(cell => {
+                const expected = color.map(channel => channel * (1 - cell.mix) + 255 * cell.mix);
+                const data = context.getImageData(cell.col * 64, cell.row * 64, 64, 64).data;
+                let count = 0;
+                for (let index = 0; index < data.length; index += 4) {
+                  if (expected.every((channel, offset) => Math.abs(data[index + offset] - channel) < 3)) count++;
+                }
+                return count;
+              }));
+            };
+            image.src = ${JSON.stringify(`data:image/png;base64,${screenshot.data}`)};
+          })`);
+          assert.ok(counts.every(count => count > 30), `${side}/${blackOrientation}/${move}: ${counts}`);
+        }
+      }
+      assert.deepEqual(runtimeErrors, []);
+    });
+    await t.test("captured pieces, promotion choices, pockets and editor pieces use the selected colors", async () => {
+      const failures = await evaluate(`(() => {
+        const root = document.documentElement;
+        const options = LichessSettings.normalize({ pieceSet: "system_rund", whitePieceColor: "#20cc60", blackPieceColor: "#c040a0" });
+        root.style.setProperty("--lfs-white-piece-color", options.whitePieceColor);
+        root.style.setProperty("--lfs-black-piece-color", options.blackPieceColor);
+        const types = { pawn: "p", knight: "n", bishop: "b", rook: "r", queen: "q", king: "k" };
+        for (const side of ["w", "b"]) for (const letter of Object.values(types)) {
+          root.style.setProperty("--lfs-piece-" + side + letter, 'url("' + chrome.runtime.getURL(LichessSettings.getPieceAsset(options, side, letter)) + '")');
+        }
+        const sandbox = document.createElement("div"); document.body.append(sandbox);
+        const failures = [];
+        const context = document.createElement("canvas").getContext("2d");
+        const check = (node, side, label) => {
+          const style = getComputedStyle(node);
+          context.clearRect(0, 0, 1, 1); context.fillStyle = style.backgroundColor; context.fillRect(0, 0, 1, 1);
+          const pixel = [...context.getImageData(0, 0, 1, 1).data].slice(0, 3);
+          const expected = side === "w" ? [32, 204, 96] : [192, 64, 160];
+          if (pixel.some((channel, index) => Math.abs(channel - expected[index]) > 1)
+            || !style.maskImage.includes("system_rund/")) failures.push(label + ": " + pixel + "/" + style.maskImage);
+        };
+        for (const layout of ["round__app", "analyse__board", "bot-game"]) for (const orientation of ["white", "black"]) {
+          sandbox.innerHTML = '<div class="' + layout + '"><div class="main-board"><div class="cg-wrap orientation-' + orientation + '"></div></div><div class="material material-top"></div><div class="material material-bottom"></div></div>';
+          if (layout === "analyse__board") sandbox.firstElementChild.prepend(sandbox.querySelector(".cg-wrap"));
+          for (const placement of ["top", "bottom"]) for (const type of Object.keys(types)) {
+            const node = document.createElement("mpiece"); node.className = type;
+            sandbox.querySelector(".material-" + placement).append(node);
+            check(node, (orientation === "white") === (placement === "top") ? "w" : "b", layout + "/" + orientation + "/" + placement + "/" + type);
+          }
+        }
+        for (const markup of ['<div id="promotion-choice"></div>', '<div class="pocket"></div>',
+          '<div class="board-editor"><div class="spare"></div></div>', '<div class="is2d"><div class="puzzle__feedback"></div></div>']) {
+          sandbox.innerHTML = markup;
+          const parent = sandbox.querySelector(".spare, .puzzle__feedback") ?? sandbox.firstElementChild;
+          for (const side of ["w", "b"]) for (const type of Object.keys(types)) {
+            const node = document.createElement("piece"); node.className = (side === "w" ? "white" : "black") + " " + type;
+            parent.append(node); check(node, side, markup + "/" + side + "/" + type);
+          }
+        }
+        sandbox.remove(); return failures;
+      })()`);
+      assert.deepEqual(failures, []);
+    });
   } finally {
     socket?.close();
     if (browser && browser.exitCode === null) {

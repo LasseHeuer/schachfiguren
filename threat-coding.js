@@ -474,7 +474,8 @@
   function renderPosition(board, position, blackOrientation) {
     const threatMap = calculateThreatMap(position, settings);
     const colors = Array.from({ length: 8 }, () => Array(8));
-    const bevelEnabled = settings.boardBevelEnabled && settings.boardBevelPercent > 0;
+    const fieldShapePercent = settings.boardFieldShape === "round" ? settings.boardRoundPercent : settings.boardBevelPercent;
+    const bevelEnabled = settings.boardBevelEnabled && fieldShapePercent > 0;
     const gapColors = bevelEnabled ? Array.from({ length: 8 }, () => Array(8)) : null;
     const gapBase = bevelEnabled ? parseHexColor(document.documentElement.classList.contains("light") ? settings.boardGapLight : settings.boardGapDark) : null;
     for (let row = 0; row < 8; row++) {

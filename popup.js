@@ -237,7 +237,7 @@
   }
 
   function previewPieceUrl(piece = "r", color = "w", settings = currentSettings) {
-    const asset = settings.pieceSet === "cage" ? `cage/cage_${piece}.svg` : `${settings.pieceSet}/${color}${piece}.svg`;
+    const asset = globalThis.LichessSettings.getPieceAsset(settings, color, piece);
     return chrome.runtime.getURL(asset);
   }
 

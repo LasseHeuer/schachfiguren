@@ -173,6 +173,19 @@
 
   function appendCell(paths, rowOffset, colOffset, state) {
     if (state === "open") return;
+    if (settings.pieceSet === "system_rund") {
+      // The SVG ring's inner radius is 5/14 of the piece width.
+      const radius = 5 / 14;
+      const angle = Math.atan2(rowOffset, colOffset);
+      const start = angle - Math.PI / 8;
+      const end = angle + Math.PI / 8;
+      const x1 = 0.5 + radius * Math.cos(start);
+      const y1 = 0.5 + radius * Math.sin(start);
+      const x2 = 0.5 + radius * Math.cos(end);
+      const y2 = 0.5 + radius * Math.sin(end);
+      paths.push(`M0.5 0.5L${x1} ${y1}A${radius} ${radius} 0 0 1 ${x2} ${y2}Z`);
+      return;
+    }
     const edges = [0.14, 0.38, 0.62, 0.86];
     const x = colOffset + 1;
     const y = rowOffset + 1;
@@ -199,7 +212,7 @@
         "stroke-width": "0.02",
         "stroke-linejoin": "miter",
         "fill-rule": "nonzero",
-        "shape-rendering": "crispEdges"
+        "shape-rendering": settings.pieceSet === "system_rund" ? "geometricPrecision" : "crispEdges"
       }));
     }
   }

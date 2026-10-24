@@ -26,7 +26,7 @@
       </nav>
 
       <section class="panel" id="panel-figuren" role="tabpanel" aria-labelledby="tab-figuren" data-panel="figuren">
-        <label class="select-setting"><span>Figurenset</span><select data-setting="pieceSet"><option value="system_pixel">System Pixel</option><option value="system_eckig">System Eckig</option><option value="rund">Rund</option><option value="rund_comic">Rund Comic</option><option value="cage">Cage</option></select></label>
+        <label class="select-setting"><span>Figurenset</span><select data-setting="pieceSet"><option value="system_pixel">System Pixel</option><option value="system_eckig">System Eckig</option><option value="system_rund">System Rund</option><option value="rund">Rund</option><option value="rund_comic">Rund Comic</option><option value="cage">Cage</option></select></label>
         <label class="switch-setting"><span><strong>Komplexer Bauer</strong><small>Bei „System Pixel“ und „System Eckig“.</small></span><input type="checkbox" data-setting="complexPawn" role="switch"></label>
         <div class="color-pair">
           <label class="color-setting"><span>Weisse Figuren</span><input type="color" data-setting="whitePieceColor"></label>
@@ -80,9 +80,11 @@
         <div class="switch-list">
           <label class="switch-setting"><span>Einfarbig</span><input type="checkbox" data-setting="monochromeBoard" role="switch"></label>
           <label class="switch-setting"><span>Felderoutline</span><input type="checkbox" data-setting="squareOutline" role="switch"></label>
-          <label class="switch-setting"><span>Feldecken abschraegen</span><input type="checkbox" data-setting="boardBevelEnabled" role="switch"></label>
+          <label class="switch-setting"><span>Feldform anpassen</span><input type="checkbox" data-setting="boardBevelEnabled" role="switch"></label>
         </div>
-        <label class="range-setting" data-depends-on="boardBevelEnabled"><span>Abschraegung</span><output data-value-for="boardBevelPercent"></output><input type="range" min="0" max="100" step="1" data-setting="boardBevelPercent" title="0%: eckig; 100%: bis zur Kantenmitte"></label>
+        <label class="select-setting" data-depends-on="boardBevelEnabled"><span>Feldform</span><select data-setting="boardFieldShape"><option value="bevel">Gerade Abschraegung</option><option value="round">Abrundung</option></select></label>
+        <label class="range-setting" data-depends-on="boardBevelEnabled boardFieldShape=bevel"><span>Abschraegung</span><output data-value-for="boardBevelPercent"></output><input type="range" min="0" max="100" step="1" data-setting="boardBevelPercent" title="0%: eckig; 100%: bis zur Kantenmitte"></label>
+        <label class="range-setting" data-depends-on="boardBevelEnabled boardFieldShape=round" title="0%: rechteckig; 100%: kreisfoermig"><span>Abrundung</span><output data-value-for="boardRoundPercent"></output><input type="range" min="0" max="100" step="1" data-setting="boardRoundPercent"></label>
       </section>
 
       <section class="panel" id="panel-zuege" role="tabpanel" aria-labelledby="tab-zuege" data-panel="zuege" hidden>
@@ -157,7 +159,7 @@
           <summary>Angriffs- und Verteidigungsanzeigen</summary>
           <label class="switch-setting"><span><strong>Angriffsrichtungen aktivieren</strong><small>Zeigt Angriffsrichtungen am bedrohten Feld.</small></span><input type="checkbox" data-setting="threatenedPieceOutlineEnabled" role="switch"></label>
           <div data-threat-role="attack" data-depends-on="threatenedPieceOutlineEnabled">
-          <label class="select-setting threat-display-select"><span>Angriffsdarstellung</span><select data-setting="threatAttackDisplayMode"><option value="segments">Kreissegmente</option><option value="lines">Linien</option><option value="square">Eckig</option></select></label>
+          <label class="select-setting threat-display-select"><span>Angriffsdarstellung</span><select data-setting="threatAttackDisplayMode"><option value="segments">Kreissegmente</option><option value="lines">Linien</option><option value="square">Eckig</option><option value="wedge">Keil</option></select></label>
           <p class="display-setting-label" data-threat-display-label="segments">Kreissegment-Einstellungen</p>
           <div class="range-grid" data-threat-display-group="segments">
             <label class="range-setting outline-width-setting"><span>Radius (ab Feldmitte)</span><output data-value-for="threatArcRadius"></output><input type="range" min="0.3" max="0.7" step="0.01" data-setting="threatArcRadius"></label>
@@ -176,6 +178,12 @@
             <label class="range-setting"><span>Lückenbreite in Prozent</span><output data-value-for="threatLineGapPercent"></output><input type="range" min="0" max="50" step="1" data-setting="threatLineGapPercent"></label>
             <label class="range-setting"><span>Abstand zur Figur (Kollisionsrand)</span><output data-value-for="threatLineFigureMargin"></output><input type="range" min="-0.1" max="0.2" step="0.01" data-setting="threatLineFigureMargin"></label><label class="range-setting"><span>Krümmung Springerlinien</span><output data-value-for="threatLineCurvature"></output><input type="range" min="-0.5" max="0.5" step="0.01" data-setting="threatLineCurvature"></label>
           </div>
+          <p class="display-setting-label" data-threat-display-label="wedge" hidden>Keil-Einstellungen</p>
+          <div class="range-grid" data-threat-display-group="wedge" hidden>
+            <label class="range-setting"><span>Keillänge (% der Feldbreite)</span><output data-value-for="threatWedgeLengthPercent"></output><input type="range" min="1" max="30" step="1" data-setting="threatWedgeLengthPercent"></label>
+            <label class="range-setting"><span>Basisbreite (% der Feldbreite)</span><output data-value-for="threatWedgeWidthPercent"></output><input type="range" min="1" max="30" step="1" data-setting="threatWedgeWidthPercent"></label>
+            <label class="range-setting"><span>Abstand gleichgerichteter Linien</span><output data-value-for="threatLineGap"></output><input type="range" min="0" max="0.2" step="0.01" data-setting="threatLineGap"></label>
+          </div>
           <p class="display-setting-label" data-threat-display-label="square" hidden>Eckige Segment-Einstellungen</p>
           <div class="range-grid" data-threat-display-group="square" hidden>
             <label class="range-setting outline-width-setting"><span>Radius (ab Feldmitte)</span><output data-value-for="threatSquareRadius"></output><input type="range" min="0.3" max="0.7" step="0.01" data-setting="threatSquareRadius"></label>
@@ -189,7 +197,7 @@
           </div>
           <label class="switch-setting"><span><strong>Verteidigungsrichtungen aktivieren</strong><small>Zeigt Verbindungen von deckenden zu eigenen Figuren.</small></span><input type="checkbox" data-setting="defenseCirclesEnabled" role="switch"></label>
           <div data-threat-role="defense" data-depends-on="defenseCirclesEnabled">
-          <label class="select-setting threat-display-select"><span>Verteidigungsdarstellung</span><select data-setting="threatDefenseDisplayMode"><option value="segments">Kreissegmente</option><option value="lines">Linien</option><option value="square">Eckig</option></select></label>
+          <label class="select-setting threat-display-select"><span>Verteidigungsdarstellung</span><select data-setting="threatDefenseDisplayMode"><option value="segments">Kreissegmente</option><option value="lines">Linien</option><option value="square">Eckig</option><option value="wedge">Keil</option></select></label>
             <p class="display-setting-label" data-threat-display-label="segments">Kreissegment-Einstellungen</p>
             <div class="range-grid" data-threat-display-group="segments">
               <label class="range-setting outline-width-setting"><span>Radius (ab Feldmitte)</span><output data-value-for="threatArcRadius"></output><input type="range" min="0.3" max="0.7" step="0.01" data-setting="threatArcRadius"></label>
@@ -208,6 +216,12 @@
               <label class="range-setting"><span>Lückenbreite in Prozent</span><output data-value-for="threatLineGapPercent"></output><input type="range" min="0" max="50" step="1" data-setting="threatLineGapPercent"></label>
               <label class="range-setting"><span>Abstand zur Figur (Kollisionsrand)</span><output data-value-for="threatLineFigureMargin"></output><input type="range" min="-0.1" max="0.2" step="0.01" data-setting="threatLineFigureMargin"></label><label class="range-setting"><span>Krümmung Springerlinien</span><output data-value-for="threatLineCurvature"></output><input type="range" min="-0.5" max="0.5" step="0.01" data-setting="threatLineCurvature"></label>
               
+            </div>
+            <p class="display-setting-label" data-threat-display-label="wedge" hidden>Keil-Einstellungen</p>
+            <div class="range-grid" data-threat-display-group="wedge" hidden>
+              <label class="range-setting"><span>Keillänge (% der Feldbreite)</span><output data-value-for="threatWedgeLengthPercent"></output><input type="range" min="1" max="30" step="1" data-setting="threatWedgeLengthPercent"></label>
+              <label class="range-setting"><span>Basisbreite (% der Feldbreite)</span><output data-value-for="threatWedgeWidthPercent"></output><input type="range" min="1" max="30" step="1" data-setting="threatWedgeWidthPercent"></label>
+              <label class="range-setting"><span>Abstand gleichgerichteter Linien</span><output data-value-for="threatLineGap"></output><input type="range" min="0" max="0.2" step="0.01" data-setting="threatLineGap"></label>
             </div>
             <p class="display-setting-label" data-threat-display-label="square" hidden>Eckige Segment-Einstellungen</p>
             <div class="range-grid" data-threat-display-group="square" hidden>
