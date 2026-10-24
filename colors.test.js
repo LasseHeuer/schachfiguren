@@ -2387,6 +2387,76 @@ ${marker}`);
       await new Promise(resolve => setTimeout(resolve, 50));
     }
     assert.equal(await evaluate("Boolean(window.testing)"), true, "the browser loaded the production renderer");
+    await t.test("zen clocks follow both half-board contours and shrink along their paths", async () => {
+      const contentSource = readFileSync(join(root, "content.js"), "utf8");
+      const clockMarker = "  chrome.runtime.onMessage.addListener";
+      assert.ok(contentSource.includes(clockMarker));
+      await evaluate(contentSource.replace(clockMarker, `
+        globalThis.clockTesting = {
+          ensureZenClockOverlay, positionZenClock, updateZenClock,
+          configure(value) { settings = normalize(value); },
+          get rows() { return zenClockRows; }
+        };
+        return;
+${clockMarker}`));
+      for (const size of [512, 320]) for (const shape of ["round", "bevel", "square"]) {
+        await send("Emulation.setDeviceMetricsOverride", { width: size + 100, height: size + 160, deviceScaleFactor: 1, mobile: size === 320 });
+        const result = await evaluate(`(() => {
+          document.documentElement.setAttribute('data-lfs-zen-mode', '');
+          clockTesting.configure({ boardFieldShape: '${shape === "square" ? "round" : shape}', boardBevelEnabled: ${shape !== "square"},
+            boardRoundPercent: 100, boardBevelPercent: 100, zenClockMarginPx: 4, zenClockLineThicknessPx: 6,
+            zenClockShowTimeOnlyWhenLow: false });
+          clockTesting.ensureZenClockOverlay();
+          const overlay = document.querySelector('#lfs-zen-clock-overlay');
+          overlay.style.setProperty('--lfs-zen-clock-line-thickness', '6px');
+          overlay.style.setProperty('--lfs-zen-clock-font-size', '27px');
+          const rect = { left: 50, top: 80, width: ${size}, height: ${size}, bottom: ${size + 80} };
+          const results = ['top', 'bottom'].map(side => {
+            const source = document.createElement('div');
+            source.className = 'clock'; source.textContent = '1:00';
+            clockTesting.updateZenClock(side, source, 0);
+            clockTesting.positionZenClock(side, rect);
+            const { bar, fill, warning, end, time, row } = clockTesting.rows[side];
+            const total = fill.getTotalLength();
+            const start = fill.getPointAtLength(0), finish = fill.getPointAtLength(total);
+            const midpoint = fill.getPointAtLength(total / 2);
+            source.textContent = '0:30'; clockTesting.updateZenClock(side, source, 1000);
+            const half = fill.getAttribute('stroke-dasharray');
+            source.classList.add('running'); clockTesting.updateZenClock(side, source, 1000);
+            const runningVisible = getComputedStyle(end).display !== 'none';
+            clockTesting.updateZenClock(side, source, 1500);
+            const flowing = Number(fill.getAttribute('stroke-dasharray').split(' ')[0]) < 50;
+            source.classList.remove('running'); source.textContent = '0:00'; clockTesting.updateZenClock(side, source, 2000);
+            return { start: [start.x, start.y], finish: [finish.x, finish.y], middle: [midpoint.x, midpoint.y],
+              rounded: fill.getAttribute('d').includes('A '), half, zero: fill.getAttribute('stroke-dasharray'),
+              warning: warning.getAttribute('stroke-dasharray'), strokeWidth: getComputedStyle(fill).strokeWidth,
+              fill: getComputedStyle(fill).fill, runningVisible, flowing,
+              outside: side === 'top' ? row.getBoundingClientRect().bottom <= rect.top - 10 : row.getBoundingClientRect().top >= rect.bottom + 10,
+              bar: [bar.getBoundingClientRect().left, bar.getBoundingClientRect().top] };
+          });
+          document.documentElement.removeAttribute('data-lfs-zen-mode');
+          return results;
+        })()`);
+        for (const [index, clock] of result.entries()) {
+          assert.deepEqual(clock.start, [3, size / 2 + 10]);
+          assert.deepEqual(clock.finish, [size + 17, size / 2 + 10]);
+          assert.ok(Math.abs(clock.middle[0] - (size / 2 + 10)) < 0.01);
+          assert.ok(Math.abs(clock.middle[1] - (index === 0 ? 3 : size + 17)) < 0.01);
+          assert.equal(clock.rounded, shape === "round");
+          assert.equal(clock.half, "50 100");
+          assert.equal(clock.zero, "0 100");
+          assert.equal(clock.warning, "0 100");
+          assert.equal(clock.strokeWidth, "6px");
+          assert.equal(clock.fill, "none");
+          assert.equal(clock.runningVisible, true);
+          assert.equal(clock.flowing, true);
+          assert.equal(clock.outside, true);
+          assert.deepEqual(clock.bar, [40, 70]);
+        }
+      }
+      await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
+      assert.deepEqual(runtimeErrors, []);
+    });
     await t.test("rook outlines include occupied a6 destinations from a2 for moves and premoves", async () => {
       for (const destinationClass of ["move-dest", "premove-dest"]) {
         const result = await evaluate(`(() => {

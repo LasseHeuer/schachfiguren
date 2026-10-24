@@ -379,17 +379,34 @@
       row.setAttribute("aria-label", side === "top" ? "Zeit des oberen Spielers" : "Zeit des unteren Spielers");
       const time = document.createElement("span");
       time.className = "lfs-zen-clock-time";
-      const bar = document.createElement("span");
-      bar.className = "lfs-zen-clock-bar";
-      const fill = document.createElement("span");
-      fill.className = "lfs-zen-clock-fill";
-      const end = document.createElement("span");
-      end.className = "lfs-zen-clock-active-end";
-      fill.append(end);
-      bar.append(fill);
+      const svgNamespace = "http://www.w3.org/2000/svg";
+      const bar = document.createElementNS(svgNamespace, "svg");
+      bar.setAttribute("class", "lfs-zen-clock-bar");
+      bar.setAttribute("aria-hidden", "true");
+      const defs = document.createElementNS(svgNamespace, "defs");
+      const gradient = document.createElementNS(svgNamespace, "linearGradient");
+      gradient.id = `lfs-zen-clock-end-${side}`;
+      gradient.setAttribute("gradientUnits", "userSpaceOnUse");
+      for (const [offset, opacity] of [["0%", 0], [`${100 - settings.zenClockActiveEndBlendPercent}%`, 1], ["100%", 1]]) {
+        const stop = document.createElementNS(svgNamespace, "stop");
+        stop.setAttribute("offset", offset);
+        stop.setAttribute("stop-color", "white");
+        stop.setAttribute("stop-opacity", opacity);
+        gradient.append(stop);
+      }
+      defs.append(gradient);
+      const paths = ["fill", "warning", "active-end"].map(name => {
+        const path = document.createElementNS(svgNamespace, "path");
+        path.setAttribute("class", `lfs-zen-clock-${name}`);
+        path.setAttribute("pathLength", "100");
+        return path;
+      });
+      const [fill, warning, end] = paths;
+      end.style.stroke = `url(#${gradient.id})`;
+      bar.append(defs, ...paths);
       row.append(time, bar);
       zenClockOverlay.append(row);
-      zenClockRows[side] = { row, time, bar, fill };
+      zenClockRows[side] = { row, time, bar, fill, warning, end, gradient };
     }
     document.documentElement.append(zenClockOverlay);
   }
@@ -409,7 +426,8 @@
   }
 
   function updateZenClock(side, source, now = performance.now()) {
-    const { row, time, fill } = zenClockRows[side];
+    const clockRow = zenClockRows[side];
+    const { row, time } = clockRow;
     row.hidden = !source;
     if (!source) {
       row.removeAttribute("data-running");
@@ -444,13 +462,27 @@
     const showTime = !settings.zenClockShowTimeOnlyWhenLow || remaining !== null && remaining <= 10;
     time.hidden = !showTime;
     if (showTime && time.textContent !== nextText) time.textContent = nextText;
-    if (clockTime) {
-      const width = `${Math.max(0, Math.min(100, remaining / clockTime.maximum * 100))}%`;
-      if (fill.style.width !== width) fill.style.width = width;
-    } else {
-      if (fill.style.width !== "100%") fill.style.width = "100%";
-    }
+    clockRow.progress = clockTime
+      ? clockTime.maximum > 0 ? Math.max(0, Math.min(100, remaining / clockTime.maximum * 100)) : 0
+      : 100;
+    updateZenClockStroke(clockRow);
     return running;
+  }
+
+  function updateZenClockStroke(clockRow) {
+    const { fill, warning, end, gradient, length, progress = 100 } = clockRow;
+    fill.setAttribute("stroke-dasharray", `${progress} 100`);
+    warning.setAttribute("stroke-dasharray", `${progress} 100`);
+    if (!length) return;
+    const endSize = Math.min(progress, settings.zenClockActiveEndSizePercent);
+    end.setAttribute("stroke-dasharray", `${endSize} 100`);
+    end.setAttribute("stroke-dashoffset", -(progress - endSize));
+    const startPoint = fill.getPointAtLength((progress - endSize) * length / 100);
+    const endPoint = fill.getPointAtLength(progress * length / 100);
+    gradient.setAttribute("x1", startPoint.x);
+    gradient.setAttribute("y1", startPoint.y);
+    gradient.setAttribute("x2", endPoint.x);
+    gradient.setAttribute("y2", endPoint.y);
   }
 
   function animateZenClockProgress() {
@@ -468,15 +500,47 @@
   }
 
   function positionZenClock(side, boardRect) {
-    const { row, fill } = zenClockRows[side];
+    const clockRow = zenClockRows[side];
+    const { row, bar, fill, warning, end, gradient } = clockRow;
     if (row.hidden) return;
     row.style.left = `${boardRect.left}px`;
     row.style.width = `${boardRect.width}px`;
-    fill.style.setProperty("--lfs-zen-clock-end-size", `${boardRect.width * settings.zenClockActiveEndSizePercent / 100}px`);
     const margin = settings.zenClockMarginPx;
+    const thickness = Number.parseFloat(zenClockOverlay.style.getPropertyValue("--lfs-zen-clock-line-thickness"));
+    const distance = margin + thickness / 2;
+    const padding = margin + thickness;
+    const width = boardRect.width + padding * 2;
+    const height = boardRect.height + padding * 2;
+    bar.style.left = `${boardRect.left - padding}px`;
+    bar.style.top = `${boardRect.top - padding}px`;
+    bar.style.width = `${width}px`;
+    bar.style.height = `${height}px`;
+    bar.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    const shapePercent = settings.boardFieldShape === "round" ? settings.boardRoundPercent : settings.boardBevelPercent;
+    const corner = settings.boardBevelEnabled ? boardRect.width * shapePercent / 1600 : 0;
+    const rounded = corner > 0 && settings.boardFieldShape === "round";
+    // Offset the contour so the inner stroke edge stays outside the board.
+    const radius = corner > 0 ? corner + distance * (rounded ? 1 : 2 - Math.SQRT2) : 0;
+    const left = thickness / 2;
+    const right = width - left;
+    const edge = side === "top" ? left : height - left;
+    const direction = side === "top" ? 1 : -1;
+    const middle = height / 2;
+    const sweep = side === "top" ? 1 : 0;
+    const path = `M ${left} ${middle} L ${left} ${edge + direction * radius} `
+      + (rounded ? `A ${radius} ${radius} 0 0 ${sweep} ${left + radius} ${edge} ` : `L ${left + radius} ${edge} `)
+      + `L ${right - radius} ${edge} `
+      + (rounded ? `A ${radius} ${radius} 0 0 ${sweep} ${right} ${edge + direction * radius} ` : `L ${right} ${edge + direction * radius} `)
+      + `L ${right} ${middle}`;
+    if (fill.getAttribute("d") !== path) {
+      for (const stroke of [fill, warning, end]) stroke.setAttribute("d", path);
+      clockRow.length = fill.getTotalLength();
+    }
+    gradient.children[1].setAttribute("offset", `${100 - settings.zenClockActiveEndBlendPercent}%`);
+    updateZenClockStroke(clockRow);
     const top = side === "top"
-      ? boardRect.top - margin - row.getBoundingClientRect().height
-      : boardRect.bottom + margin;
+      ? boardRect.top - padding - settings.zenClockLineGapPx - row.getBoundingClientRect().height
+      : boardRect.bottom + padding + settings.zenClockLineGapPx;
     row.style.top = `${top}px`;
   }
 
@@ -574,10 +638,6 @@
     const lineThickness = Math.max(1, Math.round(settings.zenClockLineThicknessPx * devicePixelRatio)) / devicePixelRatio;
     zenClockOverlay.style.setProperty("--lfs-zen-clock-line-thickness", `${lineThickness}px`);
     zenClockOverlay.style.setProperty("--lfs-zen-clock-line-gap", `${settings.zenClockLineGapPx}px`);
-    const boardShapePercent = settings.boardFieldShape === "round" ? settings.boardRoundPercent : settings.boardBevelPercent;
-    const clockCorner = settings.boardBevelEnabled ? boardRect.width * boardShapePercent / 1600 : 0;
-    zenClockOverlay.dataset.boardShape = clockCorner > 0 ? settings.boardFieldShape : "square";
-    zenClockOverlay.style.setProperty("--lfs-zen-clock-corner", `${clockCorner}px`);
     const bottomClock = clocks.length > 1 ? clocks.at(-1) : clocks[0]?.classList.contains("rclock-bottom") ? clocks[0] : null;
     zenClockSources = { top: topClock === bottomClock ? null : topClock, bottom: bottomClock };
     setZenClockPlayerColors();
