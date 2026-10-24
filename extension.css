@@ -690,6 +690,7 @@ html[data-lfs-zen-mode] body .material[data-lfs-zen-side] {
   visibility: visible !important;
 }
 
+#lfs-zen-clock-overlay[data-active],
 html[data-lfs-zen-mode] #lfs-zen-clock-overlay {
   position: fixed !important;
   inset: 0 !important;
@@ -698,7 +699,7 @@ html[data-lfs-zen-mode] #lfs-zen-clock-overlay {
   pointer-events: none !important;
 }
 
-html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock {
+#lfs-zen-clock-overlay .lfs-zen-clock {
   position: fixed !important;
   display: flex !important;
   flex-direction: column !important;
@@ -710,11 +711,11 @@ html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock {
   text-align: center !important;
 }
 
-html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock[hidden] {
+#lfs-zen-clock-overlay .lfs-zen-clock[hidden] {
   display: none !important;
 }
 
-html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-time {
+#lfs-zen-clock-overlay .lfs-zen-clock-time {
   display: block !important;
   color: var(--c-font, oklch(0.251964748219976 0.000000009391733 89.875563765988)) !important;
   font: 600 var(--lfs-zen-clock-font-size) / 1.1 system-ui, sans-serif !important;
@@ -722,11 +723,15 @@ html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-time {
   white-space: nowrap !important;
 }
 
-html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-time[hidden] {
+html:not([data-lfs-zen-mode]) #lfs-zen-clock-overlay .lfs-zen-clock-time {
   display: none !important;
 }
 
-html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-bar {
+#lfs-zen-clock-overlay .lfs-zen-clock-time[hidden] {
+  display: none !important;
+}
+
+#lfs-zen-clock-overlay .lfs-zen-clock-bar {
   position: fixed !important;
   display: block !important;
   overflow: visible !important;
@@ -736,7 +741,7 @@ html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-bar {
   box-shadow: none !important;
 }
 
-html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-bar path {
+#lfs-zen-clock-overlay .lfs-zen-clock-bar path {
   fill: none !important;
   stroke-width: var(--lfs-zen-clock-line-thickness) !important;
   stroke-linecap: butt !important;
@@ -744,25 +749,25 @@ html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-bar path {
   transition: none !important;
 }
 
-html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-fill {
+#lfs-zen-clock-overlay .lfs-zen-clock-fill {
   stroke: var(--lfs-zen-clock-player-color, var(--lfs-white-piece-color, oklch(0.599740930068773 0.172188795606971 40.184529469491))) !important;
 }
 
-html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock[data-player-color="black"] {
+#lfs-zen-clock-overlay .lfs-zen-clock[data-player-color="black"] {
   --lfs-zen-clock-player-color: var(--lfs-black-piece-color, oklch(0.674238427247811 0.120655575344413 228.510181577896));
 }
 
-html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-warning,
-html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-active-end {
+#lfs-zen-clock-overlay .lfs-zen-clock-warning,
+#lfs-zen-clock-overlay .lfs-zen-clock-active-end {
   display: none !important;
 }
 
-html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-warning {
+#lfs-zen-clock-overlay .lfs-zen-clock-warning {
   stroke: white !important;
 }
 
-html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock[data-critical] .lfs-zen-clock-warning,
-html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock[data-running] .lfs-zen-clock-active-end {
+#lfs-zen-clock-overlay .lfs-zen-clock[data-critical] .lfs-zen-clock-warning,
+#lfs-zen-clock-overlay .lfs-zen-clock[data-running] .lfs-zen-clock-active-end {
   display: block !important;
   animation: lfs-zen-clock-pulse var(--lfs-zen-clock-blink-duration, 0.5s) linear infinite !important;
 }

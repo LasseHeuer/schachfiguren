@@ -98,9 +98,8 @@
     if (!zenOrientationBoard) return;
 
     zenOrientationObserver = new MutationObserver(() => {
-      if (!document.documentElement.hasAttribute("data-lfs-zen-mode")) return;
       scheduleZenClockUpdate();
-      scheduleZenSideUpdate();
+      if (document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenSideUpdate();
     });
     zenOrientationObserver.observe(zenOrientationBoard, { attributes: true, attributeFilter: ["class"] });
   }
@@ -165,6 +164,7 @@
           clearZenOffset(zenBoard);
           syncZenPromotionChoice();
           syncNormalRoundLayout();
+          scheduleZenClockUpdate();
         }
         if (event.detail) zenToggle.blur();
       });
@@ -487,7 +487,7 @@
 
   function animateZenClockProgress() {
     zenClockProgressFrame = 0;
-    if (document.hidden || !document.documentElement.hasAttribute("data-lfs-zen-mode") || !zenClockRows) return;
+    if (document.hidden || !zenClockRows || !zenClockOverlay?.hasAttribute("data-active")) return;
     const now = performance.now();
     const topRunning = updateZenClock("top", zenClockSources.top, now);
     const bottomRunning = updateZenClock("bottom", zenClockSources.bottom, now);
@@ -554,21 +554,62 @@
     if (zenClockRows.bottom.row.dataset.playerColor !== bottomColor) zenClockRows.bottom.row.dataset.playerColor = bottomColor;
   }
 
+  function visibleClocks(root) {
+    const visible = element => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    };
+    let clocks = [...root.querySelectorAll(".rclock")].filter(visible);
+    if (!clocks.length) clocks = [...root.querySelectorAll(".clock")].filter(visible);
+    return clocks;
+  }
+
+  function syncZenClockOverlay(clocks, boardRect) {
+    if (!boardRect?.width || !boardRect.height || !clocks.length) {
+      if (zenClockOverlay) {
+        zenClockOverlay.removeAttribute("data-active");
+        for (const side of ["top", "bottom"]) zenClockRows[side].row.hidden = true;
+      }
+      zenClockSources = { top: null, bottom: null };
+      cancelAnimationFrame(zenClockProgressFrame);
+      return false;
+    }
+
+    ensureZenClockOverlay();
+    zenClockOverlay.setAttribute("data-active", "");
+    zenClockOverlay.style.setProperty("--lfs-zen-clock-font-size", `${settings.zenClockFontSizePx}px`);
+    const devicePixelRatio = window.devicePixelRatio || 1;
+    const lineThickness = Math.max(1, Math.round(settings.zenClockLineThicknessPx * devicePixelRatio)) / devicePixelRatio;
+    zenClockOverlay.style.setProperty("--lfs-zen-clock-line-thickness", `${lineThickness}px`);
+    zenClockOverlay.style.setProperty("--lfs-zen-clock-line-gap", `${settings.zenClockLineGapPx}px`);
+
+    clocks.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
+    const topClock = clocks[0];
+    const bottomClock = clocks.length > 1 ? clocks.at(-1) : topClock.classList.contains("rclock-bottom") ? topClock : null;
+    zenClockSources = { top: topClock === bottomClock ? null : topClock, bottom: bottomClock };
+    setZenClockPlayerColors();
+    let running = false;
+    for (const side of ["top", "bottom"]) {
+      running = updateZenClock(side, zenClockSources[side]) || running;
+      positionZenClock(side, boardRect);
+    }
+    if (running) scheduleZenClockProgress();
+    return running;
+  }
+
+  function syncZenClockOverlayForBoard() {
+    const board = zenBoard?.querySelector("cg-board");
+    const boardRect = board?.getBoundingClientRect();
+    const root = zenBoard?.closest(".round__app, .analyse__board, .analyse, .bot-game, .puzzle, .study__main, .study, main")
+      ?? zenBoard?.parentElement;
+    return syncZenClockOverlay(root ? visibleClocks(root) : [], boardRect);
+  }
+
   function scheduleZenClockUpdate() {
     cancelAnimationFrame(zenClockFrame);
     cancelAnimationFrame(zenClockProgressFrame);
     zenClockFrame = requestAnimationFrame(() => {
-      if (!document.documentElement.hasAttribute("data-lfs-zen-mode") || !zenClockRows) return;
-      setZenClockPlayerColors();
-      const boardRect = zenBoard?.querySelector("cg-board")?.getBoundingClientRect();
-      const now = performance.now();
-      const topRunning = updateZenClock("top", zenClockSources.top, now);
-      const bottomRunning = updateZenClock("bottom", zenClockSources.bottom, now);
-      if (boardRect?.width && boardRect.height) {
-        positionZenClock("top", boardRect);
-        positionZenClock("bottom", boardRect);
-      }
-      if (topRunning || bottomRunning) scheduleZenClockProgress();
+      syncZenClockOverlayForBoard();
     });
   }
 
@@ -585,13 +626,7 @@
     if (!root) return;
 
     const boardRect = board.getBoundingClientRect();
-    const visible = element => {
-      const rect = element.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0;
-    };
     const materials = [...root.querySelectorAll(".material")];
-    let clocks = [...root.querySelectorAll(".rclock")].filter(visible);
-    if (!clocks.length) clocks = [...root.querySelectorAll(".clock")].filter(visible);
     let topMaterial = materials.find(element => element.classList.contains("material-top"));
     let bottomMaterial = materials.find(element => element.classList.contains("material-bottom"));
     if (!topMaterial && !bottomMaterial) {
@@ -611,10 +646,10 @@
     zenSideElements = nextElements;
     for (const element of zenSideElements) element.setAttribute("data-lfs-zen-side", "");
 
-    if (!boardRect.width || !boardRect.height) return;
-    const byTop = (a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top;
-    clocks.sort(byTop);
-    const topClock = clocks[0];
+    if (!boardRect.width || !boardRect.height) {
+      syncZenClockOverlay([], boardRect);
+      return;
+    }
     const topMaterialRect = topMaterial?.getBoundingClientRect();
     const bottomMaterialRect = bottomMaterial?.getBoundingClientRect();
     const padding = 6;
@@ -632,21 +667,7 @@
     place(topMaterial, materialLeft, boardRect.top);
     place(bottomMaterial, materialLeft, boardRect.bottom - (bottomMaterialRect?.height ?? 0));
 
-    ensureZenClockOverlay();
-    zenClockOverlay.style.setProperty("--lfs-zen-clock-font-size", `${settings.zenClockFontSizePx}px`);
-    const devicePixelRatio = window.devicePixelRatio || 1;
-    const lineThickness = Math.max(1, Math.round(settings.zenClockLineThicknessPx * devicePixelRatio)) / devicePixelRatio;
-    zenClockOverlay.style.setProperty("--lfs-zen-clock-line-thickness", `${lineThickness}px`);
-    zenClockOverlay.style.setProperty("--lfs-zen-clock-line-gap", `${settings.zenClockLineGapPx}px`);
-    const bottomClock = clocks.length > 1 ? clocks.at(-1) : clocks[0]?.classList.contains("rclock-bottom") ? clocks[0] : null;
-    zenClockSources = { top: topClock === bottomClock ? null : topClock, bottom: bottomClock };
-    setZenClockPlayerColors();
-    let running = false;
-    for (const side of ["top", "bottom"]) {
-      running = updateZenClock(side, zenClockSources[side]) || running;
-      positionZenClock(side, boardRect);
-    }
-    if (running) scheduleZenClockProgress();
+    syncZenClockOverlay(visibleClocks(root), boardRect);
   }
 
   function schedulePvPreviewSync() {
@@ -1090,7 +1111,7 @@
     syncNormalRoundLayout();
     schedulePvPreviewSync();
     queuePlayTimeUpdate();
-    if (document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenClockUpdate();
+    scheduleZenClockUpdate();
   }
 
   const dayPattern = /(\d[\d.,\s\u00a0]*)\s*(?:days?|tage?|jours?|d[ií]as?|giorni?|dias?|dagen?|dagar?|дн(?:я|ей|ь)?)/iu;
@@ -1227,6 +1248,7 @@
     if (document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenCenter();
     else syncNormalRoundLayout();
     schedulePvPreviewSync();
+    scheduleZenClockUpdate();
   });
 
   const refreshZenClock = () => {
@@ -1241,7 +1263,10 @@
   window.addEventListener("focus", refreshZenClock);
   window.addEventListener("pageshow", refreshZenClock);
 
-  document.addEventListener("scroll", schedulePvPreviewSync, true);
+  document.addEventListener("scroll", () => {
+    schedulePvPreviewSync();
+    scheduleZenClockUpdate();
+  }, true);
 
   const syncedCustomSoundFiles = new Set();
   function syncSoundSettings() {
@@ -1355,9 +1380,10 @@
       syncBoardLayout();
       if (zenMode) scheduleZenCenter();
       else syncNormalRoundLayout();
+      scheduleZenClockUpdate();
     }
+    if (records.some(isZenClockMutation)) scheduleZenClockUpdate();
     if (zenMode) {
-      if (records.some(isZenClockMutation)) scheduleZenClockUpdate();
       if (records.some(isZenMaterialMutation)) scheduleZenSideUpdate();
     }
     const hasPlayTimeMutation = records.some(record => {

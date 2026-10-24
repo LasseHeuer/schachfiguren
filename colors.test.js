@@ -1122,6 +1122,7 @@ test("board preview updates do not trigger round layout and synthetic scroll fee
     syncNormalRoundLayout = () => recordLayout("round");
     scheduleZenCenter = () => recordLayout("zen");
     schedulePvPreviewSync = () => recordLayout("pv");
+    scheduleZenClockUpdate = () => recordLayout("clock");
     new MutationObserver(records => {`), context);
   const node = { nodeType: 1, matches: () => false, querySelector: () => null, querySelectorAll: () => [], closest: () => null };
   for (zenMode of [false, true]) {
@@ -1133,7 +1134,11 @@ test("board preview updates do not trigger round layout and synthetic scroll fee
     }
     const round = { ...node, closest: selector => selector.includes("main") ? round : null };
     observer([{ type: "childList", target: round, addedNodes: [node], removedNodes: [] }]);
-    assert.deepEqual(calls, ["board", zenMode ? "zen" : "round"], "real surrounding layout changes must still be handled");
+    assert.deepEqual(calls, ["board", zenMode ? "zen" : "round", "clock"], "real surrounding layout changes must still be handled");
+    calls.length = 0;
+    const clock = { ...node, textContent: "1:00", closest: selector => selector.includes(".rclock") ? clock : null };
+    observer([{ type: "characterData", target: clock, addedNodes: [], removedNodes: [] }]);
+    assert.deepEqual(calls, ["clock"], "clock changes must refresh the lines in both display modes");
     calls.length = 0;
   }
 });
