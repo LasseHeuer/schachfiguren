@@ -90,13 +90,11 @@
       <section class="panel" id="panel-zuege" role="tabpanel" aria-labelledby="tab-zuege" data-panel="zuege" hidden>
         <div class="theme-grid">
           <fieldset class="theme"><legend>Hell</legend>
-            <label class="color-row"><span>Letzter Zug</span><input type="color" data-setting="lastMoveLight"></label>
             <label class="color-row"><span>Auswahl und Dots</span><input type="color" data-setting="selectedLight"></label>
             <label class="color-row"><span>Schachfeld</span><input type="color" data-setting="checkSquareLight"></label>
             <label class="color-row"><span>Engine-Pfeile</span><input type="color" data-setting="engineArrowLight"></label>
           </fieldset>
           <fieldset class="theme"><legend>Dunkel</legend>
-            <label class="color-row"><span>Letzter Zug</span><input type="color" data-setting="lastMoveDark"></label>
             <label class="color-row"><span>Auswahl und Dots</span><input type="color" data-setting="selectedDark"></label>
             <label class="color-row"><span>Schachfeld</span><input type="color" data-setting="checkSquareDark"></label>
             <label class="color-row"><span>Engine-Pfeile</span><input type="color" data-setting="engineArrowDark"></label>
@@ -105,7 +103,6 @@
         <label class="select-setting"><span>Zugmarkierung</span><select data-setting="moveIndicatorMode"><option value="dots">Bewegungsdots</option><option value="outline">Glow-Feld-Outline</option></select></label>
         <div class="range-grid single-range">
           <label class="range-setting" data-depends-on="moveIndicatorMode=dots"><span>Groesse Bewegungsdots</span><output data-value-for="moveDotSize"></output><input type="range" min="5" max="50" step="1" data-setting="moveDotSize"></label>
-          <label class="range-setting" data-depends-on="markLastMove"><span>Breite der Letztzug-Linie</span><output data-value-for="lastMoveLineWidth"></output><input type="range" min="1" max="100" step="1" data-setting="lastMoveLineWidth"></label>
         </div>
         <div class="range-grid" data-depends-on="moveIndicatorMode=outline">
           <label class="range-setting"><span>Linie: Dicke</span><output data-value-for="moveOutlineWidthPx"></output><input type="range" min="0" max="10" step="1" data-setting="moveOutlineWidthPx"></label>

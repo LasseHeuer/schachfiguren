@@ -1,6 +1,5 @@
 (() => {
   const boardSelector = "cg-board";
-  const svgNamespace = "http://www.w3.org/2000/svg";
   const observedBoards = new Map();
   let settings = null;
 
@@ -13,73 +12,18 @@
     });
   }
 
-  function createOverlay() {
-    const svg = document.createElementNS(svgNamespace, "svg");
-    svg.classList.add("lfs-last-move-line");
-    svg.setAttribute("viewBox", "0 0 8 8");
-    svg.setAttribute("aria-hidden", "true");
-    const line = document.createElementNS(svgNamespace, "polygon");
-    svg.append(line);
-    return { svg, line };
-  }
-
   function renderBoard(board, entry) {
-    if (!settings?.enabled || !settings.markLastMove || !board.closest(".is2d")) {
-      if (entry.svg) entry.svg.style.display = "none";
-      return;
+    const render = globalThis.LichessSelectedPieceWedge?.renderLastMoveOutline;
+    if (render) render(board, entry);
+    else {
+      entry.lastMoveOutlineSvg?.remove();
+      entry.lastMoveOutlineSvg = null;
     }
-
-    const squares = board.querySelectorAll("square.last-move");
-    if (squares.length !== 2) {
-      if (entry.svg) entry.svg.style.display = "none";
-      return;
-    }
-
-    const boardRect = board.getBoundingClientRect();
-    if (!boardRect.width || !boardRect.height) {
-      if (entry.svg) entry.svg.style.display = "none";
-      return;
-    }
-
-    if (!entry.svg) Object.assign(entry, createOverlay());
-    globalThis.LichessBoardOverlay.place(board, entry.svg, "between-pieces");
-    const [first, second] = [...squares].map(square => globalThis.LichessBoardOverlay.getBoardPoint(board, square, boardRect));
-    if (!first || !second) {
-      entry.svg.style.display = "none";
-      return;
-    }
-
-    entry.svg.style.display = drawLine(entry.line, first, second) ? "block" : "none";
-  }
-
-  function drawLine(line, first, second) {
-    const dx = second.x - first.x;
-    const dy = second.y - first.y;
-    const length = Math.hypot(dx, dy);
-    if (length < 0.01) return false;
-    const halfWidth = settings.lastMoveLineWidth / 200;
-    const direction = { x: dx / length, y: dy / length };
-    const perpendicular = { x: -direction.y * halfWidth, y: direction.x * halfWidth };
-    const isDiagonal = Math.abs(dx) > 0.01 && Math.abs(dy) > 0.01;
-    // Like the bishop SVG, the two edges meet at a third point without widening the line.
-    const inset = isDiagonal ? Math.min(halfWidth, length / 2) : 0;
-    const start = { x: first.x + direction.x * inset, y: first.y + direction.y * inset };
-    const end = { x: second.x - direction.x * inset, y: second.y - direction.y * inset };
-    const points = [
-      ...(isDiagonal ? [first] : []),
-      { x: start.x + perpendicular.x, y: start.y + perpendicular.y },
-      { x: end.x + perpendicular.x, y: end.y + perpendicular.y },
-      ...(isDiagonal ? [second] : []),
-      { x: end.x - perpendicular.x, y: end.y - perpendicular.y },
-      { x: start.x - perpendicular.x, y: start.y - perpendicular.y }
-    ];
-    line.setAttribute("points", points.map(point => `${point.x},${point.y}`).join(" "));
-    return true;
   }
 
   function observeBoard(board) {
     if (observedBoards.has(board)) return;
-    const entry = { svg: null, line: null, frame: 0 };
+    const entry = { lastMoveOutlineSvg: null, frame: 0 };
     observedBoards.set(board, entry);
 
     const boardObserver = new MutationObserver(mutations => {
@@ -119,7 +63,7 @@
       entry.wrapperObserver?.disconnect();
       entry.resizeObserver?.disconnect();
       if (entry.frame) cancelAnimationFrame(entry.frame);
-      entry.svg?.remove();
+      entry.lastMoveOutlineSvg?.remove();
       observedBoards.delete(board);
     }
   }
@@ -136,20 +80,9 @@
   scanBoards();
 
   globalThis.LichessLastMoveLine = {
-    createPreviewLine(uci, blackOrientation) {
+    createPreviewLine(uci, blackOrientation, board, color) {
       if (!settings?.enabled || !settings.markLastMove) return null;
-      const squares = uci?.match(/[a-h][1-8]/g) ?? [];
-      if (squares.length !== 2) return null;
-      const [first, second] = squares.map(square => {
-        const file = square.charCodeAt(0) - 97;
-        const rank = 8 - Number(square[1]);
-        return {
-          x: (blackOrientation ? 7 - file : file) + 0.5,
-          y: (blackOrientation ? 7 - rank : rank) + 0.5
-        };
-      });
-      const { svg, line } = createOverlay();
-      return drawLine(line, first, second) ? svg : null;
+      return globalThis.LichessSelectedPieceWedge?.createLastMovePreview(board, uci, blackOrientation, color) ?? null;
     },
     update(nextSettings) {
       settings = nextSettings;

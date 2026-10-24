@@ -574,6 +574,10 @@
     const lineThickness = Math.max(1, Math.round(settings.zenClockLineThicknessPx * devicePixelRatio)) / devicePixelRatio;
     zenClockOverlay.style.setProperty("--lfs-zen-clock-line-thickness", `${lineThickness}px`);
     zenClockOverlay.style.setProperty("--lfs-zen-clock-line-gap", `${settings.zenClockLineGapPx}px`);
+    const boardShapePercent = settings.boardFieldShape === "round" ? settings.boardRoundPercent : settings.boardBevelPercent;
+    const clockCorner = settings.boardBevelEnabled ? boardRect.width * boardShapePercent / 1600 : 0;
+    zenClockOverlay.dataset.boardShape = clockCorner > 0 ? settings.boardFieldShape : "square";
+    zenClockOverlay.style.setProperty("--lfs-zen-clock-corner", `${clockCorner}px`);
     const bottomClock = clocks.length > 1 ? clocks.at(-1) : clocks[0]?.classList.contains("rclock-bottom") ? clocks[0] : null;
     zenClockSources = { top: topClock === bottomClock ? null : topClock, bottom: bottomClock };
     setZenClockPlayerColors();
@@ -756,7 +760,12 @@
     }
 
     const blackOrientation = board.closest(".cg-wrap")?.classList.contains("orientation-black");
-    const key = `${move.dataset.board}:${blackOrientation}:${settings.markLastMove}:${settings.lastMoveLineWidth}`;
+    const key = `${move.dataset.board}:${blackOrientation}:${JSON.stringify([
+      settings.markLastMove, settings.moveOutlineWidthPx, settings.moveOutlineColor,
+      settings.moveGlowOpacity, settings.moveGlowRadiusPercent, settings.moveDotsPlayerColor,
+      settings.whitePieceColor, settings.blackPieceColor, settings.boardBevelEnabled,
+      settings.boardFieldShape, settings.boardBevelPercent, settings.boardRoundPercent
+    ])}`;
     if (pvPreviewBoard !== board) pvPreviewBoard?.removeAttribute("data-lfs-pv-preview");
     const sameBoard = pvPreviewBoard === board;
     pvPreviewBoard = board;
@@ -852,8 +861,10 @@
     }
 
     const fragment = document.createDocumentFragment();
-    const lastMoveLine = globalThis.LichessLastMoveLine.createPreviewLine(uci, blackOrientation);
-    if (lastMoveLine) fragment.append(lastMoveLine);
+    const previewMove = /^([a-h][1-8])([a-h][1-8])/.exec(uci);
+    const movingColor = targets.find(target => target.square === previewMove?.[2])?.color[0];
+    const lastMoveOutline = globalThis.LichessLastMoveLine.createPreviewLine(uci, blackOrientation, board, movingColor);
+    if (lastMoveOutline) fragment.append(lastMoveOutline);
     const shouldAnimate = Boolean(pvPreview.dataset.position) && sameBoard && samePreviewLine && settings.enabled && !settings.disableAnimations
       && typeof Element.prototype.animate === "function" && boardRect.width > 0 && boardRect.height > 0;
     const baseDuration = pvPreviewStepDuration ?? (settings.moveAnimationLichessSpeed ? 250 : settings.moveAnimationDuration);
@@ -957,6 +968,10 @@
     const bevelPoints = `${bevel},0 ${100 - bevel},0 100,${bevel} 100,${100 - bevel} ${100 - bevel},100 ${bevel},100 0,${100 - bevel} 0,${bevel}`;
     const roundRadius = settings.boardRoundPercent / 2;
     const rounded = settings.boardFieldShape === "round";
+    const outerCorner = (rounded ? settings.boardRoundPercent : settings.boardBevelPercent) / 16;
+    const outerBoardClip = rounded
+      ? `inset(0 round ${outerCorner}%)`
+      : `polygon(${outerCorner}% 0, ${100 - outerCorner}% 0, 100% ${outerCorner}%, 100% ${100 - outerCorner}%, ${100 - outerCorner}% 100%, ${outerCorner}% 100%, 0 ${100 - outerCorner}%, 0 ${outerCorner}%)`;
     const bevelMaskShape = rounded
       ? `<rect width="100" height="100" rx="${roundRadius}" fill="white"/>`
       : `<polygon points="${bevelPoints}" fill="white"/>`;
@@ -966,6 +981,7 @@
     const variables = {
       "--lfs-board-bevel-mask": `url("data:image/svg+xml,${encodeURIComponent(bevelMask)}")`,
       "--lfs-board-bevel-clip": bevelClip,
+      "--lfs-board-outer-clip": outerBoardClip,
       "--lfs-idle-mix-percent": `${settings.idleMixPercent}%`,
       "--lfs-hover-mix-percent": `${settings.hoverMixPercent}%`,
       "--lfs-hover-desaturation-setting": `${settings.hoverDesaturation}%`,
@@ -988,13 +1004,11 @@
       "--lfs-board-light-dark": settings.boardLightDark,
       "--lfs-board-gap-dark": settings.boardGapDark,
       "--lfs-board-dark-dark": settings.boardDarkDark,
-      "--lfs-last-move-light": settings.lastMoveLight,
       "--lfs-selected-light": settings.selectedLight,
       "--lfs-check-light": settings.checkSquareLight,
       "--lfs-engine-arrow-light": settings.engineArrowLight,
       "--lfs-engine-arrow-opacity": settings.engineArrowOpacity / 100,
       "--lfs-hover-mix-light": settings.hoverMixLight,
-      "--lfs-last-move-dark": settings.lastMoveDark,
       "--lfs-selected-dark": settings.selectedDark,
       "--lfs-check-dark": settings.checkSquareDark,
       "--lfs-engine-arrow-dark": settings.engineArrowDark,
@@ -1271,6 +1285,8 @@
     const hasLayoutMutation = records.some(record => {
       if (!record.addedNodes.length && !record.removedNodes.length) return false;
       const target = targetElement(record);
+      // Piece/preview updates inside the fixed-size board do not change its layout.
+      if (target?.closest("cg-board")) return false;
       const isBoardLayout = Boolean(target?.closest(".puzzle, .analyse, .round__app, .bot-game, .study__main, main"))
         || [...record.addedNodes, ...record.removedNodes].some(node => containsMatchingElement(node, boardMountSelector));
       return isBoardLayout && (!zenMode || !isZenClockMutation(record) && !isZenMaterialMutation(record) && !isZenOverlayMutation(record));

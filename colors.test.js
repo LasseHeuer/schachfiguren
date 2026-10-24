@@ -526,7 +526,7 @@ test("preview filters respect custom piece colors and System Rund uses a circula
   assert.ok(context.cageBounds.every(bound => bound === undefined), "queens and knights must not use square clearance for System Rund");
 });
 
-test("rounded move outlines connect straight fields and only round their ends", () => {
+test("move outlines keep rounded joins and share formatting with last-move previews", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");
   const { join } = require("node:path");
@@ -537,7 +537,12 @@ test("rounded move outlines connect straight fields and only round their ends", 
   const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
   vm.runInContext(source.replace("  documentObserver = new MutationObserver", `
     getScreenSquare = square => square;
-    globalThis.testing = { renderMoveOutline, configure(value) { settings = value; } };
+    readPosition = () => ({
+      position: Array.from({ length: 8 }, (_, row) => Array.from({ length: 8 }, (_, col) =>
+        row === 4 && col === 4 ? { color: "w", type: "pawn" } : null)),
+      blackOrientation: false
+    });
+    globalThis.testing = { renderMoveOutline, renderLastMoveOutline, createLastMovePreview, getLastMoveOutlineCells, configure(value) { settings = value; } };
     return;
     documentObserver = new MutationObserver`), context);
   const render = (cells, selected = []) => {
@@ -574,6 +579,31 @@ test("rounded move outlines connect straight fields and only round their ends", 
     const block = render([{ row: 2, col: 2 }, { row: 2, col: 3 }, { row: 3, col: 2 }, { row: 3, col: 3 }]);
     assert.equal((block.path.match(/A/g) ?? []).length, 4);
   }
+  const outlineSettings = settings.normalize({
+    enabled: true, markLastMove: true, moveDotsPlayerColor: true,
+    whitePieceColor: "#abcdef", moveOutlineColor: "#123456", moveOutlineWidthPx: 3,
+    moveGlowOpacity: 20, moveGlowRadiusPercent: 5, boardBevelEnabled: false
+  });
+  context.testing.configure(outlineSettings);
+  const preview = context.testing.createLastMovePreview({}, "e2e4", false, "w");
+  assert.ok(preview.innerHTML.includes(`stroke="${outlineSettings.whitePieceColor}" stroke-width="3"`));
+  assert.ok(preview.innerHTML.includes("M4 4L5 4"));
+  assert.ok(preview.innerHTML.includes("M5 7L4 7"));
+  assert.ok(!preview.innerHTML.includes("M4 5L5 5"));
+  assert.ok(!preview.innerHTML.includes("M4 6L5 6"));
+  const cells = (source, target) => Array.from(context.testing.getLastMoveOutlineCells(source, target), cell => [cell.row, cell.col]);
+  assert.deepEqual(cells({ row: 6, col: 4 }, { row: 3, col: 4 }), [[6, 4], [5, 4], [4, 4], [3, 4]]);
+  assert.deepEqual(cells({ row: 6, col: 1 }, { row: 1, col: 6 }), [[6, 1], [5, 2], [4, 3], [3, 4], [2, 5], [1, 6]]);
+  assert.deepEqual(cells({ row: 7, col: 1 }, { row: 5, col: 2 }), [[7, 1], [5, 2]]);
+  const board = {
+    closest: () => true,
+    querySelectorAll: () => [{ row: 6, col: 4 }, { row: 4, col: 4 }]
+  };
+  const entry = {};
+  context.testing.renderLastMoveOutline(board, entry);
+  assert.ok(entry.lastMoveOutlineSvg.innerHTML.includes(`stroke="${outlineSettings.whitePieceColor}" stroke-width="3"`));
+  assert.ok(entry.lastMoveOutlineSvg.innerHTML.includes("M4 4L5 4"));
+  assert.ok(!entry.lastMoveOutlineSvg.innerHTML.includes("M4 6L5 6"));
 });
 
 const previousColors = {
@@ -1020,6 +1050,50 @@ test("line timing and brightness stay synchronized with each highlight wave", ()
   }
 });
 
+test("board preview updates do not trigger round layout and synthetic scroll feedback", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  let observer;
+  let zenMode = false;
+  const calls = [];
+  const context = vm.createContext({
+    LichessSettings: settings,
+    window: { addEventListener() {} },
+    document: { addEventListener() {}, documentElement: { hasAttribute: () => zenMode } },
+    chrome: {
+      runtime: { onMessage: { addListener() {} } },
+      storage: { local: { get() {} }, onChanged: { addListener() {} } }
+    },
+    Node: { ELEMENT_NODE: 1 },
+    MutationObserver: class {
+      constructor(callback) { observer = callback; }
+      observe() {}
+    },
+    recordLayout: name => calls.push(name)
+  });
+  const source = readFileSync(join(__dirname, "content.js"), "utf8");
+  vm.runInContext(source.replace("  new MutationObserver(records => {", `
+    syncBoardLayout = () => recordLayout("board");
+    syncNormalRoundLayout = () => recordLayout("round");
+    scheduleZenCenter = () => recordLayout("zen");
+    schedulePvPreviewSync = () => recordLayout("pv");
+    new MutationObserver(records => {`), context);
+  const node = { nodeType: 1, matches: () => false, querySelector: () => null, querySelectorAll: () => [], closest: () => null };
+  for (zenMode of [false, true]) {
+    const board = { ...node, closest: selector => selector === "cg-board" || selector.includes("main") ? board : null };
+    const overlay = { ...node, closest: selector => selector === "cg-board" || selector.includes("main") ? board : null };
+    for (const target of [board, overlay]) {
+      observer([{ type: "childList", target, addedNodes: [node], removedNodes: [] }]);
+      assert.deepEqual(calls, [], "board overlays and piece changes must not reset hover anticipation via layout updates");
+    }
+    const round = { ...node, closest: selector => selector.includes("main") ? round : null };
+    observer([{ type: "childList", target: round, addedNodes: [node], removedNodes: [] }]);
+    assert.deepEqual(calls, ["board", zenMode ? "zen" : "round"], "real surrounding layout changes must still be handled");
+    calls.length = 0;
+  }
+});
+
 test("hover previews ignore stale move keys and respect active move animations", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");
@@ -1065,6 +1139,10 @@ test("hover previews ignore stale move keys and respect active move animations",
   assert.deepEqual([...allowed], ["1,1"], "CSS-hidden legal fields remain valid move targets");
   assert.deepEqual({ ...context.threatTesting.getHoverMoveTarget(hiddenMoveBoard, allowed, false, 15, 15, { row: 0, col: 0 }) },
     { row: 1, col: 1 }, "hovering a hidden legal destination must preview the move instead of returning to origin");
+  const unusedDestination = { ...hiddenDestination, style: { display: "none", transform: "translate(200%, 200%)" } };
+  hiddenMoveBoard.querySelectorAll = () => [unusedDestination, hiddenDestination];
+  assert.deepEqual([...context.threatTesting.getAllowedDestinations(hiddenMoveBoard, false)], ["1,1"],
+    "Chessground's unused inline-hidden destinations must not remain legal targets");
 
   const sourcePiece = {
     classList: { contains: name => name === "white" || name === "rook" },
@@ -1083,11 +1161,31 @@ test("hover previews ignore stale move keys and respect active move animations",
     closest: selector => selector === ".is2d" ? {} : null,
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 80, height: 80 }),
     querySelector: () => selectedSquare,
-    querySelectorAll: selector => selector === ":scope > piece" ? [sourcePiece] : [destinationSquare]
+    querySelectorAll: selector => selector === ":scope > piece" ? [sourcePiece]
+      : selector === ":scope > square.selected" ? [selectedSquare] : [destinationSquare]
   };
   const preview = context.threatTesting.getInteractionPreview(historyBoard, 45, 45);
   assert.deepEqual({ ...preview.source }, { row: 4, col: 3 }, "history navigation must use the piece's current square instead of its stale key");
   assert.deepEqual({ ...preview.target }, { row: 4, col: 4 }, "the selected piece must preview the hovered legal field after history navigation");
+
+  const unusedSelection = { ...hiddenDestination, style: { display: "none", transform: "translate(0%, 0%)" } };
+  const historySquares = historyBoard.querySelectorAll;
+  historyBoard.querySelector = () => unusedSelection;
+  historyBoard.querySelectorAll = selector => selector === ":scope > square.selected"
+    ? [unusedSelection, selectedSquare] : historySquares(selector);
+  for (const blackOrientation of [false, true]) {
+    historyBoard.closest = selector => selector === ".is2d" ? {}
+      : selector === ".cg-wrap" ? { classList: { contains: () => blackOrientation } } : null;
+    const current = context.threatTesting.getInteractionPreview(historyBoard, 45, 45);
+    assert.deepEqual({ ...current.source }, blackOrientation ? { row: 3, col: 4 } : { row: 4, col: 3 },
+      "a retained hidden selection must not suppress the current piece preview in either orientation");
+    assert.deepEqual({ ...current.target }, blackOrientation ? { row: 3, col: 3 } : { row: 4, col: 4 });
+  }
+  historyBoard.closest = selector => selector === ".is2d" ? {} : null;
+  historyBoard.querySelectorAll = selector => selector === ":scope > square.selected" ? [unusedSelection] : historySquares(selector);
+  assert.equal(context.threatTesting.getInteractionPreview(historyBoard, 45, 45), null,
+    "deselection must not revive a retained hidden selection");
+  historyBoard.querySelectorAll = historySquares;
 
   const listeners = {};
   const interactionContext = vm.createContext({
@@ -2187,7 +2285,7 @@ ${marker}`);
     --lfs-piece-wp:url('/cage/cage_p.svg'); --lfs-piece-wn:url('/cage/cage_n.svg'); }</style>
   <script>window.chrome = { runtime: { getURL: path => location.origin + '/' + path } };</script>
   <script src="/colors.js"></script><script src="/settings.js"></script><script src="/king-movement-fields.js"></script>
-  <script src="/board-overlay.js"></script><script src="/highlight-line-preview.js"></script><script src="/selected-piece-wedge.js"></script>
+   <script src="/board-overlay.js"></script><script src="/highlight-line-preview.js"></script><script src="/threat-coding.js"></script><script src="/selected-piece-wedge.js"></script>
   </body></html>`;
   const server = createServer((request, response) => {
     const path = new URL(request.url, "http://localhost").pathname;
@@ -2197,7 +2295,7 @@ ${marker}`);
       response.end(html);
       return;
     }
-    if (["/board-overlay.js", "/highlight-line-preview.js", "/colors.js", "/settings.js", "/king-movement-fields.js"].includes(path)) {
+    if (["/board-overlay.js", "/highlight-line-preview.js", "/colors.js", "/settings.js", "/king-movement-fields.js", "/threat-coding.js"].includes(path)) {
       response.setHeader("Content-Type", "text/javascript; charset=utf-8");
       response.end(readFileSync(join(root, path.slice(1))));
       return;
@@ -2565,6 +2663,45 @@ ${marker}`);
         }; image.src = ${JSON.stringify(`data:image/png;base64,${screenshot.data}`)};
       })`);
       assert.deepEqual(pixels, [[221, 221, 221], [221, 221, 221], [240, 0, 0], [240, 0, 0]]);
+    });
+    await t.test("hover previews animate after Chessground retains hidden selections and destinations", async () => {
+      for (const size of [512, 320]) for (const blackOrientation of [false, true]) {
+        await send("Emulation.setDeviceMetricsOverride", { width: size, height: size, deviceScaleFactor: 1, mobile: size === 320 });
+        const result = await evaluate(`(async () => {
+          const board = document.querySelector("cg-board");
+          const wrapper = board.closest(".cg-wrap");
+          wrapper.className = "cg-wrap orientation-${blackOrientation ? "black" : "white"}";
+          for (const node of [document.documentElement, document.body, wrapper, board]) {
+            node.style.width = "${size}px"; node.style.height = "${size}px";
+          }
+          const row = ${blackOrientation ? 3 : 4}, col = ${blackOrientation ? 4 : 3}, targetCol = ${blackOrientation ? 2 : 5};
+          const at = (r, c) => 'transform:translate(' + c * 100 + '%,' + r * 100 + '%)';
+          board.innerHTML = '<square class="selected" style="display:none;transform:translate(0%,0%)"></square>'
+            + '<square class="last-move selected" style="' + at(row, col) + '"></square>'
+            + '<square class="move-dest" style="display:none;transform:translate(100%,100%)"></square>'
+            + '<square class="move-dest" style="' + at(row, targetCol) + '"></square>'
+            + '<piece class="white rook" style="' + at(row, col) + '"></piece>';
+          const rect = board.getBoundingClientRect();
+          const preview = LichessThreatCoding.getInteractionPreview(board,
+            rect.left + (targetCol + 0.5) * rect.width / 8, rect.top + (row + 0.5) * rect.height / 8);
+          if (!preview) return { missing: true };
+          testing.configure(LichessSettings.normalize({ enabled: true, pieceSet: "system_rund", disableAnimations: false,
+            moveAnimationLichessSpeed: false, moveAnimationDuration: 100, moveAnimationTimeDistance: false }));
+          const entry = {};
+          testing.renderMovePreviewPiece(board, entry, preview);
+          const started = Boolean(entry.previewAnimation);
+          for (let frame = 0; frame < 90 && entry.previewAnimation; frame++) {
+            await new Promise(resolve => requestAnimationFrame(resolve));
+          }
+          const result = { source: preview.source, target: preview.target, started, finished: !entry.previewAnimation,
+            x: entry.previewTranslation.x, y: entry.previewTranslation.y, opacity: entry.previewOpacity };
+          board.replaceChildren();
+          return result;
+        })()`);
+        assert.deepEqual(result, { source: { row: 4, col: 3 }, target: { row: 4, col: 5 },
+          started: true, finished: true, x: blackOrientation ? -2 : 2, y: 0, opacity: 1 });
+      }
+      assert.deepEqual(runtimeErrors, []);
     });
     await t.test("move previews recolor both sides, castling, captures and promotions", async () => {
       await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });

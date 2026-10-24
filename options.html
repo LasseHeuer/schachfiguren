@@ -105,13 +105,11 @@
           <div class="section-heading"><span class="section-index">03</span><div><h2>Zugmarkierungen</h2><p>Farben und Form der Hervorhebungen auf dem Brett.</p></div></div>
           <div class="theme-grid">
             <fieldset class="theme-panel"><legend>Helles Design</legend>
-              <label class="color-field"><span>Letzter Zug</span><input type="color" data-setting="lastMoveLight"></label>
               <label class="color-field"><span>Auswahl und Dots</span><input type="color" data-setting="selectedLight"></label>
               <label class="color-field"><span>Koenig im Schach</span><input type="color" data-setting="checkSquareLight"></label>
               <label class="color-field"><span>Engine-Pfeile</span><input type="color" data-setting="engineArrowLight"></label>
             </fieldset>
             <fieldset class="theme-panel"><legend>Dunkles Design</legend>
-              <label class="color-field"><span>Letzter Zug</span><input type="color" data-setting="lastMoveDark"></label>
               <label class="color-field"><span>Auswahl und Dots</span><input type="color" data-setting="selectedDark"></label>
               <label class="color-field"><span>Koenig im Schach</span><input type="color" data-setting="checkSquareDark"></label>
               <label class="color-field"><span>Engine-Pfeile</span><input type="color" data-setting="engineArrowDark"></label>
@@ -120,7 +118,7 @@
           <div class="control-grid compact-grid">
             <label class="field field-wide"><span>Zugmarkierung</span><select data-setting="moveIndicatorMode"><option value="dots">Bewegungsdots</option><option value="outline">Glow-Feld-Outline</option></select></label>
             <label class="field" data-indicator-mode="dots"><span>Groesse der Bewegungsdots</span><input type="range" min="5" max="50" step="1" data-setting="moveDotSize"><output data-value-for="moveDotSize"></output></label>
-            <label class="switch-field"><span><strong>Letzten Zug markieren</strong><small>Jedes Feld des letzten Zugs mit einer Mittellinie markieren.</small></span><input type="checkbox" data-setting="markLastMove" role="switch"></label>
+            <label class="switch-field"><span><strong>Letzten Zug markieren</strong><small>Start- und Zielfeld mit der Bewegungsfeld-Outline markieren.</small></span><input type="checkbox" data-setting="markLastMove" role="switch"></label>
             <label class="switch-field" data-indicator-mode="dots"><span><strong>Quadratische Bewegungsdots</strong><small>Statt runder Punkte kleine Quadrate anzeigen.</small></span><input type="checkbox" data-setting="squareMoveDots" role="switch"></label>
             <label class="switch-field" data-indicator-mode="dots"><span><strong>Bewegungsdots in Spielerfarbe</strong><small>Farbe der aktiven Figur für ihre Bewegungsdots verwenden.</small></span><input type="checkbox" data-setting="moveDotsPlayerColor" role="switch"></label>
           </div>
@@ -129,9 +127,6 @@
             <label class="field"><span>Linie: Farbe</span><input type="color" data-setting="moveOutlineColor"></label>
             <label class="field"><span>Glow nach innen: Deckkraft</span><input type="range" min="0" max="100" step="1" data-setting="moveGlowOpacity"><output data-value-for="moveGlowOpacity"></output></label>
             <label class="field"><span>Glow nach innen: Radius (% der Feldbreite)</span><input type="range" min="0" max="50" step="1" data-setting="moveGlowRadiusPercent"><output data-value-for="moveGlowRadiusPercent"></output></label>
-          </div>
-          <div class="control-grid compact-grid">
-            <label class="field field-wide"><span>Breite der Letztzug-Linie</span><input type="range" min="1" max="100" step="1" data-setting="lastMoveLineWidth"><output data-value-for="lastMoveLineWidth"></output></label>
           </div>
         </section>
 

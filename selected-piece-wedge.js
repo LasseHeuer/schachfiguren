@@ -3327,10 +3327,40 @@
       ? [...targets, ...board.querySelectorAll(":scope > square.selected")]
         .map(square => getScreenSquare(square, board)).filter(Boolean)
       : [];
+    entry.moveOutlineSvg = drawMoveOutline(board, entry.moveOutlineSvg, cells, selectedColor, "move");
+    if (entry.moveOutlineSvg) globalThis.LichessBoardOverlay.place(board, entry.moveOutlineSvg, "between-pieces");
+  }
+
+  function renderLastMoveOutline(board, entry) {
+    const parsed = settings?.enabled && settings.markLastMove && board.closest(".is2d")
+      ? readPosition(board)
+      : null;
+    const lastMove = parsed && getLastMove(board, parsed.position, parsed.blackOrientation);
+    const cells = lastMove ? getLastMoveOutlineCells(lastMove.source, lastMove.target) : [];
+    const piece = lastMove && parsed.position[lastMove.target.row]?.[lastMove.target.col];
+    const selectedColor = settings?.moveDotsPlayerColor ? piece?.color : null;
+    entry.lastMoveOutlineSvg = drawMoveOutline(board, entry.lastMoveOutlineSvg, cells, selectedColor, "last-move");
+    if (entry.lastMoveOutlineSvg) globalThis.LichessBoardOverlay.place(board, entry.lastMoveOutlineSvg, "between-pieces");
+  }
+
+  function getLastMoveOutlineCells(source, target) {
+    const rowDelta = target.row - source.row;
+    const colDelta = target.col - source.col;
+    const steps = Math.max(Math.abs(rowDelta), Math.abs(colDelta));
+    const isStraight = rowDelta === 0 || colDelta === 0 || Math.abs(rowDelta) === Math.abs(colDelta);
+    if (!isStraight || steps < 2) return [source, target];
+    const rowStep = Math.sign(rowDelta);
+    const colStep = Math.sign(colDelta);
+    return Array.from({ length: steps + 1 }, (_, index) => ({
+      row: source.row + rowStep * index,
+      col: source.col + colStep * index
+    }));
+  }
+
+  function drawMoveOutline(board, svg, cells, selectedColor, idSuffix) {
     if (!cells.length) {
-      entry.moveOutlineSvg?.remove();
-      entry.moveOutlineSvg = null;
-      return;
+      svg?.remove();
+      return null;
     }
 
     const set = new Set(cells.map(({ row, col }) => `${row},${col}`));
@@ -3422,7 +3452,7 @@
     const color = selectedColor
       ? (selectedColor === "w" ? settings.whitePieceColor : settings.blackPieceColor)
       : settings.moveOutlineColor;
-    const id = `lfs-move-outline-${[...observedBoards.keys()].indexOf(board)}`;
+    const id = `lfs-${idSuffix}-outline-${[...observedBoards.keys()].indexOf(board)}`;
     const d = roundPaths.join("") + segments.map(([x1, y1, x2, y2]) => `M${x1} ${y1}L${x2} ${y2}`).join("");
     const clipPolygons = shapes.map(shape => Array.isArray(shape)
       ? `<polygon points="${shape.map(point => point.join(",")).join(" ")}"/>`
@@ -3430,16 +3460,30 @@
     const blur = Math.max(settings.moveGlowRadiusPercent / 100, 0.001);
     const line = `fill="none" stroke="${color}" stroke-width="${settings.moveOutlineWidthPx}" stroke-linecap="round" vector-effect="non-scaling-stroke"`;
 
-    if (!entry.moveOutlineSvg) {
-      entry.moveOutlineSvg = document.createElementNS(svgNamespace, "svg");
-      entry.moveOutlineSvg.setAttribute("viewBox", "0 0 8 8");
-      entry.moveOutlineSvg.setAttribute("aria-hidden", "true");
+    if (!svg) {
+      svg = document.createElementNS(svgNamespace, "svg");
+      svg.setAttribute("viewBox", "0 0 8 8");
+      svg.setAttribute("aria-hidden", "true");
     }
-    entry.moveOutlineSvg.innerHTML = `<defs><clipPath id="${id}">${clipPolygons}</clipPath>`
+    svg.innerHTML = `<defs><clipPath id="${id}">${clipPolygons}</clipPath>`
       + `<filter id="${id}-glow" filterUnits="userSpaceOnUse" x="-1" y="-1" width="10" height="10"><feGaussianBlur stdDeviation="${blur}"/></filter></defs>`
       + `<g clip-path="url(#${id})" opacity="${settings.moveGlowOpacity / 100}"><path d="${d}" ${line} filter="url(#${id}-glow)"/></g>`
       + `<path d="${d}" ${line}/>`;
-    globalThis.LichessBoardOverlay.place(board, entry.moveOutlineSvg, "between-pieces");
+    if (idSuffix.startsWith("last-move")) svg.classList?.add("lfs-last-move-outline");
+    return svg;
+  }
+
+  function createLastMovePreview(board, uci, blackOrientation, color) {
+    if (!settings?.enabled || !settings.markLastMove) return null;
+    const squares = uci?.match(/[a-h][1-8]/g) ?? [];
+    if (squares.length !== 2) return null;
+    const [source, target] = squares.map(square => {
+      const file = square.charCodeAt(0) - 97;
+      const rank = 8 - Number(square[1]);
+      return blackOrientation ? { row: 7 - rank, col: 7 - file } : { row: rank, col: file };
+    });
+    const cells = getLastMoveOutlineCells(source, target);
+    return drawMoveOutline(board, null, cells, settings.moveDotsPlayerColor ? color : null, "last-move-preview");
   }
 
   function renderBoard(board, entry) {
@@ -4062,6 +4106,8 @@
   scanBoards();
 
   globalThis.LichessSelectedPieceWedge = {
+    createLastMovePreview,
+    renderLastMoveOutline,
     update(nextSettings) {
       advanceHatchScroll();
       settings = nextSettings;

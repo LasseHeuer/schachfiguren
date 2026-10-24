@@ -277,6 +277,8 @@
   }
 
   function getLogicalSquare(element, board, blackOrientation) {
+    // Chessground keeps unused square nodes with inline display:none for later reuse.
+    if (element.style?.display === "none") return null;
     const key = (globalThis.LichessMoveAnimation?.getDestinationKey(element)
       ?? (element.classList.contains("anim") ? element.getAttribute("data-lfs-move-key") : null))?.toLowerCase();
     if (key && /^[a-h][1-8]$/.test(key)) {
@@ -658,9 +660,8 @@
   }
 
   function getSelectedMovePreview(board, position, blackOrientation, x, y) {
-    const selectedSquare = board.querySelector(":scope > square.selected");
-    if (!selectedSquare) return null;
-    const source = getLogicalSquare(selectedSquare, board, blackOrientation);
+    const source = [...board.querySelectorAll(":scope > square.selected")]
+      .map(square => getLogicalSquare(square, board, blackOrientation)).find(Boolean);
     if (!source || !position[source.row][source.col]) return null;
     const allowed = getAllowedDestinations(board, blackOrientation);
     const isKnight = position[source.row][source.col][1] === "N";
@@ -832,8 +833,8 @@
           ? getLogicalSquareAtPoint(board, event.clientX, event.clientY, parsed.blackOrientation)
           : null;
         if (!parsed || !source || !parsed.position[source.row][source.col]) return;
-        const selectedElement = board.querySelector(":scope > square.selected");
-        const selected = selectedElement && getLogicalSquare(selectedElement, board, parsed.blackOrientation);
+        const selected = [...board.querySelectorAll(":scope > square.selected")]
+          .map(square => getLogicalSquare(square, board, parsed.blackOrientation)).find(Boolean);
         // A capture click confirms the selected piece instead of starting a drag of its victim.
         if (selected && (selected.row !== source.row || selected.col !== source.col)
           && getAllowedDestinations(board, parsed.blackOrientation).has(`${source.row},${source.col}`)) return;

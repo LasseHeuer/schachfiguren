@@ -38,7 +38,6 @@ html.light {
   --lfs-board-light-active: var(--lfs-board-light-light, oklch(0.931771275027537 0.001079741737538 17.179127131600));
   --lfs-board-gap-active: var(--lfs-board-gap-light, oklch(0.845 0 0));
   --lfs-board-dark-active: var(--lfs-board-dark-light, oklch(0.889369210212465 0.015441664254116 136.085135168608));
-  --lfs-last-move-color: var(--lfs-last-move-light, oklch(0.899575171577826 0.013704677926575 134.902661492060));
   --lfs-selected-square-color: var(--lfs-selected-light, oklch(0.999999993473546 0.000000037273996 89.875563095902));
   --lfs-check-square-color: var(--lfs-check-light, oklch(0.687546825729105 0.141955024920225 21.456576562938));
   --lfs-hover-mix-color: var(--lfs-hover-mix-light, oklch(0.865356965687609 0.002202233145200 17.200923070259));
@@ -52,7 +51,6 @@ html:not(.light) {
   --lfs-board-light-active: var(--lfs-board-light-dark, oklch(0.402865111336688 0.024101051706464 126.369117320751));
   --lfs-board-gap-active: var(--lfs-board-gap-dark, oklch(0.32 0 0));
   --lfs-board-dark-active: var(--lfs-board-dark-dark, oklch(0.374333149454170 0.024456008727707 301.504533708507));
-  --lfs-last-move-color: var(--lfs-last-move-dark, oklch(0.291178940257418 0.002908317873507 17.323614671502));
   --lfs-selected-square-color: var(--lfs-selected-dark, oklch(0.271958579915841 0.010027590302030 132.640183310038));
   --lfs-check-square-color: var(--lfs-check-dark, oklch(0.450272037237114 0.120348785495185 23.235475932859));
   --lfs-hover-mix-color: var(--lfs-hover-mix-dark, oklch(0.273797858213924 0.001471467317541 17.247148016878));
@@ -740,6 +738,28 @@ html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-bar {
   box-shadow: none !important;
 }
 
+html[data-lfs-zen-mode] #lfs-zen-clock-overlay[data-board-shape="round"] .lfs-zen-clock-bar {
+  border-radius: var(--lfs-zen-clock-corner) / 50% !important;
+}
+
+html[data-lfs-zen-mode] #lfs-zen-clock-overlay[data-board-shape="bevel"] .lfs-zen-clock[data-side="top"] .lfs-zen-clock-bar {
+  clip-path: polygon(
+    calc(var(--lfs-zen-clock-corner) + var(--lfs-zen-clock-line-thickness)) 0,
+    calc(100% - var(--lfs-zen-clock-corner) - var(--lfs-zen-clock-line-thickness)) 0,
+    calc(100% - var(--lfs-zen-clock-corner)) 100%,
+    var(--lfs-zen-clock-corner) 100%
+  ) !important;
+}
+
+html[data-lfs-zen-mode] #lfs-zen-clock-overlay[data-board-shape="bevel"] .lfs-zen-clock[data-side="bottom"] .lfs-zen-clock-bar {
+  clip-path: polygon(
+    var(--lfs-zen-clock-corner) 0,
+    calc(100% - var(--lfs-zen-clock-corner)) 0,
+    calc(100% - var(--lfs-zen-clock-corner) - var(--lfs-zen-clock-line-thickness)) 100%,
+    calc(var(--lfs-zen-clock-corner) + var(--lfs-zen-clock-line-thickness)) 100%
+  ) !important;
+}
+
 html[data-lfs-zen-mode] #lfs-zen-clock-overlay .lfs-zen-clock-fill {
   position: relative !important;
   display: block !important;
@@ -1001,6 +1021,10 @@ html:not([data-lfs-disabled])[data-lfs-board-bevel] body[data-board] .is2d .cg-w
   background: var(--lfs-board-gap-active) !important;
 }
 
+html:not([data-lfs-disabled])[data-lfs-board-bevel] body[data-board] .is2d .cg-wrap {
+  clip-path: var(--lfs-board-outer-clip) !important;
+}
+
 html:not([data-lfs-disabled])[data-lfs-board-bevel] body[data-board] .is2d .cg-wrap cg-board[data-lfs-threat-board] {
   background-image: var(--lfs-threat-gap-background, none) !important;
   background-size: 100% 100% !important;
@@ -1025,7 +1049,7 @@ html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board square.last-move {
 }
 
 html:not([data-lfs-disabled]) cg-board > svg[data-lfs-board-overlay],
-html:not([data-lfs-disabled]) #lfs-pv-preview > svg.lfs-last-move-line {
+html:not([data-lfs-disabled]) #lfs-pv-preview > svg.lfs-last-move-outline {
   position: absolute !important;
   inset: 0 !important;
   width: 100% !important;
@@ -1062,7 +1086,7 @@ html:not([data-lfs-disabled]) .is2d .cg-wrap.orientation-black cg-board > piece.
   transform: rotate(180deg);
 }
 
-html:not([data-lfs-disabled]) #lfs-pv-preview > svg.lfs-last-move-line {
+html:not([data-lfs-disabled]) #lfs-pv-preview > svg.lfs-last-move-outline {
   z-index: 1 !important;
 }
 
@@ -1111,11 +1135,6 @@ html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-center-outline[dat
 html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-threat-center-outline[data-lfs-hatching] * {
   filter: none !important;
   box-shadow: none !important;
-}
-
-html:not([data-lfs-disabled]) cg-board > svg.lfs-last-move-line polygon,
-html:not([data-lfs-disabled]) #lfs-pv-preview > svg.lfs-last-move-line polygon {
-  fill: var(--lfs-last-move-color);
 }
 
 html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square.selected {
