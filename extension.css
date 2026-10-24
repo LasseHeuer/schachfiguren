@@ -1098,6 +1098,10 @@ html:not([data-lfs-disabled]) .is2d cg-board piece > span.lfs-king-movement-grou
   pointer-events: none;
 }
 
+html:not([data-lfs-disabled]) .is2d cg-board > svg.lfs-move-preview-piece svg.lfs-king-preview-fields {
+  overflow: visible !important;
+}
+
 html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board > piece.king[data-lfs-defense-highlight] > span.lfs-king-movement-group > svg.lfs-king-movement-fields path {
   fill: color-mix(in srgb, var(--lfs-bounce-piece-color) calc(100% - var(--lfs-defense-highlight-mix, 0%)), white var(--lfs-defense-highlight-mix, 0%)) !important;
   stroke: color-mix(in srgb, var(--lfs-bounce-piece-color) calc(100% - var(--lfs-defense-highlight-mix, 0%)), white var(--lfs-defense-highlight-mix, 0%)) !important;

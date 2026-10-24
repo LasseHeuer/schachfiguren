@@ -246,14 +246,27 @@
 
   function getLogicalSquare(element, board, blackOrientation) {
     const key = (globalThis.LichessMoveAnimation?.getDestinationKey(element)
-      ?? (element.classList.contains("anim") ? element.getAttribute("data-lfs-move-key") : null)
-      ?? element.dataset.key)?.toLowerCase();
+      ?? (element.classList.contains("anim") ? element.getAttribute("data-lfs-move-key") : null))?.toLowerCase();
     if (key && /^[a-h][1-8]$/.test(key)) {
       return { row: 8 - Number(key[1]), col: key.charCodeAt(0) - 97 };
     }
 
     const rect = element.getBoundingClientRect();
-    return getLogicalSquareAtPoint(board, rect.left + rect.width / 2, rect.top + rect.height / 2, blackOrientation);
+    if (rect.width && rect.height) {
+      return getLogicalSquareAtPoint(board, rect.left + rect.width / 2, rect.top + rect.height / 2, blackOrientation);
+    }
+    const datasetKey = element.dataset?.key?.toLowerCase();
+    if (datasetKey && /^[a-h][1-8]$/.test(datasetKey)) {
+      return { row: 8 - Number(datasetKey[1]), col: datasetKey.charCodeAt(0) - 97 };
+    }
+    const transform = element.style?.transform?.match(/translate(?:3d)?\(\s*(-?[\d.]+)%\s*,\s*(-?[\d.]+)%/);
+    if (!transform) return null;
+    const screenRow = Math.round(Number(transform[2]) / 100);
+    const screenCol = Math.round(Number(transform[1]) / 100);
+    if (!isInside(screenRow, screenCol)) return null;
+    return blackOrientation
+      ? { row: 7 - screenRow, col: 7 - screenCol }
+      : { row: screenRow, col: screenCol };
   }
 
   function getLogicalSquareAtPoint(board, x, y, blackOrientation) {
@@ -303,8 +316,6 @@
   function getAllowedDestinations(board, blackOrientation) {
     const destinations = new Set();
     for (const square of board.querySelectorAll(":scope > square.move-dest, :scope > square.premove-dest")) {
-      const style = getComputedStyle(square);
-      if (style.display === "none" || style.visibility === "hidden") continue;
       const destination = getLogicalSquare(square, board, blackOrientation);
       if (destination) destinations.add(`${destination.row},${destination.col}`);
     }

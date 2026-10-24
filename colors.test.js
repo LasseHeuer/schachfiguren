@@ -75,7 +75,83 @@ test("threat wedges point at the piece and share line placement in both display 
   assert.equal(mixed.children[1].tag, "path");
 });
 
-test("highlight lines meet the rendered line or wedge endpoints in either animation direction", () => {
+test("empty move-field attacks and defenses share their configured radius in every display mode", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const element = (_, tag) => ({
+    tag, attributes: {}, children: [],
+    setAttribute(key, value) { this.attributes[key] = value; },
+    append(child) { this.children.push(child); }
+  });
+  const context = vm.createContext({ document: { addEventListener() {}, createElementNS: element } });
+  const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
+  vm.runInContext(source.replace("  documentObserver = new MutationObserver", `
+    getFigureRadii = () => new Map([["pawn", Array(720).fill(0.2)]]);
+    globalThis.testing = { renderThreatSegmentsInto, advanceFigureBlends, configure(value) { settings = value; } };
+    return;
+    documentObserver = new MutationObserver`), context);
+  const api = context.testing;
+  const options = settings.normalize({ threatMoveFieldRadius: 0.42, threatSquareCornerRadiusPercent: 50 });
+  api.configure(options);
+  const segment = {
+    target: { row: 3, col: 3 }, source: { row: 3, col: 4 }, angle: 0,
+    type: "pawn", color: "#20cc60", figureBlend: 0, moveFieldRadius: 0.42
+  };
+  const expectedRadii = {
+    lines: 0.42 + options.threatLineLength,
+    wedge: 0.42 + options.threatWedgeLengthPercent / 100,
+    segments: 0.42 + options.threatArcThickness,
+    square: 0.42 + options.threatSquareThickness / 2
+  };
+  const blendEntry = { figureBlends: new Map() };
+  assert.equal(api.advanceFigureBlends(blendEntry, "3,3"), true);
+  assert.equal(blendEntry.figureBlends.get("3,3"), 0, "the configured radius is rendered before the figure arrives");
+  while (api.advanceFigureBlends(blendEntry, "3,3")) {}
+  assert.equal(blendEntry.figureBlends.get("3,3"), 1, "the line radius animates to the figure clearance");
+  for (const [mode, expectedRadius] of Object.entries(expectedRadii)) for (const role of ["attack", "defense"]) {
+    const svg = element();
+    const endpoints = api.renderThreatSegmentsInto(svg,
+      role === "attack" ? [segment] : [], role === "defense" ? [segment] : [], mode, mode);
+    const point = endpoints.get("3,3:3,4");
+    assert.ok(point, `${role} ${mode} should expose its rendered endpoint`);
+    assert.ok(Math.abs(Math.hypot(point.x - 3.5, point.y - 3.5) - expectedRadius) < 1e-9,
+      `${role} ${mode} endpoint should use the shared radius`);
+  }
+});
+
+test("king move fields do not show defense lines or wedges", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const context = vm.createContext({ document: { addEventListener() {} } });
+  const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
+  vm.runInContext(source.replace("  documentObserver = new MutationObserver", `
+    getScreenSquare = square => square;
+    globalThis.testing = { getMoveDestinationLines, configure(value) { settings = value; } };
+    return;
+    documentObserver = new MutationObserver`), context);
+  const api = context.testing;
+  const target = { row: 3, col: 4, setAttribute() {} };
+  const board = { querySelectorAll: () => [target] };
+  const positionFor = type => {
+    const position = Array.from({ length: 8 }, () => Array(8).fill(null));
+    position[4][4] = { color: "w", type };
+    position[7][4] = { color: "w", type: "rook" };
+    return position;
+  };
+  api.configure(settings.normalize({ defenseCirclesEnabled: true, threatMoveFieldDisplayMode: "lines" }));
+
+  const kingMove = api.getMoveDestinationLines(board, positionFor("king"), { row: 4, col: 4 }, false);
+  assert.equal(kingMove.defenseSegments.length, 0);
+  assert.equal(kingMove.targetKeys.size, 0);
+
+  const queenMove = api.getMoveDestinationLines(board, positionFor("queen"), { row: 4, col: 4 }, false);
+  assert.equal(queenMove.defenseSegments.length, 1, "other pieces still show defended move fields");
+  assert.deepEqual([...queenMove.targetKeys], ["3,4"]);
+});
+
+test("highlight lines meet the rendered markers in either animation direction", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");
   const { join } = require("node:path");
@@ -98,7 +174,7 @@ test("highlight lines meet the rendered line or wedge endpoints in either animat
   const root = { row: 3, col: 3 };
   const source = { row: 3, col: 6 };
   const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-10, `${actual} != ${expected}`);
-  for (const mode of ["lines", "wedge"]) for (const reverse of [false, true]) {
+  for (const mode of ["lines", "wedge", "segments", "square"]) for (const reverse of [false, true]) {
     for (const sourceType of ["rook", "knight"]) {
       api.configure(settings.normalize({ highlightCascadeLinesHoldEnabled: true }));
       const svg = element();
@@ -109,6 +185,12 @@ test("highlight lines meet the rendered line or wedge endpoints in either animat
       if (mode === "wedge") {
         const [, left, right] = drawn.attributes.points.split(" ").map(point => point.split(",").map(Number));
         expected = { x: (left[0] + right[0]) / 2, y: (left[1] + right[1]) / 2 };
+      } else if (mode === "segments") {
+        const [, radius] = /A ([\d.e+-]+)/.exec(drawn.attributes.d);
+        expected = { x: root.col + 0.5 + Number(radius), y: root.row + 0.5 };
+      } else if (mode === "square") {
+        const points = [...drawn.attributes.d.matchAll(/[ML] ([\d.e+-]+) ([\d.e+-]+)/g)];
+        expected = { x: root.col + 0.5 + Number(points[0][1]), y: root.row + 0.5 };
       } else if (sourceType === "knight") {
         const [, x, y] = /^M ([\d.e+-]+) ([\d.e+-]+)/.exec(drawn.attributes.d);
         expected = { x: Number(x), y: Number(y) };
@@ -158,6 +240,112 @@ test("highlight lines meet the rendered line or wedge endpoints in either animat
       assert.equal(line.path.attributes["stroke-linecap"], "round");
     }
   }
+  for (const attackMode of ["lines", "wedge", "segments", "square"]) {
+    for (const defenseMode of ["lines", "wedge", "segments", "square"]) for (const reverse of [false, true]) {
+      api.configure(settings.normalize({ highlightCascadeLinesHoldEnabled: true }));
+      const marker = { target: root, source, type: "pawn", angle: 0, color: "#20cc60", sourceType: "rook" };
+      const endpoints = api.renderThreatSegmentsInto(element(), [marker],
+        [{ ...marker, target: source, source: root, angle: Math.PI }], attackMode, defenseMode);
+      const [startSquare, endSquare] = reverse ? [source, root] : [root, source];
+      const line = {
+        path: element(), gradient: element(), stops: Array.from({ length: 10 }, element), color: marker.color,
+        depth: 1, wave: 1, held: true, startSquare, endSquare,
+        fromX: startSquare.col + 0.5, fromY: startSquare.row + 0.5,
+        toX: endSquare.col + 0.5, toY: endSquare.row + 0.5, length: 3
+      };
+      api.syncHighlightLineEndpoints({ highlightLineEndpoints: endpoints,
+        defenseHighlightRuns: [{ lines: [line], startedAt: 0, maxDepth: 1, reverse, holding: true }] });
+      const from = endpoints.get(`${startSquare.row},${startSquare.col}:${endSquare.row},${endSquare.col}`);
+      const to = endpoints.get(`${endSquare.row},${endSquare.col}:${startSquare.row},${startSquare.col}`);
+      assert.ok(from && to, `${attackMode}/${defenseMode} supplies both ends`);
+      close(line.fromX, from.x);
+      close(line.fromY, from.y);
+      close(line.toX, to.x);
+      close(line.toY, to.y);
+      close(line.length, Math.hypot(to.x - from.x, to.y - from.y));
+      assert.ok(line.length > 0 && line.length < 3);
+    }
+  }
+});
+
+test("segment highlight endpoints stay on rendered geometry across directions, lanes and mixed display roles", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const element = (_, tag) => ({
+    tag, attributes: {}, children: [],
+    setAttribute(key, value) { this.attributes[key] = value; },
+    append(child) { this.children.push(child); }
+  });
+  const context = vm.createContext({ document: { addEventListener() {}, createElementNS: element } });
+  vm.runInContext(readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8")
+    .replace("  documentObserver = new MutationObserver", `
+      getFigureRadii = () => new Map([["pawn", Array(720).fill(0.65)]]);
+      globalThis.testing = { renderThreatSegmentsInto, configure(value) { settings = value; } };
+      return;
+      documentObserver = new MutationObserver`), context);
+  const api = context.testing;
+  const target = { row: 3, col: 3 };
+  const modes = ["segments", "square", "lines", "wedge"];
+  let clampedEndpoints = 0;
+  for (const mode of ["segments", "square"]) for (const otherMode of modes) {
+    for (const role of ["attack", "defense"]) for (const cornerRadius of [0, 6, 50]) {
+      api.configure(settings.normalize({
+        threatSquareCornerRadiusPercent: cornerRadius, threatSquareRadialGapPercent: 100,
+        threatArcRadialGapPercent: 200, threatSquareThickness: 0.08, threatArcThickness: 0.08
+      }));
+      const directions = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1],
+        [2, 1], [1, 2], [-1, 2], [-2, 1], [-2, -1], [-1, -2], [1, -2], [2, -1]];
+      for (const [dx, dy] of directions) for (const figureBlend of [0, 0.5, 1]) {
+        const angle = Math.atan2(dy, dx);
+        const segments = Array.from({ length: 4 }, (_, lane) => ({
+          target, source: { row: target.row + dy * (lane + 1), col: target.col + dx * (lane + 1) },
+          type: "pawn", sourceType: Math.abs(dx * dy) === 2 ? "knight" : "queen",
+          angle, color: "#20cc60", figureBlend
+        }));
+        // This neighbour shortens only one side, shifting outer square lanes away from the source ray.
+        const neighbour = { ...segments[0], source: undefined, angle: angle + 0.12 };
+        const other = { ...segments[0], target: { row: 6, col: 6 }, source: { row: 6, col: 7 }, angle: 0 };
+        const svg = element();
+        const own = [...segments, neighbour];
+        const endpoints = api.renderThreatSegmentsInto(svg,
+          role === "attack" ? own : [other], role === "attack" ? [other] : own,
+          role === "attack" ? mode : otherMode, role === "attack" ? otherMode : mode);
+        const drawn = svg.children.filter(child => child.attributes.d && !child.attributes.d.includes(" Q "));
+        const ownPaths = role === "attack" ? drawn.slice(0, 4) : drawn.slice(-5, -1);
+        assert.equal(ownPaths.length, 4);
+        for (const [index, segment] of segments.entries()) {
+          const point = endpoints.get(`3,3:${segment.source.row},${segment.source.col}`);
+          assert.ok(point && Number.isFinite(point.x) && Number.isFinite(point.y));
+          const x = point.x - 3.5;
+          const y = point.y - 3.5;
+          const path = ownPaths[index].attributes.d;
+          if (mode === "segments") {
+            const radius = Number(/A ([\d.e+-]+)/.exec(path)[1]);
+            assert.ok(Math.abs(Math.hypot(x, y) - radius) < 1e-9);
+            assert.ok(Math.abs(x * Math.sin(angle) - y * Math.cos(angle)) < 1e-9);
+          } else {
+            const points = [...path.matchAll(/[ML] ([\d.e+-]+) ([\d.e+-]+)/g)]
+              .map(match => ({ x: Number(match[1]), y: Number(match[2]) }));
+            let closest = Infinity;
+            for (let i = 1; i < points.length; i++) {
+              const a = points[i - 1];
+              const b = points[i];
+              const dx = b.x - a.x;
+              const dy = b.y - a.y;
+              const fraction = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / (dx * dx + dy * dy)));
+              closest = Math.min(closest, Math.hypot(x - a.x - fraction * dx, y - a.y - fraction * dy));
+            }
+            assert.ok(closest < 1e-9, JSON.stringify({ role, otherMode, cornerRadius, angle, index, closest }));
+            if (Math.abs(x * Math.sin(angle) - y * Math.cos(angle)) > 1e-6) clampedEndpoints++;
+          }
+        }
+        assert.ok(endpoints.has("6,6:6,7"), "the other display role also supplies its endpoint");
+        assert.equal(endpoints.size, 5, "markers without a source must not create highlight connections");
+      }
+    }
+  }
+  assert.ok(clampedEndpoints > 0, "asymmetric outer lanes exercise endpoint clamping");
 });
 
 test("System Rund shares existing SVG assets for both piece colors", () => {
@@ -193,13 +381,16 @@ test("round king movement sectors follow blocked directions and board orientatio
   const element = () => ({
     attributes: {}, children: [],
     setAttribute(key, value) { this.attributes[key] = value; },
+    removeAttribute(key) { delete this.attributes[key]; },
+    classList: { add() {} },
+    querySelector() { return null; },
     append(child) { this.children.push(child); },
     replaceChildren() { this.children = []; }
   });
   const context = vm.createContext({ document: { addEventListener() {}, createElementNS: element } });
   const source = readFileSync(join(__dirname, "king-movement-fields.js"), "utf8");
   vm.runInContext(source.replace("  globalThis.LichessKingMovementFields = {", `
-    globalThis.testing = { fillOverlay, getDestinationState, configure(value) { settings = value; } };
+    globalThis.testing = { fillOverlay, getDestinationState, renderPreview, configure(value) { settings = value; } };
     globalThis.LichessKingMovementFields = {`), context);
   const api = context.testing;
   const position = Array.from({ length: 8 }, () => Array(8).fill(""));
@@ -225,6 +416,20 @@ test("round king movement sectors follow blocked directions and board orientatio
   api.fillOverlay(squareSvg, position, king, false);
   assert.equal(squareSvg.children[0].attributes.d, "M0.38 0.14H0.62V0.38H0.38Z");
   assert.equal(squareSvg.children[0].attributes["shape-rendering"], "crispEdges");
+  const previewPosition = Array.from({ length: 8 }, () => Array(8).fill(""));
+  previewPosition[3][3] = "wK";
+  previewPosition[2][3] = "wP";
+  const previewGroup = element();
+  api.renderPreview(previewGroup, {
+    position: previewPosition,
+    source: { row: 4, col: 4 },
+    target: { row: 3, col: 3 },
+    blackOrientation: false
+  }, "preview-highlight");
+  assert.equal(previewGroup.children[0].attributes.x, "4");
+  assert.equal(previewGroup.children[0].attributes.y, "4");
+  assert.equal(previewGroup.children[0].attributes.filter, "url(#preview-highlight)");
+  assert.equal(previewGroup.children[0].children[0].attributes.fill, settings.normalize({ pieceSet: "system_eckig" }).whitePieceColor);
   api.configure(settings.normalize({ pieceSet: "system_rund" }));
   position[3][4] = "";
   const emptySvg = element();
@@ -274,13 +479,19 @@ test("preview filters respect custom piece colors and System Rund uses a circula
     const options = settings.normalize({ pieceSet, whitePieceColor: "#20cc60", blackPieceColor: "#c040a0" });
     api.configure(options);
     for (const side of ["w", "b"]) {
-      const entry = { previewPieceSvg: element(), previewPieceImage: element(), previewPieceColor: side };
+      const previewFields = element();
+      const entry = {
+        previewPieceSvg: element(), previewPieceImage: element(), previewPieceColor: side,
+        previewPieceGroup: { querySelector: () => previewFields }
+      };
       api.syncPreviewDefenseFilter(entry);
       if (pieceSet === "rund_comic") {
         assert.equal(entry.previewPieceImage.attributes.filter, undefined);
+        assert.equal(previewFields.attributes.filter, undefined);
         entry.defensePreviewMix = 0.5;
         api.syncPreviewDefenseFilter(entry);
         assert.equal(entry.previewDefenseFilter.transfer.attributes.in, "SourceGraphic");
+        assert.equal(previewFields.attributes.filter, entry.previewPieceImage.attributes.filter);
       } else {
         const { flood, transfer, channels, colors: filters } = entry.previewDefenseFilter;
         assert.equal(flood.attributes["flood-color"], side === "w" ? options.whitePieceColor : options.blackPieceColor);
@@ -288,9 +499,11 @@ test("preview filters respect custom piece colors and System Rund uses a circula
         assert.equal(filters.w.flood.attributes["flood-color"], options.whitePieceColor);
         assert.equal(filters.b.flood.attributes["flood-color"], options.blackPieceColor);
         assert.ok(channels.every(channel => channel.attributes.slope === "1" && channel.attributes.intercept === "0"));
+        assert.equal(previewFields.attributes.filter, entry.previewPieceImage.attributes.filter);
         entry.defensePreviewMix = 0.5;
         api.syncPreviewDefenseFilter(entry);
         assert.ok(channels.every(channel => channel.attributes.slope === "0.5" && channel.attributes.intercept === "0.5"));
+        assert.equal(previewFields.attributes.filter, entry.previewPieceImage.attributes.filter);
       }
     }
   }
@@ -486,6 +699,15 @@ test("hover preview anticipation uses the configured default and clamps saved va
     const normalized = settings.normalize({ movePreviewAnticipationPercent: saved });
     assert.equal(normalized.movePreviewAnticipationPercent, expected);
     assert.equal(settings.normalize(normalized).movePreviewAnticipationPercent, expected);
+  }
+});
+
+test("empty move-field radius has a stable default and supported limits", () => {
+  assert.equal(settings.normalize().threatMoveFieldRadius, 0.35);
+  for (const [saved, expected] of [[0.1, 0.1], [0.48, 0.48], [0.7, 0.7], [-1, 0.1], [1, 0.7], ["invalid", 0.35]]) {
+    const normalized = settings.normalize({ threatMoveFieldRadius: saved });
+    assert.equal(normalized.threatMoveFieldRadius, expected);
+    assert.equal(settings.normalize(normalized).threatMoveFieldRadius, expected);
   }
 });
 
@@ -803,7 +1025,7 @@ test("hover previews ignore stale move keys and respect active move animations",
   });
   const threatSource = readFileSync(join(__dirname, "threat-coding.js"), "utf8");
   vm.runInContext(threatSource.replace("  globalThis.LichessThreatCoding = {", `
-    globalThis.threatTesting = { getLogicalSquare };
+    globalThis.threatTesting = { getLogicalSquare, getAllowedDestinations, getHoverMoveTarget, getInteractionPreview };
     globalThis.LichessThreatCoding = {`), context);
   const previewSource = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
   vm.runInContext(previewSource.replace("  documentObserver = new MutationObserver", `
@@ -813,7 +1035,7 @@ test("hover previews ignore stale move keys and respect active move animations",
   const board = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 80, height: 80 }) };
   const animationKeyPiece = isAnimating => ({
     classList: { contains: name => name === "anim" && isAnimating },
-    dataset: {},
+    dataset: { key: "a1" },
     getAttribute: name => name === "data-lfs-move-key" ? "h8" : null,
     getBoundingClientRect: () => ({ left: 30, top: 20, width: 10, height: 10 })
   });
@@ -822,6 +1044,45 @@ test("hover previews ignore stale move keys and respect active move animations",
     assert.deepEqual({ ...context.threatTesting.getLogicalSquare(piece, board, false) }, expected);
     assert.deepEqual({ ...context.previewTesting.getPieceScreenSquare(piece, board, false) }, expected);
   }
+
+  const hiddenDestination = {
+    classList: { contains: () => false },
+    dataset: {},
+    style: { transform: "translate(100%, 100%)" },
+    getAttribute: () => null,
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 0, height: 0 })
+  };
+  const hiddenMoveBoard = {
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 80, height: 80 }),
+    querySelectorAll: () => [hiddenDestination]
+  };
+  const allowed = context.threatTesting.getAllowedDestinations(hiddenMoveBoard, false);
+  assert.deepEqual([...allowed], ["1,1"], "CSS-hidden legal fields remain valid move targets");
+  assert.deepEqual({ ...context.threatTesting.getHoverMoveTarget(hiddenMoveBoard, allowed, false, 15, 15, { row: 0, col: 0 }) },
+    { row: 1, col: 1 }, "hovering a hidden legal destination must preview the move instead of returning to origin");
+
+  const sourcePiece = {
+    classList: { contains: name => name === "white" || name === "rook" },
+    dataset: { key: "a1" },
+    getBoundingClientRect: () => ({ left: 30, top: 40, width: 10, height: 10 })
+  };
+  const selectedSquare = {
+    classList: { contains: () => false },
+    getBoundingClientRect: () => ({ left: 30, top: 40, width: 10, height: 10 })
+  };
+  const destinationSquare = {
+    classList: { contains: () => false },
+    getBoundingClientRect: () => ({ left: 40, top: 40, width: 10, height: 10 })
+  };
+  const historyBoard = {
+    closest: selector => selector === ".is2d" ? {} : null,
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 80, height: 80 }),
+    querySelector: () => selectedSquare,
+    querySelectorAll: selector => selector === ":scope > piece" ? [sourcePiece] : [destinationSquare]
+  };
+  const preview = context.threatTesting.getInteractionPreview(historyBoard, 45, 45);
+  assert.deepEqual({ ...preview.source }, { row: 4, col: 3 }, "history navigation must use the piece's current square instead of its stale key");
+  assert.deepEqual({ ...preview.target }, { row: 4, col: 4 }, "the selected piece must preview the hovered legal field after history navigation");
 });
 
 test("highlight cascades only follow recaptures on the root square and reveal vacated lines", () => {
@@ -1005,6 +1266,8 @@ test("highlight cascades only follow recaptures on the root square and reveal va
   ]), [
     [[4, 4], [2, 5], 1], [[4, 4], [7, 4], 2]
   ]);
+  assert.deepEqual(Array.from(context.testing.getDefenseCascadeLayers(attackedPosition, { row: 4, col: 4 }, false, 3)), [],
+    "a king cannot be the root of a defense cascade");
   attackedPosition[7][4] = null;
   assert.equal(context.testing.getAttackCascadeLayers(attackedPosition, { row: 4, col: 4 }, false, 3).length, 2);
 
@@ -1063,7 +1326,7 @@ test("highlight cascades only follow recaptures on the root square and reveal va
     exchangeExpected.map(layer => layer.map(([row, col]) => [7 - row, 7 - col])));
 });
 
-test("cascade kings only participate as safe final capturers", () => {
+test("defense cascades exclude kings while attack cascades keep safe final recaptures", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");
   const { join } = require("node:path");
@@ -1077,14 +1340,13 @@ test("cascade kings only participate as safe final capturers", () => {
     { pieces: [[5, 4, "w", "king"], [3, 3, "b", "pawn"], [2, 2, "b", "bishop"]],
       defense: [], attack: [[[4, 4]], [[3, 3]]] },
     { pieces: [[5, 4, "w", "king"], [3, 3, "b", "pawn"]],
-      defense: [[[4, 4]], [[5, 4]]], attack: [[[4, 4]], [[3, 3]], [[5, 4]]] },
+      defense: [], attack: [[[4, 4]], [[3, 3]], [[5, 4]]] },
     { pieces: [[5, 4, "w", "king"], [4, 6, "w", "rook"], [3, 3, "b", "pawn"], [2, 2, "b", "bishop"]],
-      defense: [[[4, 4]], [[4, 6]], [[5, 4]]],
+      defense: [[[4, 4]], [[4, 6]]],
       attack: [[[4, 4]], [[3, 3]], [[4, 6]], [[2, 2]], [[5, 4]]] },
     { pieces: [[5, 4, "w", "king"], [4, 6, "w", "rook"], [3, 3, "b", "pawn"], [2, 2, "b", "bishop"], [1, 1, "b", "queen"]],
       defense: [[[4, 4]], [[4, 6]]], attack: [[[4, 4]], [[3, 3]], [[4, 6]], [[2, 2]]] },
-    { pieces: [[4, 5, "w", "king"], [4, 7, "w", "rook"]],
-      defense: [[[4, 4]], [[4, 5]]], attack: [] },
+    { pieces: [[4, 5, "w", "king"], [4, 7, "w", "rook"]], defense: [], attack: [] },
     { pieces: [[5, 5, "w", "king"], [6, 6, "b", "bishop"]], defense: [], attack: [] },
     { pieces: [[5, 4, "w", "king"], [3, 5, "b", "king"]], defense: [], attack: [] },
     { pieces: [[5, 4, "w", "king"], [2, 5, "b", "knight"], [3, 3, "b", "pawn"]],
@@ -1289,12 +1551,12 @@ test("attack and defense share deduplicated figure and line waves in both direct
       attackHighlightEnabled: attack, highlightCascadeReverseEnabled: reverse }));
     api.startHighlightCascades(board, entry, kingPosition, root, false);
     const run = entry.defenseHighlightRuns[0];
-    const king = run.nodes.find(node => node.element === kingPosition[5][4].element);
-    assert.equal(king.depth, run.maxDepth);
-    assert.equal(king.wave, reverse ? 0 : run.maxDepth);
-    const line = run.lines.find(line => (reverse ? line.fromY : line.toY) === 5.5);
-    assert.equal(line.depth, king.depth);
-    assert.equal(line.wave, king.wave);
+    if (!attack) {
+      assert.ok(run.nodes.every(node => node.element !== kingPosition[5][4].element),
+        "the king never receives a defense highlight");
+      assert.ok(run.lines.every(line => line.fromY !== 5.5 && line.toY !== 5.5),
+        "defense lines never end at or originate from the king");
+    }
     api.clearDefenseHighlights(entry);
   }
   kingPosition[1][1] = { color: "b", type: "queen", element: element() };
@@ -1970,7 +2232,8 @@ ${marker}`);
       await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
     });
     await t.test("board highlights connect to the visible marker instead of the piece center", async () => {
-      for (const mode of ["lines", "wedge"]) for (const reverse of [false, true]) {
+      for (const size of [512, 320]) for (const mode of ["lines", "wedge", "segments", "square"]) for (const reverse of [false, true]) {
+        await send("Emulation.setDeviceMetricsOverride", { width: size, height: size, deviceScaleFactor: 1, mobile: size === 320 });
         const result = await evaluate(`(() => {
           testing.configure(LichessSettings.normalize({ pieceSet: "system_rund", defenseHighlightDepth: 1,
             defenseHighlightEnabled: true, attackHighlightEnabled: false, threatDefenseDisplayMode: "${mode}",
@@ -1989,6 +2252,16 @@ ${marker}`);
           if (marker.tagName === "polygon") {
             const [, left, right] = [...marker.points];
             expected = [(left.x + right.x) / 2, (left.y + right.y) / 2];
+          } else if ("${mode}" === "segments") {
+            const radius = Number(/A ([\\d.e+-]+)/.exec(marker.getAttribute("d"))[1]);
+            const angle = Math.atan2(-2, 1);
+            expected = [4.5 + Math.cos(angle) * radius, 4.5 + Math.sin(angle) * radius];
+          } else if ("${mode}" === "square") {
+            const actual = ${reverse} ? [line.toX, line.toY] : [line.fromX, line.fromY];
+            if (!marker.isPointInStroke(new DOMPoint(actual[0] - 4.5, actual[1] - 4.5))) {
+              throw new Error("The highlight endpoint does not touch the rendered square segment");
+            }
+            expected = actual;
           } else {
             const [, x, y] = /^M ([\\d.e+-]+) ([\\d.e+-]+)/.exec(marker.getAttribute("d"));
             expected = [Number(x), Number(y)];
@@ -2003,6 +2276,7 @@ ${marker}`);
         assert.ok(result.length > 0 && result.length < Math.sqrt(5));
         assert.equal(result.cap, "butt");
       }
+      await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
     });
     await t.test("Cage mask hides rendered board highlight lines inside the piece silhouette", async () => {
     const setup = await evaluate(`(() => {
@@ -2071,7 +2345,7 @@ ${marker}`);
       `the mask must preserve rendered knight pixels, got ${insideKnight} vs ${knightWithoutLine}`);
     assert.ok(outside[0] > 180 && outside[2] > 180 && outside[1] < 80,
       `the same rendered SVG line must remain visible outside silhouettes, got ${outside}`);
-    await evaluate("testLineGroup.removeAttribute('mask')");
+    await evaluate("testLineGroup.querySelectorAll('[mask]').forEach(path => path.removeAttribute('mask'))");
     const [unmaskedPawn] = await captureSamples();
     assert.ok(unmaskedPawn[0] > 180 && unmaskedPawn[2] > 180 && unmaskedPawn[1] < 80,
       `the pixel check must detect the actual line when its mask is removed, got ${unmaskedPawn}`);

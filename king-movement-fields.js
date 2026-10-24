@@ -217,7 +217,7 @@
     }
   }
 
-  function renderPreview(group, preview) {
+  function renderPreview(group, preview, highlightFilterId) {
     group.querySelector(":scope > svg.lfs-king-preview-fields")?.remove();
     if (!settings?.enabled || !settings.kingMovementFieldsEnabled) return;
     const piece = preview.position[preview.target.row][preview.target.col];
@@ -229,6 +229,7 @@
     });
     svg.classList.add("lfs-king-preview-fields");
     fillOverlay(svg, preview.position, { ...preview.target, color: piece[0] }, preview.blackOrientation);
+    if (highlightFilterId) svg.setAttribute("filter", `url(#${highlightFilterId})`);
     group.append(svg);
   }
 
