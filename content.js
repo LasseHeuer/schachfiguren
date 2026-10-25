@@ -840,6 +840,12 @@
       return;
     }
 
+    const sameBoard = pvPreviewBoard === board;
+    if (!sameBoard) {
+      pvPreview?.remove();
+      pvPreview = null;
+      pvPreviewBoard?.removeAttribute("data-lfs-pv-preview");
+    }
     const blackOrientation = board.closest(".cg-wrap")?.classList.contains("orientation-black");
     const key = `${move.dataset.board}:${blackOrientation}:${JSON.stringify([
       settings.markLastMove, settings.moveOutlineWidthPx, settings.moveOutlineColor,
@@ -847,13 +853,16 @@
       settings.whitePieceColor, settings.blackPieceColor, settings.boardBevelEnabled,
       settings.boardFieldShape, settings.boardBevelPercent, settings.boardRoundPercent
     ])}`;
-    if (pvPreviewBoard !== board) pvPreviewBoard?.removeAttribute("data-lfs-pv-preview");
-    const sameBoard = pvPreviewBoard === board;
     pvPreviewBoard = board;
-    pvPreview ??= document.createElement("div");
+    pvPreview ??= document.createElement("cg-board");
     pvPreview.id = "lfs-pv-preview";
     pvPreview.setAttribute("aria-hidden", "true");
-    if (pvPreview.parentElement !== board) board.append(pvPreview);
+    const wrapper = board.closest(".cg-wrap");
+    if (!wrapper) {
+      clearPvPreview();
+      return;
+    }
+    if (pvPreview.parentElement !== wrapper) wrapper.append(pvPreview);
     board.setAttribute("data-lfs-pv-preview", "");
     if (pvPreview.dataset.position === key) return;
 
@@ -886,7 +895,6 @@
           piece: `${color} ${role}`,
           color,
           role,
-          symbol,
           left: targetFile * 12.5,
           top: targetRank * 12.5
         });
@@ -895,7 +903,7 @@
     });
 
     const boardRect = board.getBoundingClientRect();
-    const existingPieces = [...pvPreview.querySelectorAll(":scope > .lfs-pv-piece")];
+    const existingPieces = [...pvPreview.querySelectorAll(":scope > piece.lfs-pv-piece")];
     const origins = new Map(existingPieces.map(piece => {
       const rect = piece.getBoundingClientRect();
       for (const animation of piece.getAnimations()) animation.cancel();
@@ -950,15 +958,13 @@
       && typeof Element.prototype.animate === "function" && boardRect.width > 0 && boardRect.height > 0;
     const baseDuration = pvPreviewStepDuration ?? (settings.moveAnimationLichessSpeed ? 250 : settings.moveAnimationDuration);
     for (const target of targets) {
-      const piece = reusedPieces.get(target) ?? document.createElement("span");
+      const piece = reusedPieces.get(target) ?? document.createElement("piece");
       const origin = origins.get(piece);
-      piece.className = "lfs-pv-piece";
+      piece.className = `lfs-pv-piece ${target.color} ${target.role}`;
       piece.dataset.piece = target.piece;
       piece.dataset.square = target.square;
       piece.style.left = `${target.left}%`;
       piece.style.top = `${target.top}%`;
-      piece.style.setProperty("--lfs-pv-piece-color", `var(--lfs-${target.color}-piece-color)`);
-      piece.style.setProperty("--lfs-pv-piece-mask", `var(--lfs-piece-${target.color[0]}${target.symbol.toLowerCase()})`);
       if (shouldAnimate && origin && baseDuration > 0) {
         const moveX = target.left - origin.left;
         const moveY = target.top - origin.top;

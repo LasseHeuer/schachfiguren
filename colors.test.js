@@ -2329,6 +2329,7 @@ test("board SVG rendering preserves piece masks and round king fields", { skip: 
   const testSource = source.replace(marker, `
     globalThis.testing = {
       readPosition,
+      observeBoard,
       renderMoveOutline,
       renderMovePreviewPiece,
       clearMovePreviewPiece,
@@ -2433,7 +2434,8 @@ ${marker}`);
     const runtimeErrors = [];
     socket.addEventListener("message", event => {
       const message = JSON.parse(event.data);
-      if (message.method === "Runtime.exceptionThrown") runtimeErrors.push(message.params.exceptionDetails.text);
+      if (message.method === "Runtime.exceptionThrown") runtimeErrors.push(
+        message.params.exceptionDetails.exception?.description ?? message.params.exceptionDetails.text);
       if (!message.id) return;
       const request = pending.get(message.id);
       if (!request) return;
@@ -2462,6 +2464,82 @@ ${marker}`);
       await new Promise(resolve => setTimeout(resolve, 50));
     }
     assert.equal(await evaluate("Boolean(window.testing)"), true, "the browser loaded the production renderer");
+    await t.test("candidate sliders expose both colors to board analysis and render preview markers", async () => {
+      const contentSource = readFileSync(join(root, "content.js"), "utf8");
+      const contentMarker = "  chrome.runtime.onMessage.addListener";
+      assert.ok(contentSource.includes(contentMarker));
+      await evaluate(contentSource.replace(contentMarker, `
+        globalThis.pvTesting = { syncPvLineSliders, previewPvMove, clearPvPreview,
+          configure(value) { settings = normalize(value); } };
+        return;
+${contentMarker}`));
+      for (const size of [512, 320]) for (const orientation of ["white", "black"]) {
+        const result = await evaluate(`(async () => {
+          const host = document.querySelector('.is2d');
+          host.classList.add('analyse__board');
+          const wrapper = host.querySelector('.cg-wrap');
+          const originalClass = wrapper.className;
+          const originalRootStyle = document.documentElement.style.cssText;
+          document.documentElement.style.setProperty('--lfs-white-piece-color', '#c02d50');
+          document.documentElement.style.setProperty('--lfs-black-piece-color', '#309a70');
+          wrapper.className = 'cg-wrap orientation-${orientation}';
+          wrapper.style.width = wrapper.style.height = '${size}px';
+          const box = document.createElement('div');
+          box.className = 'pv_box'; box.dataset.fen = 'base';
+          box.innerHTML = '<div class="pv"><span class="pv-san" data-board="q6k/8/8/8/8/8/8/R6K w - - 0 1|a2a1">Ra1</span></div>';
+          document.body.append(box);
+          globalThis.LichessLastMoveLine = { createPreviewLine() { return null; } };
+          const options = LichessSettings.normalize({ enabled: true, disableAnimations: true, pieceSet: 'cage',
+            threatenedPieceOutlineEnabled: true, defenseCirclesEnabled: true,
+            threatCenterOutlineEnabled: false, selectedPieceWedgeEnabled: true,
+            selectedPieceWedgeOnlySelected: false });
+          testing.configure(options); pvTesting.configure(options);
+          pvTesting.syncPvLineSliders();
+          const slider = box.querySelector('input');
+          pvTesting.previewPvMove(slider, 0);
+          const preview = document.querySelector('#lfs-pv-preview');
+          const parsed = testing.readPosition(preview);
+          const paint = element => {
+            const before = getComputedStyle(element, '::before');
+            const style = before.content !== 'none' ? before : getComputedStyle(element);
+            return [style.backgroundColor, style.backgroundImage, style.maskImage];
+          };
+          const matchingColors = ['white rook', 'black queen'].map(classes => {
+            const normal = document.createElement('piece');
+            normal.className = classes;
+            wrapper.querySelector('cg-board').append(normal);
+            const candidate = preview.querySelector('piece.' + classes.replace(' ', '.'));
+            const matches = JSON.stringify(paint(candidate)) === JSON.stringify(paint(normal));
+            normal.remove();
+            return matches;
+          });
+          testing.observeBoard(preview);
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          const output = {
+            matchingColors,
+            duplicateFigures: preview.querySelectorAll(':scope > span.lfs-pv-piece').length,
+            colors: [...preview.querySelectorAll(':scope > piece')].map(piece =>
+              piece.classList.contains('white') ? 'white' : piece.classList.contains('black') ? 'black' : 'unknown'),
+            rook: parsed?.position[${orientation === "black" ? 0 : 7}][${orientation === "black" ? 7 : 0}]?.type,
+            queen: parsed?.position[${orientation === "black" ? 7 : 0}][${orientation === "black" ? 7 : 0}]?.type,
+            markers: preview.querySelectorAll('svg[data-lfs-board-overlay] path').length
+          };
+          pvTesting.clearPvPreview(); box.remove();
+          document.documentElement.style.cssText = originalRootStyle;
+          wrapper.className = originalClass;
+          wrapper.style.removeProperty('width'); wrapper.style.removeProperty('height');
+          host.classList.remove('analyse__board');
+          return output;
+        })()`);
+        assert.deepEqual(result.colors.sort(), ["black", "black", "white", "white"]);
+        assert.equal(result.rook, "rook");
+        assert.equal(result.queen, "queen");
+        assert.deepEqual(result.matchingColors, [true, true], "both player colors must use the normal board rendering");
+        assert.equal(result.duplicateFigures, 0, "preview pieces must not be drawn twice");
+        assert.ok(result.markers > 0, "the candidate position must have visible analysis paths");
+      }
+      assert.deepEqual(runtimeErrors, []);
+    });
     await t.test("zen clocks follow both half-board contours and shrink along their paths", async () => {
       const contentSource = readFileSync(join(root, "content.js"), "utf8");
       const clockMarker = "  chrome.runtime.onMessage.addListener";
