@@ -3236,7 +3236,7 @@
       piece.removeAttribute("data-lfs-move-preview-origin");
       if (!piece.classList.contains("fading")) piece.removeAttribute("data-lfs-move-preview-hidden");
     }
-    if (!preview || (!preview.isHoverPreview && !preview.isDragging) || !preview.legal) {
+    if (!preview?.isHoverPreview || !preview.legal) {
       clearMovePreviewPiece(board, entry);
       return;
     }

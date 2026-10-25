@@ -2848,7 +2848,7 @@ ${clockMarker}`));
       }
       assert.deepEqual(runtimeErrors, []);
     });
-    await t.test("promotion previews cycle during hover and drag", async () => {
+    await t.test("promotion previews cycle on hover but not while dragging", async () => {
       for (const interaction of ["hover", "drag"]) {
         const result = await evaluate(`(async () => {
           const board = document.querySelector("cg-board");
@@ -2866,15 +2866,29 @@ ${clockMarker}`));
           const entry = {};
           testing.renderMovePreviewPiece(board, entry, { basePosition, position,
             source: { row: 1, col: 4 }, target: { row: 0, col: 4 }, blackOrientation: false, legal: true,
-            isHoverPreview: ${interaction === "hover"}, isDragging: ${interaction === "drag"} });
+            isHoverPreview: true });
+          if (${interaction === "drag"}) {
+            const hadHoverPreview = Boolean(entry.previewPieceSvg?.isConnected);
+            testing.renderMovePreviewPiece(board, entry, { basePosition, position,
+              source: { row: 1, col: 4 }, target: { row: 0, col: 4 }, blackOrientation: false, legal: true,
+              isDragging: true });
+            const result = { hadHoverPreview, previewRemoved: !entry.previewPieceSvg,
+              promotionStopped: !entry.promotionPreview };
+            testing.clearMovePreviewPiece(board, entry);
+            return result;
+          }
           const initial = entry.previewPieceImage.getAttribute("href");
           await new Promise(resolve => setTimeout(resolve, 125));
           const next = entry.previewPieceImage.getAttribute("href");
           testing.clearMovePreviewPiece(board, entry);
           return { initial, next };
         })()`);
-        assert.ok(result.initial.endsWith("system_rund/bq.svg"), `${interaction}: ${result.initial}`);
-        assert.ok(result.next.endsWith("system_rund/br.svg"), `${interaction}: ${result.next}`);
+        if (interaction === "hover") {
+          assert.ok(result.initial.endsWith("system_rund/bq.svg"), `${interaction}: ${result.initial}`);
+          assert.ok(result.next.endsWith("system_rund/br.svg"), `${interaction}: ${result.next}`);
+        } else {
+          assert.deepEqual(result, { hadHoverPreview: true, previewRemoved: true, promotionStopped: true });
+        }
       }
       assert.deepEqual(runtimeErrors, []);
     });
