@@ -3366,6 +3366,13 @@
       : [];
     entry.moveOutlineSvg = drawMoveOutline(board, entry.moveOutlineSvg, cells, selectedColor, "move");
     if (entry.moveOutlineSvg) globalThis.LichessBoardOverlay.place(board, entry.moveOutlineSvg, "between-pieces");
+    const premoveSquares = settings?.enabled && board.closest(".is2d")
+      ? [...board.querySelectorAll(":scope > square.current-premove")].map(square => getScreenSquare(square, board)).filter(Boolean)
+      : [];
+    const premoveCells = premoveSquares.length === 2
+      ? getLastMoveOutlineCells(premoveSquares[0], premoveSquares[1]) : premoveSquares;
+    entry.premoveOutlineSvg = drawMoveOutline(board, entry.premoveOutlineSvg, premoveCells, selectedColor, "premove");
+    if (entry.premoveOutlineSvg) globalThis.LichessBoardOverlay.place(board, entry.premoveOutlineSvg, "between-pieces");
   }
 
   function renderLastMoveOutline(board, entry) {
@@ -3413,6 +3420,8 @@
     const segments = [];
     const shapes = [];
     const roundPaths = [];
+    const gapOutlines = [];
+    const replacedCorners = new Set();
     for (const { row, col } of cells) {
       const x0 = col;
       const y0 = row;
@@ -3454,6 +3463,7 @@
       for (let x = 0; x <= 8; x++) {
         for (let y = 0; y <= 8; y++) {
           if (!isGapFilled(x, y)) continue;
+          const shapeIndex = shapes.length;
           shapes.push(`<path d="M${x} ${y - round}A${round} ${round} 0 0 1 ${x + round} ${y}A${round} ${round} 0 0 1 ${x} ${y + round}A${round} ${round} 0 0 1 ${x - round} ${y}A${round} ${round} 0 0 1 ${x} ${y - round}Z"/>`);
           const corners = [
             { row: y, col: x, path: `M${x} ${y + round}A${round} ${round} 0 0 1 ${x + round} ${y}` },
@@ -3462,7 +3472,10 @@
             { row: y - 1, col: x - 1, path: `M${x} ${y - round}A${round} ${round} 0 0 1 ${x - round} ${y}` }
           ];
           for (const { row, col, path } of corners) {
-            if (!has(row, col)) roundPaths.push(path);
+            if (!has(row, col)) {
+              roundPaths.push(path);
+              gapOutlines.push({ key: `${x},${y}`, shapeIndex, path });
+            }
           }
         }
       }
@@ -3473,7 +3486,10 @@
     for (let x = 0; bevel && x <= 8; x++) {
       for (let y = 0; y <= 8; y++) {
         const filled = isGapFilled(x, y);
-        if (filled) shapes.push([[x, y - bevel], [x + bevel, y], [x, y + bevel], [x - bevel, y]]);
+        const shapeIndex = shapes.length;
+        if (filled) {
+          shapes.push([[x, y - bevel], [x + bevel, y], [x, y + bevel], [x - bevel, y]]);
+        }
         const chamfers = [
           { row: y, col: x, segment: [x, y + bevel, x + bevel, y] },
           { row: y - 1, col: x, segment: [x + bevel, y, x, y - bevel] },
@@ -3481,7 +3497,61 @@
           { row: y - 1, col: x - 1, segment: [x, y - bevel, x - bevel, y] }
         ];
         for (const { row, col, segment } of chamfers) {
-          if (has(row, col) !== filled) segments.push(segment);
+          if (has(row, col) !== filled) {
+            segments.push(segment);
+            if (filled) gapOutlines.push({ key: `${x},${y}`, shapeIndex, segment });
+          }
+        }
+      }
+    }
+
+    const bridges = [];
+    const straightSegments = [];
+    if (settings.moveOutlineStraightDiagonals) {
+      const origin = idSuffix === "move"
+        ? [...board.querySelectorAll(":scope > square.selected")].map(square => getScreenSquare(square, board)).find(Boolean)
+        : cells[0];
+      const occupied = new Set([...board.querySelectorAll(":scope > piece:not(.ghost)")]
+        .map(piece => getScreenSquare(piece, board)).filter(Boolean).map(({ row, col }) => `${row},${col}`));
+      const addStraightSide = (start, end, source, target) => {
+        const bridge = [start, end, [target.col + 0.5, target.row + 0.5], [source.col + 0.5, source.row + 0.5]];
+        bridges.push(`<polygon points="${bridge.map(point => point.join(",")).join(" ")}"/>`);
+        straightSegments.push({
+          start, end, bridge
+        });
+      };
+      const inset = round ? round * (1 - Math.SQRT1_2) : bevel / 2;
+      for (const { row, col } of cells) {
+        for (const [dr, dc] of [[1, 0], [0, 1]]) {
+          if (!has(row + dr, col + dc) || !origin || (dr ? col !== origin.col : row !== origin.row)) continue;
+          for (const side of [-1, 1]) {
+            const x = col + (dc ? 1 : (side + 1) / 2);
+            const y = row + (dr ? 1 : (side + 1) / 2);
+            if (pointCount(x, y) < 3) continue;
+            if ([[y - 1, x - 1], [y - 1, x], [y, x - 1], [y, x]]
+              .some(([r, c]) => !has(r, c) && occupied.has(`${r},${c}`))) continue;
+            replacedCorners.add(`${x},${y}`);
+            const start = [col + 0.5 + dr * side / 2, row + 0.5 + dc * side / 2];
+            addStraightSide(start, [start[0] + dc, start[1] + dr], { row, col },
+              { row: row + dr, col: col + dc });
+          }
+        }
+        for (const direction of [-1, 1]) {
+          if (!has(row + 1, col + direction)) continue;
+          const neighbors = [[row, col + direction], [row + 1, col]];
+          // At junctions, only continue a real diagonal through the selected piece.
+          if (neighbors.some(([r, c]) => has(r, c))
+            && (!origin || row - origin.row !== (col - origin.col) * direction)) continue;
+          const right = direction === 1 ? col + 1 - inset : col + inset;
+          const left = direction === 1 ? col + inset : col + 1 - inset;
+          const points = [[right, row + inset], [right + direction, row + 1 + inset],
+            [left + direction, row + 2 - inset], [left, row + 1 - inset]];
+          // Each side depends only on the field directly beside that connection.
+          for (const [side, [r, c]] of neighbors.entries()) {
+            if (occupied.has(`${r},${c}`)) continue;
+            const [start, end] = side === 0 ? [points[0], points[1]] : [points[3], points[2]];
+            addStraightSide(start, end, { row, col }, { row: row + 1, col: col + direction });
+          }
         }
       }
     }
@@ -3490,10 +3560,16 @@
       ? (selectedColor === "w" ? settings.whitePieceColor : settings.blackPieceColor)
       : settings.moveOutlineColor;
     const id = `lfs-${idSuffix}-outline-${[...observedBoards.keys()].indexOf(board)}`;
-    const d = roundPaths.join("") + segments.map(([x1, y1, x2, y2]) => `M${x1} ${y1}L${x2} ${y2}`).join("");
-    const clipPolygons = shapes.map(shape => Array.isArray(shape)
+    const obsoleteCorners = gapOutlines.filter(({ key }) => replacedCorners.has(key));
+    const obsoletePaths = new Set(obsoleteCorners.map(({ path }) => path));
+    const obsoleteSegments = new Set(obsoleteCorners.map(({ segment }) => segment));
+    const obsoleteShapes = new Set(obsoleteCorners.map(({ shapeIndex }) => shapeIndex));
+    const d = roundPaths.filter(path => !obsoletePaths.has(path)).join("")
+      + segments.filter(segment => !obsoleteSegments.has(segment)).map(([x1, y1, x2, y2]) => `M${x1} ${y1}L${x2} ${y2}`).join("");
+    const basePolygons = shapes.map((shape, index) => obsoleteShapes.has(index) ? "" : Array.isArray(shape)
       ? `<polygon points="${shape.map(point => point.join(",")).join(" ")}"/>`
-      : shape).join("");
+      : shape);
+    const clipPolygons = basePolygons.join("") + bridges.join("");
     const blur = Math.max(settings.moveGlowRadiusPercent / 100, 0.001);
     const line = `fill="none" stroke="${color}" stroke-width="${settings.moveOutlineWidthPx}" stroke-linecap="round" vector-effect="non-scaling-stroke"`;
 
@@ -3502,10 +3578,133 @@
       svg.setAttribute("viewBox", "0 0 8 8");
       svg.setAttribute("aria-hidden", "true");
     }
-    svg.innerHTML = `<defs><clipPath id="${id}">${clipPolygons}</clipPath>`
+    const mask = bridges.length ? ` mask="url(#${id}-straight)"` : "";
+    const maskFrame = '<rect x="-1" y="-1" width="10" height="10" fill="white"/>';
+    let outline = `<path d="${d}" ${line}${mask}/>`;
+    const fillets = [];
+    const cross = (a, b) => a[0] * b[1] - a[1] * b[0];
+    const subtract = (a, b) => [a[0] - b[0], a[1] - b[1]];
+    const insideBridge = (point, polygon) => {
+      const sides = polygon.map((a, index) => cross(subtract(polygon[(index + 1) % polygon.length], a), subtract(point, a)))
+        .filter((_, index) => Math.hypot(...subtract(polygon[(index + 1) % polygon.length], polygon[index])) > 1e-8);
+      return sides.every(value => value > 1e-8) || sides.every(value => value < -1e-8);
+    };
+    const insideCells = ([x, y]) => cells.some(({ row, col }) => {
+      if (x <= col + 1e-8 || x >= col + 1 - 1e-8 || y <= row + 1e-8 || y >= row + 1 - 1e-8) return false;
+      if (!round) return !bevel || [[col, row], [col + 1, row], [col + 1, row + 1], [col, row + 1]]
+        .every(([cx, cy]) => Math.abs(x - cx) + Math.abs(y - cy) > bevel + 1e-8);
+      const top = !has(row - 1, col), right = !has(row, col + 1);
+      const bottom = !has(row + 1, col), left = !has(row, col - 1);
+      for (const [cx, cy, rounded] of [[col, row, top && left], [col + 1, row, top && right],
+        [col + 1, row + 1, bottom && right], [col, row + 1, bottom && left]]) {
+        if (!rounded && !isGapFilled(cx, cy)) continue;
+        const dx = Math.abs(x - cx), dy = Math.abs(y - cy);
+        if (dx < round && dy < round && Math.hypot(round - dx, round - dy) >= round - 1e-8) return false;
+      }
+      return true;
+    });
+    const inside = point => insideCells(point) || straightSegments.some(({ bridge }) => insideBridge(point, bridge));
+    if (round && straightSegments.length) {
+      // Round exposed concave intersections, using collinear neighbors to fit the tangents.
+      const extent = (point, direction) => {
+        const intervals = straightSegments.filter(({ start, end }) =>
+          Math.abs(cross(subtract(start, point), direction)) < 1e-7 && Math.abs(cross(subtract(end, point), direction)) < 1e-7)
+          .map(({ start, end }) => [start, end].map(p => (p[0] - point[0]) * direction[0] + (p[1] - point[1]) * direction[1]).sort((a, b) => a - b))
+          .sort((a, b) => a[0] - b[0]);
+        let length = 0;
+        for (const [from, to] of intervals) if (from <= length + 1e-7 && to > length) length = to;
+        return length;
+      };
+      const visited = new Set();
+      for (let i = 0; i < straightSegments.length; i++) for (let j = i + 1; j < straightSegments.length; j++) {
+        const a = straightSegments[i], b = straightSegments[j];
+        const da = subtract(a.end, a.start), db = subtract(b.end, b.start), determinant = cross(da, db);
+        if (Math.abs(determinant) < 1e-8) continue;
+        const delta = subtract(b.start, a.start);
+        const t = cross(delta, db) / determinant, s = cross(delta, da) / determinant;
+        if (t < -1e-7 || t > 1 + 1e-7 || s < -1e-7 || s > 1 + 1e-7) continue;
+        const point = [a.start[0] + t * da[0], a.start[1] + t * da[1]];
+        const key = point.map(value => value.toFixed(7)).join(",");
+        if (visited.has(key)) continue;
+        const directions = [da, db].map(vector => {
+          const length = Math.hypot(...vector);
+          const unit = vector.map(value => value / length);
+          return [unit, unit.map(value => -value)].find(direction => extent(point, direction) > 1e-6
+            && !inside(point.map((value, axis) => value + direction[axis] * 1e-5)));
+        });
+        if (directions.some(direction => !direction)) continue;
+        const [u, v] = directions;
+        const cosine = Math.max(-1, Math.min(1, u[0] * v[0] + u[1] * v[1]));
+        const halfAngle = Math.acos(cosine) / 2;
+        if (halfAngle < 1e-5 || halfAngle >= Math.PI / 2 - 1e-5) continue;
+        const bisector = [u[0] + v[0], u[1] + v[1]], length = Math.hypot(...bisector);
+        if (inside(point.map((value, axis) => value + bisector[axis] / length * 1e-5))) continue;
+        const trim = Math.min(round / Math.tan(halfAngle), extent(point, u) * 0.95, extent(point, v) * 0.95);
+        const radius = trim * Math.tan(halfAngle);
+        const start = point.map((value, axis) => value + u[axis] * trim);
+        const end = point.map((value, axis) => value + v[axis] * trim);
+        const sweep = cross(u, v) > 0 ? 0 : 1;
+        const arc = `M${start.join(" ")}A${radius} ${radius} 0 0 ${sweep} ${end.join(" ")}`;
+        const patch = `M${start.join(" ")}L${point.join(" ")}L${end.join(" ")}A${radius} ${radius} 0 0 ${1 - sweep} ${start.join(" ")}Z`;
+        fillets.push({ start, end, point, arc, patch, legs: `M${start.join(" ")}L${point.join(" ")}L${end.join(" ")}` });
+        visited.add(key);
+      }
+    }
+    const filletShapes = fillets.map(({ patch }) => `<path d="${patch}"/>`).join("");
+    if (fillets.length) outline = `<g mask="url(#${id}-fillets)">${outline}</g>`
+      + fillets.map(({ arc }) => `<path d="${arc}" ${line}/>`).join("");
+    // Clip centerlines, not their strokes, so tangent joins retain the complete line width.
+    outline += straightSegments.map(({ start, end }, index) => {
+      const direction = subtract(end, start), squaredLength = direction[0] ** 2 + direction[1] ** 2;
+      const cuts = [0, 1];
+      const project = point => ((point[0] - start[0]) * direction[0] + (point[1] - start[1]) * direction[1]) / squaredLength;
+      const intersect = (a, b) => {
+        const edge = subtract(b, a), determinant = cross(direction, edge);
+        if (Math.abs(determinant) < 1e-8) return;
+        const delta = subtract(a, start), t = cross(delta, edge) / determinant, s = cross(delta, direction) / determinant;
+        if (s >= -1e-8 && s <= 1 + 1e-8) cuts.push(t);
+      };
+      cells.forEach(({ row, col }, cellIndex) => {
+        const polygon = round ? [[col, row], [col + 1, row], [col + 1, row + 1], [col, row + 1]] : shapes[cellIndex];
+        polygon.forEach((point, i) => intersect(point, polygon[(i + 1) % polygon.length]));
+        if (!round) return;
+        for (const center of [[col + round, row + round], [col + 1 - round, row + round],
+          [col + 1 - round, row + 1 - round], [col + round, row + 1 - round]]) {
+          const delta = subtract(start, center), b = 2 * (delta[0] * direction[0] + delta[1] * direction[1]);
+          const c = delta[0] ** 2 + delta[1] ** 2 - round ** 2, discriminant = b * b - 4 * squaredLength * c;
+          if (discriminant >= 0) cuts.push((-b - Math.sqrt(discriminant)) / (2 * squaredLength), (-b + Math.sqrt(discriminant)) / (2 * squaredLength));
+        }
+      });
+      straightSegments.forEach(({ bridge }, otherIndex) => {
+        if (index !== otherIndex) bridge.forEach((point, i) => intersect(point, bridge[(i + 1) % bridge.length]));
+      });
+      const legs = fillets.flatMap(fillet => [[fillet.start, fillet.point], [fillet.point, fillet.end]])
+        .filter(([a, b]) => Math.abs(cross(subtract(a, start), direction)) < 1e-7
+          && Math.abs(cross(subtract(b, start), direction)) < 1e-7)
+        .map(([a, b]) => [project(a), project(b)].sort((a, b) => a - b));
+      legs.forEach(interval => cuts.push(...interval));
+      const sorted = cuts.filter(t => t >= 0 && t <= 1).map(t => t < 1e-8 ? 0 : t > 1 - 1e-8 ? 1 : t).sort((a, b) => a - b)
+        .filter((t, i, values) => !i || t - values[i - 1] > 1e-8);
+      const at = t => t === 0 ? start : t === 1 ? end : start.map((value, axis) => value + t * direction[axis]);
+      const normal = [-direction[1], direction[0]].map(value => value / Math.sqrt(squaredLength) * 1e-6);
+      const visible = [];
+      for (let i = 1; i < sorted.length; i++) {
+        const from = sorted[i - 1], to = sorted[i], t = (from + to) / 2, point = at(t);
+        if (insideCells(point) || straightSegments.some(({ bridge }, otherIndex) => index !== otherIndex && insideBridge(point, bridge))
+          || (inside(point.map((value, axis) => value + normal[axis])) && inside(point.map((value, axis) => value - normal[axis])))
+          || legs.some(([a, b]) => t > a - 1e-8 && t < b + 1e-8)) continue;
+        if (visible.length && Math.abs(visible[visible.length - 1][1] - from) < 1e-8) visible[visible.length - 1][1] = to;
+        else visible.push([from, to]);
+      }
+      const path = visible.map(([a, b]) => `M${at(a).join(" ")}L${at(b).join(" ")}`).join("");
+      return path ? `<path d="${path}" ${line} data-lfs-outline-side="${index}"/>` : "";
+    }).join("");
+    svg.innerHTML = `<defs><clipPath id="${id}">${clipPolygons}${filletShapes}</clipPath>`
+      + (bridges.length ? `<mask id="${id}-straight" maskUnits="userSpaceOnUse" x="-1" y="-1" width="10" height="10">${maskFrame}<g fill="black">${bridges.join("")}</g></mask>` : "")
+      + (fillets.length ? `<mask id="${id}-fillets" maskUnits="userSpaceOnUse" x="-1" y="-1" width="10" height="10">${maskFrame}<g fill="black">${filletShapes}</g><g fill="none" stroke="black" stroke-width="${settings.moveOutlineWidthPx * 2 + 2}" stroke-linecap="butt">${fillets.map(({ legs }) => `<path d="${legs}" vector-effect="non-scaling-stroke"/>`).join("")}</g></mask>` : "")
       + `<filter id="${id}-glow" filterUnits="userSpaceOnUse" x="-1" y="-1" width="10" height="10"><feGaussianBlur stdDeviation="${blur}"/></filter></defs>`
-      + `<g clip-path="url(#${id})" opacity="${settings.moveGlowOpacity / 100}"><path d="${d}" ${line} filter="url(#${id}-glow)"/></g>`
-      + `<path d="${d}" ${line}/>`;
+      + `<g clip-path="url(#${id})" opacity="${settings.moveGlowOpacity / 100}"><g filter="url(#${id}-glow)">${outline}</g></g>`
+      + outline;
     if (idSuffix.startsWith("last-move")) svg.classList?.add("lfs-last-move-outline");
     return svg;
   }
@@ -4127,6 +4326,7 @@
       entry.arcSvg?.remove();
       entry.centerSvg?.remove();
       entry.moveOutlineSvg?.remove();
+      entry.premoveOutlineSvg?.remove();
       clearMovePreviewPiece(board, entry);
       if (pointerOverBoard === board) pointerOverBoard = null;
       observedBoards.delete(board);

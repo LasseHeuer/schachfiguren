@@ -589,8 +589,9 @@ test("move outlines keep rounded joins and share formatting with last-move previ
     globalThis.testing = { renderMoveOutline, renderLastMoveOutline, createLastMovePreview, getLastMoveOutlineCells, configure(value) { settings = value; } };
     return;
     documentObserver = new MutationObserver`), context);
-  const render = (cells, selected = []) => {
-    const board = { closest: () => true, querySelectorAll: selector => selector.includes("selected") ? selected : cells };
+  const render = (cells, selected = [], pieces = [], premoves = []) => {
+    const board = { closest: () => true, querySelectorAll: selector => selector.includes("selected") ? selected
+      : selector.includes("current-premove") ? premoves : selector.includes("piece:") ? pieces : cells };
     const entry = {};
     context.testing.renderMoveOutline(board, entry, null);
     const html = entry.moveOutlineSvg.innerHTML;
@@ -622,6 +623,67 @@ test("move outlines keep rounded joins and share formatting with last-move previ
     assert.ok(corner.path.includes(`M3 ${3 + radius}A${radius} ${radius} 0 0 1 ${3 + radius} 3`));
     const block = render([{ row: 2, col: 2 }, { row: 2, col: 3 }, { row: 3, col: 2 }, { row: 3, col: 3 }]);
     assert.equal((block.path.match(/A/g) ?? []).length, 4);
+  }
+  assert.equal(settings.normalize().moveOutlineStraightDiagonals, false);
+  assert.equal(settings.normalize({ moveOutlineStraightDiagonals: 0 }).moveOutlineStraightDiagonals, false);
+  assert.equal(settings.normalize({ moveOutlineStraightDiagonals: 100 }).moveOutlineStraightDiagonals, true);
+  for (const file of ["options.html", "popup.html"]) {
+    const html = readFileSync(join(__dirname, file), "utf8");
+    const control = html.match(/<input[^>]*data-setting="moveOutlineStraightDiagonals"[^>]*>/)?.[0];
+    assert.match(control, /type="checkbox"/);
+    assert.match(control, /role="switch"/);
+  }
+  for (const boardFieldShape of ["round", "bevel"]) {
+    const options = settings.normalize({ enabled: true, boardBevelEnabled: true, boardFieldShape,
+      boardRoundPercent: 100, boardBevelPercent: 100, moveOutlineStraightDiagonals: true });
+    context.testing.configure(options);
+    for (const direction of [-1, 1]) {
+      const cells = [0, 1, 2].map(index => ({ row: 2 + index, col: 3 + direction * index }));
+      const straight = render(cells);
+      assert.ok(straight.html.includes('<mask id="lfs-move-outline--1-straight"'));
+      const blocked = render(cells, [], [{ row: 3, col: 3 }]);
+      const bridgeCount = html => (/<g fill="black">(.*?)<\/g>/.exec(html)?.[1].match(/<polygon/g) ?? []).length;
+      assert.equal(bridgeCount(straight.html), 4);
+      assert.equal(bridgeCount(blocked.html), 3, "a neighboring piece blocks only its own side");
+      assert.equal(bridgeCount(render(cells, [{ row: 3, col: 3 }]).html), 4, "junctions continue the orthogonal rays instead of adding a diagonal shortcut");
+      assert.equal(bridgeCount(render(cells, [], [{ row: 1, col: 3 }]).html), 4, "other neighboring fields do not block connections");
+      const firstPair = cells.slice(0, 2);
+      assert.ok(!render(firstPair, [], [{ row: 2, col: 3 + direction }, { row: 3, col: 3 }]).html.includes("<mask"));
+    }
+    const screenshotCells = [0, 1, 2, 3, 4, 5].map(index => ({ row: 2 + index, col: index }));
+    const screenshotPieces = Array.from({ length: 8 }, (_, col) => [{ row: 0, col }, { row: 1, col },
+      { row: 6, col }, { row: 7, col }]).flat().filter(({ row, col }) => col !== 4 || (row !== 1 && row !== 6));
+    screenshotPieces.push({ row: 3, col: 4 }, { row: 4, col: 4 });
+    const screenshot = render(screenshotCells, [], screenshotPieces);
+    const straightPath = [...screenshot.html.matchAll(/<path d="([^"]*)" fill="none"[^>]*data-lfs-outline-side="\d+"/g)].map(match => match[1]).join("");
+    const inset = boardFieldShape === "round" ? 0.5 * (1 - Math.SQRT1_2) : 0.25;
+    const side = (row, col, upper) => upper
+      ? `M${col + 1 - inset} ${row + inset}L${col + 2 - inset} ${row + 1 + inset}`
+      : `M${col + inset} ${row + 1 - inset}L${col + 1 + inset} ${row + 2 - inset}`;
+    for (const [row, col] of [[2, 0], [3, 1], [4, 2]]) {
+      assert.ok(straightPath.includes(side(row, col, true)), "a6-b5, b5-c4 and c4-d3 keep their free upper sides straight");
+      assert.ok(straightPath.includes(side(row, col, false)), `${boardFieldShape}/${row}/${col}: free lower sides stay straight: ${straightPath}`);
+    }
+    assert.ok(straightPath.includes(side(5, 3, true)), "d3-e2 is straight towards the empty e3 field");
+    assert.ok(!straightPath.includes(side(5, 3, false)), "d3-e2 retains its shape towards the pawn on d2");
+    assert.ok(!render([{ row: 2, col: 2 }, { row: 2, col: 3 }]).html.includes("<mask"));
+    context.testing.configure({ ...options, moveOutlineStraightDiagonals: false });
+    assert.ok(!render([{ row: 2, col: 2 }, { row: 3, col: 3 }]).html.includes("<mask"));
+  }
+  for (const moveIndicatorMode of ["dots", "outline"]) {
+    context.testing.configure(settings.normalize({ enabled: true, moveIndicatorMode, boardBevelEnabled: false }));
+    const entry = {};
+    const board = { closest: () => true, querySelectorAll: selector => selector.includes("current-premove")
+      ? [{ row: 6, col: 4 }, { row: 4, col: 4 }] : [] };
+    context.testing.renderMoveOutline(board, entry, null);
+    assert.ok(entry.premoveOutlineSvg.innerHTML.includes("M4 4L5 4"));
+    assert.ok(!entry.premoveOutlineSvg.innerHTML.includes("M4 5L5 5"));
+    let removed = false;
+    entry.premoveOutlineSvg.remove = () => { removed = true; };
+    board.querySelectorAll = () => [];
+    context.testing.renderMoveOutline(board, entry, null);
+    assert.equal(entry.premoveOutlineSvg, null);
+    assert.equal(removed, true);
   }
   const outlineSettings = settings.normalize({
     enabled: true, markLastMove: true, moveDotsPlayerColor: true,
@@ -2631,6 +2693,309 @@ ${clockMarker}`));
         assert.ok(!result.includes("M0 3L1 3"), `${destinationClass}: no dividing edge below a6`);
         assert.ok(!result.includes("M0 1L1 1"), `${destinationClass}: no field beyond the capture`);
       }
+    });
+    await t.test("straight diagonal outlines and queued premoves render at desktop and mobile sizes", async () => {
+      for (const size of [512, 320]) for (const shape of ["round", "bevel"]) for (const direction of [-1, 1]) for (const blocked of [false, true]) for (const lineWidth of [2, 6]) {
+        await send("Emulation.setDeviceMetricsOverride", { width: size, height: size, deviceScaleFactor: 1, mobile: size === 320 });
+        const result = await evaluate(`(async () => {
+          const board = document.querySelector('cg-board');
+          const previous = board.innerHTML;
+          const entry = {};
+          testing.configure(LichessSettings.normalize({ enabled: true, moveIndicatorMode: 'outline',
+            boardBevelEnabled: true, boardFieldShape: '${shape}', boardRoundPercent: 100, boardBevelPercent: 60,
+            moveOutlineStraightDiagonals: true, moveOutlineWidthPx: ${lineWidth}, moveOutlineColor: '#00ff00', moveGlowOpacity: 0 }));
+          board.innerHTML = [0, 1, 2].map(index => '<square class="move-dest" style="left:'
+            + (3 + ${direction} * index) * 12.5 + '%;top:' + (2 + index) * 12.5 + '%"></square>').join('');
+          if (${blocked}) board.insertAdjacentHTML('beforeend', '<piece class="white pawn" style="left:37.5%;top:37.5%"></piece>');
+          testing.renderMoveOutline(board, entry, null);
+          const svg = entry.moveOutlineSvg;
+          svg.setAttribute('width', '${size}');
+          svg.setAttribute('height', '${size}');
+          const image = new Image();
+          image.src = 'data:image/svg+xml,' + encodeURIComponent(new XMLSerializer().serializeToString(svg));
+          await image.decode();
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = ${size};
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(image, 0, 0);
+          let thinPixels = 0;
+          if ('${shape}' === 'round' && !${blocked}) {
+            const reference = document.createElement('canvas'); reference.width = reference.height = ${size};
+            const ref = reference.getContext('2d'); ref.scale(${size} / 8, ${size} / 8);
+            if (${direction} === -1) { ref.translate(7, 0); ref.scale(-1, 1); }
+            ref.lineWidth = ${lineWidth} * 8 / ${size};
+            const diagonal = Math.SQRT1_2 / 2;
+            ref.beginPath(); ref.moveTo(3.5 + diagonal, 2.5 - diagonal); ref.lineTo(5.5 + diagonal, 4.5 - diagonal);
+            ref.arc(5.5, 4.5, 0.5, -Math.PI / 4, 3 * Math.PI / 4); ref.lineTo(3.5 - diagonal, 2.5 + diagonal);
+            ref.arc(3.5, 2.5, 0.5, 3 * Math.PI / 4, 7 * Math.PI / 4); ref.closePath(); ref.stroke();
+            const actual = ctx.getImageData(0, 0, ${size}, ${size}).data, expected = ref.getImageData(0, 0, ${size}, ${size}).data;
+            for (let i = 3; i < actual.length; i += 4) if (expected[i] >= 200 && actual[i] < 140) thinPixels++;
+          }
+          const alphaAt = (x, y) => {
+            if (${direction} === -1) x = 7 - x;
+            const pixels = ctx.getImageData(Math.round(x * ${size} / 8) - 1, Math.round(y * ${size} / 8) - 1, 3, 3).data;
+            return Math.max(...Array.from(pixels).filter((_, index) => index % 4 === 3));
+          };
+          const inset = '${shape}' === 'round' ? 0.5 * (1 - Math.SQRT1_2) : 0.15;
+          // The unreflected diagonal starts in column 3.
+          const line = alphaAt(4.5 - inset, 2.5 + inset);
+          const opposite = alphaAt(3.5 + inset, 3.5 - inset);
+          const interior = alphaAt('${shape}' === 'round' ? 4.5 - Math.SQRT1_2 / 2 : 4.15,
+            '${shape}' === 'round' ? 2.5 + Math.SQRT1_2 / 2 : 2.85);
+          svg.remove();
+          document.body.setAttribute('data-board', 'brown');
+          board.innerHTML = '<square class="current-premove" style="left:50%;top:75%;background:red"></square>'
+            + '<square class="current-premove" style="left:50%;top:50%;background:red"></square>';
+          testing.renderMoveOutline(board, entry, null);
+          const premove = Boolean(entry.premoveOutlineSvg?.querySelector('path[fill="none"]'));
+          const transparent = [...board.querySelectorAll('square')].every(square => getComputedStyle(square).backgroundColor === 'rgba(0, 0, 0, 0)');
+          entry.premoveOutlineSvg.remove();
+          board.innerHTML = previous;
+          document.body.removeAttribute('data-board');
+          return { line, opposite, interior, premove, transparent, thinPixels };
+        })()`);
+        assert.ok(result.line > 100, `${size}/${shape}/${direction}: a continuous diagonal side must be visible`);
+        if (blocked) assert.equal(result.opposite, 0, `${size}/${shape}/${direction}: only the occupied side retains its original shape`);
+        else assert.ok(result.opposite > 100, `${size}/${shape}/${direction}: the opposite free side must also be straight`);
+        assert.equal(result.interior, 0, `${size}/${shape}/${direction}: old curves inside the corridor must be hidden`);
+        assert.equal(result.premove, true);
+        assert.equal(result.transparent, true);
+        assert.equal(result.thinPixels, 0, `${size}/${shape}/${direction}/${lineWidth}: rounded end caps and diagonals must have the same width`);
+      }
+      await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
+      assert.deepEqual(runtimeErrors, []);
+    });
+    await t.test("outline mode suppresses round and square move dots including captures", async () => {
+      const result = await evaluate(`(() => {
+        const root = document.documentElement, board = document.querySelector('cg-board');
+        const previous = board.innerHTML, attributes = root.getAttributeNames().map(name => [name, root.getAttribute(name)]);
+        const bodyBoard = document.body.getAttribute('data-board');
+        document.body.setAttribute('data-board', 'brown'); root.removeAttribute('data-lfs-disabled');
+        root.style.setProperty('--lfs-square-move-dot-size', '8px'); root.style.setProperty('--lfs-move-dot-size', '20%');
+        root.style.setProperty('--lfs-active-move-dot-color', '#00ff00');
+        const results = [];
+        for (const outline of [false, true]) for (const square of [false, true]) {
+          root.toggleAttribute('data-lfs-move-outline-mode', outline); root.toggleAttribute('data-lfs-square-move-dots', square);
+          for (const className of ['move-dest', 'premove-dest', 'move-dest oc', 'premove-dest oc']) {
+            board.innerHTML = '<square class="' + className + '" style="background-image:radial-gradient(red,red)"></square>';
+            const field = board.firstElementChild;
+            results.push({ outline, square, className, hidden: getComputedStyle(field).backgroundImage === 'none' });
+          }
+        }
+        board.innerHTML = previous;
+        for (const name of root.getAttributeNames()) root.removeAttribute(name);
+        for (const [name, value] of attributes) root.setAttribute(name, value);
+        if (bodyBoard === null) document.body.removeAttribute('data-board'); else document.body.setAttribute('data-board', bodyBoard);
+        return results;
+      })()`);
+      for (const item of result) assert.equal(item.hidden, item.outline, JSON.stringify(item));
+    });
+    await t.test("straight diagonal checkbox toggles between the original and straight contours", async () => {
+      for (const size of [320, 512]) for (const [shape, rounding] of [["round", 100], ["round", 40], ["bevel", 60], ["bevel", 0]]) for (const arrangement of ["diagonal", "junction", "queen"]) {
+        const results = await evaluate(`(async () => {
+          const board = document.querySelector('cg-board'), previous = board.innerHTML;
+          const origin = '${arrangement}' === 'diagonal' ? [4, 5] : '${arrangement}' === 'junction' ? [7, 3] : [4, 3];
+          const cells = '${arrangement}' === 'diagonal' ? [[2, 3], [3, 4]] : '${arrangement}' === 'junction'
+            ? [[6, 3], [5, 3], [6, 4], [5, 5], [4, 6], [3, 7]] : [];
+          if ('${arrangement}' === 'queen') for (const [dr, dc] of [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]) {
+            for (let step = 1; step <= 3; step++) {
+              const row = origin[0] + dr * step, col = origin[1] + dc * step;
+              if (row >= 0 && row < 8 && col >= 0 && col < 8) cells.push([row, col]);
+            }
+          }
+          board.innerHTML = cells.map(([row, col]) => '<square class="move-dest" style="left:' + col * 12.5 + '%;top:' + row * 12.5 + '%"></square>').join('')
+            + '<square class="selected" style="left:' + origin[1] * 12.5 + '%;top:' + origin[0] * 12.5 + '%"></square>';
+          if ('${arrangement}' === 'junction') board.insertAdjacentHTML('beforeend', '<piece class="white king" style="left:50%;top:87.5%"></piece>');
+          const results = [], entry = {};
+          for (const strength of [false, true]) {
+            testing.configure(LichessSettings.normalize({ enabled: true, moveIndicatorMode: 'outline', boardBevelEnabled: true,
+              boardFieldShape: '${shape}', boardRoundPercent: ${rounding}, boardBevelPercent: ${rounding},
+              moveOutlineStraightDiagonals: strength, moveOutlineWidthPx: 2, moveOutlineColor: '#00ff00', moveGlowOpacity: 0 }));
+            testing.renderMoveOutline(board, entry, null);
+            const svg = entry.moveOutlineSvg; svg.setAttribute('width', '${size}'); svg.setAttribute('height', '${size}');
+            const image = new Image(); image.src = 'data:image/svg+xml,' + encodeURIComponent(new XMLSerializer().serializeToString(svg)); await image.decode();
+            const canvas = document.createElement('canvas'); canvas.width = canvas.height = ${size};
+            const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0); const pixels = ctx.getImageData(0, 0, ${size}, ${size}).data;
+            const outside = new Uint8Array(${size} * ${size}), flood = [];
+            for (let i = 0; i < ${size}; i++) for (const index of [i, (${size} - 1) * ${size} + i, i * ${size}, i * ${size} + ${size} - 1]) {
+              if (!outside[index] && pixels[index * 4 + 3] < 32) { outside[index] = 1; flood.push(index); }
+            }
+            for (let head = 0; head < flood.length; head++) {
+              const current = flood[head], x = current % ${size}, y = Math.floor(current / ${size});
+              for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+                const nx = x + dx, ny = y + dy, next = ny * ${size} + nx;
+                if (nx < 0 || ny < 0 || nx >= ${size} || ny >= ${size} || outside[next] || pixels[next * 4 + 3] >= 32) continue;
+                outside[next] = 1; flood.push(next);
+              }
+            }
+            results.push({ strength, straight: Boolean(svg.querySelector('mask[id$="-straight"]')),
+              invalid: /NaN|Infinity|undefined/.test(svg.innerHTML),
+              leaks: [...cells, origin].filter(([row, col]) => outside[Math.floor((row + 0.5) * ${size} / 8) * ${size} + Math.floor((col + 0.5) * ${size} / 8)]) });
+            svg.remove();
+          }
+          board.innerHTML = previous; return results;
+        })()`);
+        for (const result of results) {
+          const label = `${size}/${shape}/${rounding}/${arrangement}/${result.strength}`;
+          assert.equal(result.invalid, false, label);
+          assert.deepEqual(result.leaks, [], `${label}: open outline`);
+          if (arrangement === "diagonal") assert.equal(result.straight, result.strength, `${label}: checkbox controls straight diagonals`);
+        }
+      }
+      assert.deepEqual(runtimeErrors, []);
+    });
+    await t.test("intersecting straight outlines share one outer contour without interior tails", async () => {
+      for (const size of [512, 320]) for (const shape of ["round", "bevel"]) for (const crossing of [false, true]) for (const transposed of [false, true]) for (const lineWidth of [1, 2, 6]) for (const roundPercent of shape === "round" ? [40, 100] : [100]) for (const occupiedNeighbor of crossing ? [false] : [false, true]) {
+        await send("Emulation.setDeviceMetricsOverride", { width: size, height: size, deviceScaleFactor: 1, mobile: size === 320 });
+        const result = await evaluate(`(async () => {
+          const board = document.querySelector('cg-board');
+          const previous = board.innerHTML;
+          const entry = {};
+          testing.configure(LichessSettings.normalize({ enabled: true, moveIndicatorMode: 'outline',
+            boardBevelEnabled: true, boardFieldShape: '${shape}', boardRoundPercent: ${roundPercent}, boardBevelPercent: 60,
+            moveOutlineStraightDiagonals: true, moveOutlineWidthPx: ${lineWidth}, moveOutlineColor: '#00ff00', moveGlowOpacity: 0 }));
+          let origin = ${crossing} ? [4, 3] : [7, 3];
+          let cells = ${crossing} ? [[3, 2], [2, 1], [3, 4], [2, 5], [5, 2], [6, 1], [5, 4], [6, 5]]
+            : [[6, 3], [5, 3], [6, 4], [5, 5], [4, 6], [3, 7]];
+          if (${transposed}) { origin.reverse(); cells = cells.map(([row, col]) => [col, row]); }
+          board.innerHTML = cells.map(([row, col]) => '<square class="move-dest" style="left:'
+            + col * 12.5 + '%;top:' + row * 12.5 + '%"></square>').join('')
+            + '<square class="selected" style="left:' + origin[1] * 12.5 + '%;top:' + origin[0] * 12.5 + '%"></square>';
+          if (!${crossing}) board.insertAdjacentHTML('beforeend', '<piece class="white king" style="left:${transposed ? 87.5 : 50}%;top:${transposed ? 50 : 87.5}%"></piece>');
+          if (${occupiedNeighbor}) board.insertAdjacentHTML('beforeend', '<piece class="white knight" style="left:${transposed ? 37.5 : 75}%;top:${transposed ? 75 : 37.5}%"></piece>');
+          testing.renderMoveOutline(board, entry, null);
+          const svg = entry.moveOutlineSvg;
+          svg.setAttribute('width', '${size}'); svg.setAttribute('height', '${size}');
+          const image = new Image();
+          image.src = 'data:image/svg+xml,' + encodeURIComponent(new XMLSerializer().serializeToString(svg));
+          await image.decode();
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = ${size};
+          const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0);
+          const alphaAt = (x, y) => {
+            if (${transposed}) [x, y] = [y, x];
+            const pixels = ctx.getImageData(Math.round(x * ${size} / 8) - 1, Math.round(y * ${size} / 8) - 1, 3, 3).data;
+            return Math.max(...Array.from(pixels).filter((_, index) => index % 4 === 3));
+          };
+          const inset = '${shape}' === 'round' ? ${roundPercent} / 200 * (1 - Math.SQRT1_2) : 0.15;
+          let visible = ${crossing} ? [[3.5, 3.5 + 2 * inset], [3.5, 5.5 - 2 * inset]]
+            : [[4, 6 + 2 * inset], [4, 5.8], [4.5, 5.5 + 2 * inset]];
+          const hidden = ${crossing} ? [[3.5, 4], [3.5, 5], [3, 4.5], [4, 4.5]]
+            : [[4.35, 5.35 + 2 * inset], [4, 6.7], [3.8, 6.2 + 2 * inset]];
+          const corner = ${crossing} ? [3.5, 3.5 + 2 * inset] : [4, 6 + 2 * inset];
+          let edges = ${crossing} ? [[[3.1, 3.1 + 2 * inset], corner], [corner, [3.9, 3.1 + 2 * inset]]]
+            : [[[4, 5.5], corner], [corner, [4.8, 5.2 + 2 * inset]]];
+          if ('${shape}' === 'round') {
+            const halfAngle = ${crossing} ? Math.PI / 4 : Math.PI / 8;
+            const u = ${crossing} ? [-Math.SQRT1_2, -Math.SQRT1_2] : [0, -1], v = [Math.SQRT1_2, -Math.SQRT1_2];
+            const trim = ${crossing} ? ${roundPercent} / 200 : Math.min(${roundPercent} / 200 / Math.tan(halfAngle), (corner[1] - 5.5) * 0.95);
+            const radius = trim * Math.tan(halfAngle);
+            const bisector = [u[0] + v[0], u[1] + v[1]], length = Math.hypot(...bisector);
+            const center = corner.map((value, axis) => value + bisector[axis] / length * radius / Math.sin(halfAngle));
+            const a = corner.map((value, axis) => value + u[axis] * trim), b = corner.map((value, axis) => value + v[axis] * trim);
+            const startAngle = Math.atan2(a[1] - center[1], a[0] - center[0]);
+            const arc = Array.from({ length: 65 }, (_, index) => {
+              const angle = startAngle - (Math.PI - 2 * halfAngle) * index / 64;
+              return [center[0] + radius * Math.cos(angle), center[1] + radius * Math.sin(angle)];
+            });
+            edges = [[edges[0][0], a], ...arc.slice(1).map((point, index) => [arc[index], point]), [b, edges[1][1]]];
+            visible = [a, arc[32], b];
+            if ((radius / Math.sin(halfAngle) - radius) * ${size} / 8 > ${lineWidth} / 2 + 2) hidden.push(corner);
+          }
+          const result = { visible: visible.map(([x, y]) => alphaAt(x, y)), hidden: hidden.map(([x, y]) => alphaAt(x, y)),
+            fillets: Boolean(svg.querySelector('mask[id$="-fillets"]')) };
+          const pixels = ctx.getImageData(0, 0, ${size}, ${size}).data;
+          const distance = (x, y, [a, b]) => {
+            const dx = b[0] - a[0], dy = b[1] - a[1];
+            const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy)));
+            return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy);
+          };
+          const reference = document.createElement('canvas'); reference.width = reference.height = ${size};
+          const ref = reference.getContext('2d'); ref.lineWidth = ${lineWidth}; ref.lineCap = ref.lineJoin = 'round';
+          ref.beginPath();
+          edges.forEach(([a, b], index) => {
+            if (${transposed}) { a = [a[1], a[0]]; b = [b[1], b[0]]; }
+            if (!index) ref.moveTo(a[0] * ${size} / 8, a[1] * ${size} / 8);
+            ref.lineTo(b[0] * ${size} / 8, b[1] * ${size} / 8);
+          }); ref.stroke();
+          const expectedPixels = ref.getImageData(0, 0, ${size}, ${size}).data;
+          result.thinPixels = [];
+          result.extraPixels = [];
+          for (let py = 0; py < ${size}; py++) for (let px = 0; px < ${size}; px++) {
+            const [x, y] = ${transposed} ? [(py + 0.5) * 8 / ${size}, (px + 0.5) * 8 / ${size}]
+              : [(px + 0.5) * 8 / ${size}, (py + 0.5) * 8 / ${size}];
+            if (${crossing} ? (x < 3.15 || x > 3.85 || y < 3.15 + 2 * inset || y > 3.7 + 2 * inset)
+              : (x < 3.9 || x > 4.6 || y < 5.6 || y > 6.5)) continue;
+            const alpha = pixels[(py * ${size} + px) * 4 + 3], expected = expectedPixels[(py * ${size} + px) * 4 + 3];
+            if (expected >= 200 && alpha < 140) result.thinPixels.push([x, y, alpha, expected]);
+            if (alpha < 32) continue;
+            if (Math.min(...edges.map(edge => distance(x, y, edge))) * ${size} / 8 > ${lineWidth} / 2 + 1.5) result.extraPixels.push([x, y]);
+          }
+          // Limit connectivity to the junction so a detour around the contour cannot hide a gap.
+          const connectionPoints = ${crossing} && '${shape}' !== 'round' ? [visible[0], [3.3, 3.3 + 2 * inset], [3.7, 3.3 + 2 * inset]] : visible;
+          const seeds = connectionPoints.map(([x, y]) => {
+            if (${transposed}) [x, y] = [y, x];
+            const px = Math.round(x * ${size} / 8), py = Math.round(y * ${size} / 8);
+            let seed = -1, alpha = 0;
+            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+              const index = (py + dy) * ${size} + px + dx;
+              if (pixels[index * 4 + 3] > alpha) { seed = index; alpha = pixels[index * 4 + 3]; }
+            }
+            return seed;
+          });
+          const reached = new Set([seeds[0]]), queue = [seeds[0]];
+          for (let head = 0; head < queue.length; head++) {
+            const index = queue[head], x = index % ${size}, y = Math.floor(index / ${size});
+            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+              const nx = x + dx, ny = y + dy, next = ny * ${size} + nx;
+              if (nx < 0 || ny < 0 || nx >= ${size} || ny >= ${size} || reached.has(next) || pixels[next * 4 + 3] < 64) continue;
+              const [bx, by] = ${transposed} ? [ny * 8 / ${size}, nx * 8 / ${size}] : [nx * 8 / ${size}, ny * 8 / ${size}];
+              if (${crossing} ? (bx < 3.1 || bx > 3.9 || by < 3.1 + 2 * inset || by > 3.7 + 2 * inset)
+                : (bx < 3.8 || bx > 4.7 || by < 5.3 || by > 6.5)) continue;
+              reached.add(next); queue.push(next);
+            }
+          }
+          result.connected = seeds.every(seed => reached.has(seed));
+          const allReached = new Set();
+          result.fragments = [];
+          for (let index = 0; index < ${size} * ${size}; index++) {
+            if (allReached.has(index) || pixels[index * 4 + 3] < 64) continue;
+            const component = [index]; allReached.add(index);
+            for (let head = 0; head < component.length; head++) {
+              const current = component[head], x = current % ${size}, y = Math.floor(current / ${size});
+              for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                const nx = x + dx, ny = y + dy, next = ny * ${size} + nx;
+                if (nx < 0 || ny < 0 || nx >= ${size} || ny >= ${size} || allReached.has(next) || pixels[next * 4 + 3] < 64) continue;
+                allReached.add(next); component.push(next);
+              }
+            }
+            if (component.length >= Math.max(3, ${lineWidth} * ${lineWidth})) result.fragments.push({ pixels: component.length,
+              x: component[0] % ${size} * 8 / ${size}, y: Math.floor(component[0] / ${size}) * 8 / ${size} });
+          }
+          const outside = new Uint8Array(${size} * ${size}), flood = [0]; outside[0] = 1;
+          for (let head = 0; head < flood.length; head++) {
+            const current = flood[head], x = current % ${size}, y = Math.floor(current / ${size});
+            for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+              const nx = x + dx, ny = y + dy, next = ny * ${size} + nx;
+              if (nx < 0 || ny < 0 || nx >= ${size} || ny >= ${size} || outside[next] || pixels[next * 4 + 3] >= 32) continue;
+              outside[next] = 1; flood.push(next);
+            }
+          }
+          result.leaks = [...cells, origin].filter(([row, col]) => outside[Math.floor((row + 0.5) * ${size} / 8) * ${size} + Math.floor((col + 0.5) * ${size} / 8)]);
+          svg.remove(); board.innerHTML = previous;
+          return result;
+        })()`);
+        assert.ok(result.visible.every(alpha => alpha > 100), `${size}/${shape}/${crossing}: joined outer edges must remain visible: ${result.visible}`);
+        assert.equal(result.fillets, shape === "round", "only rounded fields receive circular junctions");
+        assert.ok(result.hidden.every(alpha => alpha === 0), `${size}/${shape}/${crossing}: interior crossings and shortcuts must be hidden: ${result.hidden}`);
+        assert.equal(result.connected, true, `${size}/${shape}/${crossing}/${transposed}/${lineWidth}: all outer edges must form one connected contour`);
+        assert.equal(result.extraPixels.length, 0, `${size}/${shape}/${crossing}/${transposed}/${lineWidth}: obsolete contour fragments: ${JSON.stringify(result.extraPixels.slice(0, 5))}`);
+        assert.equal(result.fragments.length, 1, `${size}/${shape}/${crossing}/${transposed}/${lineWidth}: disconnected outline fragments: ${JSON.stringify(result.fragments)}`);
+        assert.deepEqual(result.leaks, [], `${size}/${shape}/${crossing}/${transposed}/${lineWidth}/${roundPercent}: open contour around fields: ${JSON.stringify(result.leaks)}`);
+        assert.equal(result.thinPixels.length, 0, `${size}/${shape}/${crossing}/${transposed}/${lineWidth}/${roundPercent}: narrowed strokes: ${JSON.stringify(result.thinPixels.slice(0, 5))}`);
+      }
+      await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
+      assert.deepEqual(runtimeErrors, []);
     });
     const options = settings.normalize({
       pieceSet: "cage", highlightCascadesEnabled: true, defenseHighlightEnabled: true, attackHighlightEnabled: false,

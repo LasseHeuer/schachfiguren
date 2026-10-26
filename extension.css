@@ -1097,22 +1097,23 @@ html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square.se
   background-color: var(--lfs-selected-square-color) !important;
 }
 
-html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square.move-dest:not(.oc),
-html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square.premove-dest:not(.oc) {
+html:not([data-lfs-disabled]):not([data-lfs-move-outline-mode]) body[data-board] .is2d .cg-wrap cg-board square.move-dest:not(.oc),
+html:not([data-lfs-disabled]):not([data-lfs-move-outline-mode]) body[data-board] .is2d .cg-wrap cg-board square.premove-dest:not(.oc) {
   background: radial-gradient(
     in srgb, var(--lfs-active-move-dot-color, var(--lfs-selected-square-color)) 0 var(--lfs-move-dot-size),
     oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) calc(var(--lfs-move-dot-size) + 1%)
   ) !important;
 }
 
-html:not([data-lfs-disabled])[data-lfs-square-move-dots] body[data-board] .is2d .cg-wrap cg-board square.move-dest:not(.oc),
-html:not([data-lfs-disabled])[data-lfs-square-move-dots] body[data-board] .is2d .cg-wrap cg-board square.premove-dest:not(.oc) {
+html:not([data-lfs-disabled]):not([data-lfs-move-outline-mode])[data-lfs-square-move-dots] body[data-board] .is2d .cg-wrap cg-board square.move-dest:not(.oc),
+html:not([data-lfs-disabled]):not([data-lfs-move-outline-mode])[data-lfs-square-move-dots] body[data-board] .is2d .cg-wrap cg-board square.premove-dest:not(.oc) {
   background: linear-gradient(in srgb, var(--lfs-active-move-dot-color, var(--lfs-selected-square-color)), var(--lfs-active-move-dot-color, var(--lfs-selected-square-color))) center /
     var(--lfs-square-move-dot-size) var(--lfs-square-move-dot-size) no-repeat !important;
 }
 
-html:not([data-lfs-disabled])[data-lfs-move-outline-mode] body[data-board] .is2d .cg-wrap cg-board square.move-dest:not(.oc),
-html:not([data-lfs-disabled])[data-lfs-move-outline-mode] body[data-board] .is2d .cg-wrap cg-board square.premove-dest:not(.oc) {
+html:not([data-lfs-disabled])[data-lfs-move-outline-mode] body[data-board] .is2d .cg-wrap cg-board square.move-dest,
+html:not([data-lfs-disabled])[data-lfs-move-outline-mode] body[data-board] .is2d .cg-wrap cg-board square.premove-dest,
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board square.current-premove {
   background: none !important;
 }
 
