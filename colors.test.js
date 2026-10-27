@@ -418,7 +418,7 @@ test("System Rund shares existing SVG assets for both piece colors", () => {
   }
 });
 
-test("round king movement sectors follow blocked directions and board orientation", () => {
+test("king movement fields follow preview animation distances and board orientation", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");
   const { join } = require("node:path");
@@ -434,9 +434,83 @@ test("round king movement sectors follow blocked directions and board orientatio
   const context = vm.createContext({ document: { addEventListener() {}, createElementNS: element } });
   const source = readFileSync(join(__dirname, "king-movement-fields.js"), "utf8");
   vm.runInContext(source.replace("  globalThis.LichessKingMovementFields = {", `
-    globalThis.testing = { fillOverlay, getDestinationState, renderPreview, configure(value) { settings = value; } };
+    globalThis.testing = { fillOverlay, getAnimationSnapshot, getDestinationState, readPosition, renderBoard, renderPreview, configure(value) { settings = value; } };
     globalThis.LichessKingMovementFields = {`), context);
   const api = context.testing;
+  let previewKingRect = { left: 0, top: 0, width: 100, height: 100 };
+  const previewKing = {
+    dataset: { square: "e4", piece: "white king" },
+    classList: { contains: name => name === "white" || name === "king" },
+    getBoundingClientRect: () => previewKingRect
+  };
+  let previewRookRect = { left: 600, top: 600, width: 100, height: 100 };
+  const previewRook = {
+    dataset: { square: "e8", piece: "black rook" },
+    classList: { contains: name => name === "black" || name === "rook" },
+    getBoundingClientRect: () => previewRookRect
+  };
+  const previewBoard = {
+    closest: selector => selector === ".is2d" ? {} : { classList: { contains: () => false } },
+    querySelectorAll: () => [previewKing, previewRook],
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 800 })
+  };
+  const parsedPreview = api.readPosition(previewBoard);
+  assert.equal(parsedPreview.complete, true);
+  assert.equal(parsedPreview.kings[0].row, 4);
+  assert.equal(parsedPreview.kings[0].col, 4);
+  assert.equal(parsedPreview.position[0][4], "bR");
+  assert.equal(api.getDestinationState(parsedPreview.position, parsedPreview.kings[0], { row: 3, col: 4 }), "threat");
+  previewKing.dataset.square = "d4";
+  const nextParsedPreview = api.readPosition(previewBoard);
+  assert.equal(nextParsedPreview.kings[0].col, 3);
+  assert.equal(api.getDestinationState(nextParsedPreview.position, nextParsedPreview.kings[0], { row: 3, col: 3 }), "open");
+
+  api.configure(settings.normalize({ enabled: true, kingMovementFieldsEnabled: true, pieceSet: "system_rund" }));
+  const overlaySvg = element();
+  const overlay = { group: { parentNode: previewKing }, svg: overlaySvg };
+  Object.assign(previewKing, {
+    attributes: {},
+    getAnimations: () => [{ playState: "running" }],
+    setAttribute(name, value) { this.attributes[name] = value; },
+    removeAttribute(name) { delete this.attributes[name]; }
+  });
+  previewKing.dataset.square = "f4";
+  previewKing.dataset.lfsPvAnimationSourceSquare = "e4";
+  previewKingRect = { left: 437.5, top: 437.5, width: 25, height: 25 };
+  const animationBoard = {
+    id: "lfs-pv-preview",
+    closest: selector => selector === ".is2d" ? {} : { classList: { contains: () => false } },
+    querySelectorAll: () => [previewKing, previewRook],
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 800 })
+  };
+  const entry = { overlays: new Map([[previewKing, overlay]]) };
+  const sourceAnimationSnapshot = api.getAnimationSnapshot(animationBoard);
+  api.renderBoard(animationBoard, entry);
+  const sectorsBeforeMove = overlaySvg.children[0].attributes.d;
+  previewKingRect = { ...previewKingRect, left: 517.5 };
+  const kingAfterMidpoint = api.readPosition(animationBoard).kings[0];
+  assert.equal(kingAfterMidpoint.row, 4);
+  assert.equal(kingAfterMidpoint.col, 5);
+  assert.notEqual(api.getAnimationSnapshot(animationBoard), sourceAnimationSnapshot);
+  api.renderBoard(animationBoard, entry);
+  assert.notEqual(overlaySvg.children[0].attributes.d, sectorsBeforeMove);
+
+  previewKing.dataset.square = "e4";
+  delete previewKing.dataset.lfsPvAnimationSourceSquare;
+  previewKing.getAnimations = () => [];
+  previewKingRect = { left: 437.5, top: 437.5, width: 25, height: 25 };
+  previewRook.dataset.lfsPvAnimationSourceSquare = "a8";
+  previewRook.getAnimations = () => [{ playState: "running" }];
+  previewRookRect = { left: 37.5, top: 37.5, width: 25, height: 25 };
+  api.renderBoard(animationBoard, entry);
+  assert.equal(overlaySvg.children.length, 0);
+  const rookSourceSnapshot = api.getAnimationSnapshot(animationBoard);
+  previewRookRect = { ...previewRookRect, left: 437.5 };
+  assert.equal(api.readPosition(animationBoard).position[0][4], "bR");
+  assert.notEqual(api.getAnimationSnapshot(animationBoard), rookSourceSnapshot);
+  api.renderBoard(animationBoard, entry);
+  assert.ok(overlaySvg.children.length > 0);
+
   const position = Array.from({ length: 8 }, () => Array(8).fill(""));
   const king = { row: 4, col: 4, color: "w" };
   position[4][4] = "wK";
@@ -2559,6 +2633,7 @@ ${contentMarker}`));
           pvTesting.syncPvLineSliders();
           const slider = box.querySelector('input');
           pvTesting.previewPvMove(slider, 0);
+          await new Promise(resolve => requestAnimationFrame(resolve));
           const preview = document.querySelector('#lfs-pv-preview');
           const parsed = testing.readPosition(preview);
           const paint = element => {

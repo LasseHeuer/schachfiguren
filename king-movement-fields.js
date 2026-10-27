@@ -24,29 +24,69 @@
       : square;
   }
 
-  function getLogicalSquareAtPoint(board, x, y, blackOrientation) {
-    const boardRect = board.getBoundingClientRect();
+  function getLogicalSquareAtPoint(board, x, y, blackOrientation, boardRect = board.getBoundingClientRect()) {
     if (!boardRect.width || !boardRect.height) return null;
+    // Flooring each normalized axis selects the nearest center on this uniform grid.
     const screenCol = Math.floor(((x - boardRect.left) / boardRect.width) * 8);
     const screenRow = Math.floor(((y - boardRect.top) / boardRect.height) * 8);
     if (!isInside(screenRow, screenCol)) return null;
     return logicalToScreen({ row: screenRow, col: screenCol }, blackOrientation);
   }
 
-  function getLogicalSquare(element, board, blackOrientation) {
+  function parseSquare(key) {
+    const match = /^([a-h])([1-8])$/.exec(key?.toLowerCase() ?? "");
+    return match ? { row: 8 - Number(match[2]), col: match[1].charCodeAt(0) - 97 } : null;
+  }
+
+  function getPreviewAnimationState(element) {
+    if (!element.dataset.lfsPvAnimationSourceSquare) return null;
+    const animations = element.getAnimations?.() ?? [];
+    if (animations.some(animation => animation.playState === "running")) return "running";
+    return animations.some(animation => animation.playState === "pending") ? "pending" : null;
+  }
+
+  function getLogicalSquare(element, board, blackOrientation, animationState = getPreviewAnimationState(element), boardRect = null) {
     const key = (globalThis.LichessMoveAnimation?.getDestinationKey(element)
-      ?? element.dataset.lfsMoveKey ?? element.dataset.key)?.toLowerCase();
-    if (key && /^[a-h][1-8]$/.test(key)) {
-      return { row: 8 - Number(key[1]), col: key.charCodeAt(0) - 97 };
+      ?? element.dataset.lfsMoveKey ?? element.dataset.key ?? element.dataset.square)?.toLowerCase();
+    const target = parseSquare(key);
+    if (target && animationState === "pending") {
+      return parseSquare(element.dataset.lfsPvAnimationSourceSquare) ?? target;
     }
+    if (target && animationState === "running") {
+      const rect = element.getBoundingClientRect();
+      const square = getLogicalSquareAtPoint(board, rect.left + rect.width / 2, rect.top + rect.height / 2, blackOrientation, boardRect ?? undefined);
+      if (square) return square;
+    }
+    if (target) return target;
     const rect = element.getBoundingClientRect();
-    return getLogicalSquareAtPoint(board, rect.left + rect.width / 2, rect.top + rect.height / 2, blackOrientation);
+    return getLogicalSquareAtPoint(board, rect.left + rect.width / 2, rect.top + rect.height / 2, blackOrientation, boardRect ?? undefined);
+  }
+
+  function getAnimationSnapshot(board) {
+    const moving = [];
+    for (const element of board.querySelectorAll(":scope > piece[data-lfs-pv-animation-source-square]")) {
+      const animationState = getPreviewAnimationState(element);
+      if (animationState) moving.push({ element, animationState });
+    }
+    if (!moving.length) return null;
+
+    const blackOrientation = isBlackOrientation(board);
+    const boardRect = board.getBoundingClientRect();
+    const positions = [];
+    for (const { element, animationState } of moving) {
+      const square = getLogicalSquare(element, board, blackOrientation, animationState, boardRect);
+      if (square) positions.push(`${element.dataset.piece}:${square.row},${square.col}`);
+    }
+    return positions.length ? positions.join("|") : null;
   }
 
   function readPosition(board) {
     if (!board.closest(".is2d")) return null;
     const blackOrientation = isBlackOrientation(board);
+    const boardRect = board.getBoundingClientRect();
+    const isCandidatePreview = board.id === "lfs-pv-preview";
     const position = Array.from({ length: 8 }, () => Array(8).fill(""));
+    const occupants = Array.from({ length: 8 }, () => Array(8).fill(null));
     const kings = [];
     let complete = true;
     const preview = globalThis.LichessThreatCoding?.getInteractionPreview(board);
@@ -64,12 +104,13 @@
         continue;
       }
       if (preview && type !== "king") continue;
+      const animationState = getPreviewAnimationState(element);
       let square;
       if (preview) {
         const row = preview.position.findIndex(rank => rank.includes(`${side}K`));
         square = row < 0 ? null : { row, col: preview.position[row].indexOf(`${side}K`) };
       } else {
-        square = getLogicalSquare(element, board, blackOrientation);
+        square = getLogicalSquare(element, board, blackOrientation, animationState, boardRect);
       }
       const positioned = square && isInside(square.row, square.col);
       if (type === "king") {
@@ -86,10 +127,21 @@
       }
       if (preview) continue;
       if (position[square.row][square.col]) {
-        complete = false;
+        if (!isCandidatePreview) {
+          complete = false;
+          continue;
+        }
+        const previous = occupants[square.row][square.col];
+        const replace = type === "king"
+          || (previous.type !== "king" && previous.animating && !animationState);
+        if (replace) {
+          position[square.row][square.col] = side + pieceCodes[type];
+          occupants[square.row][square.col] = { type, animating: Boolean(animationState) };
+        }
         continue;
       }
       position[square.row][square.col] = side + pieceCodes[type];
+      occupants[square.row][square.col] = { type, animating: Boolean(animationState) };
     }
 
     return { position: preview?.position ?? position, kings, blackOrientation, complete };
@@ -125,26 +177,35 @@
     return true;
   }
 
-  function isSquareAttacked(position, target, attackerColor) {
+  function getAttackers(position, attackerColor) {
+    const attackers = [];
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
         const piece = position[row][col];
-        if (piece?.[0] !== attackerColor) continue;
-        if (attacksSquare(position, piece, { row, col }, target)) return true;
+        if (piece?.[0] === attackerColor) attackers.push({ piece, source: { row, col } });
       }
+    }
+    return attackers;
+  }
+
+  function isSquareAttacked(position, target, attackerColor, attackers = null) {
+    for (const { piece, source } of attackers ?? getAttackers(position, attackerColor)) {
+      if (attacksSquare(position, piece, source, target)) return true;
     }
     return false;
   }
 
-  function getDestinationState(position, king, target) {
+  function getDestinationState(position, king, target, nextPosition = null, attackers = null) {
     if (!isInside(target.row, target.col)) return "edge";
     const occupant = position[target.row][target.col];
     if (occupant) return "piece";
 
-    const nextPosition = position.map(row => [...row]);
-    nextPosition[king.row][king.col] = "";
-    nextPosition[target.row][target.col] = `${king.color}K`;
-    return isSquareAttacked(nextPosition, target, king.color === "w" ? "b" : "w") ? "threat" : "open";
+    const candidatePosition = nextPosition ?? position.map(row => [...row]);
+    if (!nextPosition) candidatePosition[king.row][king.col] = "";
+    candidatePosition[target.row][target.col] = `${king.color}K`;
+    const attacked = isSquareAttacked(candidatePosition, target, king.color === "w" ? "b" : "w", attackers);
+    if (nextPosition) candidatePosition[target.row][target.col] = "";
+    return attacked ? "threat" : "open";
   }
 
   function createSvgElement(name, attributes = {}) {
@@ -196,11 +257,15 @@
   function fillOverlay(svg, position, king, blackOrientation) {
     const paths = [];
     const orientationSign = blackOrientation ? -1 : 1;
+    const candidatePosition = position.map(row => [...row]);
+    candidatePosition[king.row][king.col] = "";
+    const attackers = getAttackers(position, king.color === "w" ? "b" : "w");
     for (let rowOffset = -1; rowOffset <= 1; rowOffset++) {
       for (let colOffset = -1; colOffset <= 1; colOffset++) {
         if (!rowOffset && !colOffset) continue;
         const target = { row: king.row + rowOffset, col: king.col + colOffset };
-        appendCell(paths, rowOffset * orientationSign, colOffset * orientationSign, getDestinationState(position, king, target));
+        appendCell(paths, rowOffset * orientationSign, colOffset * orientationSign,
+          getDestinationState(position, king, target, candidatePosition, attackers));
       }
     }
     const pathData = paths.join("");
@@ -274,13 +339,27 @@
     }
   }
 
-  function scheduleRender(board) {
-    const entry = observedBoards.get(board);
-    if (!entry || entry.frame) return;
+  function scheduleBoardFrame(board, entry) {
+    if (entry.frame) return;
     entry.frame = requestAnimationFrame(() => {
       entry.frame = 0;
-      renderBoard(board, entry);
+      const animationSnapshot = getAnimationSnapshot(board);
+      if (entry.dirty || animationSnapshot !== entry.animationSnapshot) {
+        entry.dirty = false;
+        entry.animationSnapshot = animationSnapshot;
+        renderBoard(board, entry);
+      }
+      if (animationSnapshot && settings?.enabled && settings.kingMovementFieldsEnabled) {
+        scheduleBoardFrame(board, entry);
+      }
     });
+  }
+
+  function scheduleRender(board) {
+    const entry = observedBoards.get(board);
+    if (!entry) return;
+    entry.dirty = true;
+    scheduleBoardFrame(board, entry);
   }
 
   function isRelevantMutation(mutation) {
@@ -309,7 +388,7 @@
 
     for (const board of boards) {
       if (observedBoards.has(board)) continue;
-      const entry = { overlays: new Map(), frame: 0, observer: null, orientationObserver: null, resizeObserver: null };
+      const entry = { overlays: new Map(), frame: 0, dirty: false, animationSnapshot: null, observer: null, orientationObserver: null, resizeObserver: null };
       entry.observer = new MutationObserver(mutations => {
         if (mutations.some(isRelevantMutation)) scheduleRender(board);
       });

@@ -708,7 +708,7 @@
     slider.style.setProperty("--lfs-pv-progress", `${moves.length > 1 ? index * 100 / (moves.length - 1) : 0}%`);
     pvPreviewSlider = slider;
     pvPreviewFen = row.closest(".pv_box")?.dataset.fen;
-    syncPvPreview();
+    schedulePvPreviewSync();
   }
 
   function previewPvMoveAtPointer(slider, clientX) {
@@ -800,6 +800,8 @@
   }
 
   function clearPvPreview() {
+    cancelAnimationFrame(pvPreviewFrame);
+    pvPreviewFrame = 0;
     pvPreview?.remove();
     pvPreviewBoard?.removeAttribute("data-lfs-pv-preview");
     pvPreview = null;
@@ -904,12 +906,29 @@
 
     const boardRect = board.getBoundingClientRect();
     const existingPieces = [...pvPreview.querySelectorAll(":scope > piece.lfs-pv-piece")];
+    const squareAtPoint = (x, y) => {
+      if (!boardRect.width || !boardRect.height) return null;
+      const screenCol = Math.max(0, Math.min(7, Math.floor(((x - boardRect.left) / boardRect.width) * 8)));
+      const screenRow = Math.max(0, Math.min(7, Math.floor(((y - boardRect.top) / boardRect.height) * 8)));
+      const row = blackOrientation ? 7 - screenRow : screenRow;
+      const col = blackOrientation ? 7 - screenCol : screenCol;
+      return `${String.fromCharCode(97 + col)}${8 - row}`;
+    };
     const origins = new Map(existingPieces.map(piece => {
+      if (!piece.dataset.lfsPvAnimationSourceSquare) {
+        return [piece, {
+          left: Number.parseFloat(piece.style.left) || 0,
+          top: Number.parseFloat(piece.style.top) || 0,
+          square: piece.dataset.square
+        }];
+      }
       const rect = piece.getBoundingClientRect();
       for (const animation of piece.getAnimations()) animation.cancel();
+      piece.removeAttribute("data-lfs-pv-animation-source-square");
       return [piece, {
         left: boardRect.width ? (rect.left - boardRect.left) / boardRect.width * 100 : 0,
-        top: boardRect.height ? (rect.top - boardRect.top) / boardRect.height * 100 : 0
+        top: boardRect.height ? (rect.top - boardRect.top) / boardRect.height * 100 : 0,
+        square: squareAtPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
       }];
     }));
     const usedPieces = new Set();
@@ -960,11 +979,14 @@
     for (const target of targets) {
       const piece = reusedPieces.get(target) ?? document.createElement("piece");
       const origin = origins.get(piece);
-      piece.className = `lfs-pv-piece ${target.color} ${target.role}`;
-      piece.dataset.piece = target.piece;
-      piece.dataset.square = target.square;
-      piece.style.left = `${target.left}%`;
-      piece.style.top = `${target.top}%`;
+      const className = `lfs-pv-piece ${target.color} ${target.role}`;
+      const left = `${target.left}%`;
+      const top = `${target.top}%`;
+      if (piece.className !== className) piece.className = className;
+      if (piece.dataset.piece !== target.piece) piece.dataset.piece = target.piece;
+      if (piece.dataset.square !== target.square) piece.dataset.square = target.square;
+      if (piece.style.left !== left) piece.style.left = left;
+      if (piece.style.top !== top) piece.style.top = top;
       if (shouldAnimate && origin && baseDuration > 0) {
         const moveX = target.left - origin.left;
         const moveY = target.top - origin.top;
@@ -974,11 +996,19 @@
           const distanceFactor = pvPreviewStepDuration == null && settings.moveAnimationTimeDistance ? settings.moveAnimationDistanceFactor : 0;
           const duration = baseDuration + distance * distanceFactor * baseDuration;
           const easing = `cubic-bezier(${settings.moveAnimationCurve.map((value, index) => (index % 2 ? value / -90 : value)).join(", ")})`;
+          if (origin.square) {
+            piece.dataset.lfsPvAnimationSourceSquare = origin.square;
+          }
           const animation = piece.animate([
             { left: `${origin.left}%`, top: `${origin.top}%` },
             { left: `${target.left}%`, top: `${target.top}%` }
           ], { duration, easing, fill: "forwards" });
-          animation.onfinish = () => animation.cancel();
+          animation.onfinish = () => {
+            if (piece.dataset.lfsPvAnimationSourceSquare === origin.square) {
+              piece.removeAttribute("data-lfs-pv-animation-source-square");
+            }
+            animation.cancel();
+          };
         }
       }
       fragment.append(piece);
