@@ -9,7 +9,7 @@
   const pieceTypeNames = ["pawn", "knight", "bishop", "rook", "queen", "king"];
   const pieceCodes = { pawn: "P", knight: "N", bishop: "B", rook: "R", queen: "Q", king: "K" };
   const pieceValues = { P: 1, N: 3, B: 3, R: 5, Q: 9, K: 100 };
-  const boardSelector = "body[data-board] .cg-wrap cg-board, .mini-game cg-board";
+  const boardSelector = "body[data-board] .cg-wrap cg-board, .mini-game cg-board, cg-board#lfs-pv-preview";
   const selectedSquareSelector = "body[data-board] .cg-wrap cg-board > square.selected, .mini-game cg-board > square.selected";
   // Standard blend functions operate on encoded sRGB channels in [0, 1].
   const rgbBlendModes = Object.freeze({
@@ -276,9 +276,27 @@
       : square;
   }
 
-  function getLogicalSquare(element, board, blackOrientation) {
+  function getPreviewAnimationState(element) {
+    if (!element.dataset?.lfsPvAnimationSourceSquare) return null;
+    const animations = element.getAnimations?.() ?? [];
+    if (animations.some(animation => animation.playState === "running")) return "running";
+    return animations.some(animation => animation.playState === "pending") ? "pending" : null;
+  }
+
+  function getLogicalSquare(element, board, blackOrientation, boardRect = null, animationState = getPreviewAnimationState(element)) {
     // Chessground keeps unused square nodes with inline display:none for later reuse.
     if (element.style?.display === "none") return null;
+    if (animationState === "pending") {
+      const source = element.dataset.lfsPvAnimationSourceSquare?.toLowerCase();
+      if (source && /^[a-h][1-8]$/.test(source)) {
+        return { row: 8 - Number(source[1]), col: source.charCodeAt(0) - 97 };
+      }
+    }
+    if (animationState === "running") {
+      const rect = element.getBoundingClientRect();
+      const square = getLogicalSquareAtPoint(board, rect.left + rect.width / 2, rect.top + rect.height / 2, blackOrientation, boardRect ?? undefined);
+      if (square) return square;
+    }
     const key = (globalThis.LichessMoveAnimation?.getDestinationKey(element)
       ?? (element.classList.contains("anim") ? element.getAttribute("data-lfs-move-key") : null))?.toLowerCase();
     if (key && /^[a-h][1-8]$/.test(key)) {
@@ -287,7 +305,7 @@
 
     const rect = element.getBoundingClientRect();
     if (rect.width && rect.height) {
-      return getLogicalSquareAtPoint(board, rect.left + rect.width / 2, rect.top + rect.height / 2, blackOrientation);
+      return getLogicalSquareAtPoint(board, rect.left + rect.width / 2, rect.top + rect.height / 2, blackOrientation, boardRect ?? undefined);
     }
     const datasetKey = element.dataset?.key?.toLowerCase();
     if (datasetKey && /^[a-h][1-8]$/.test(datasetKey)) {
@@ -303,8 +321,7 @@
       : { row: screenRow, col: screenCol };
   }
 
-  function getLogicalSquareAtPoint(board, x, y, blackOrientation) {
-    const boardRect = board.getBoundingClientRect();
+  function getLogicalSquareAtPoint(board, x, y, blackOrientation, boardRect = board.getBoundingClientRect()) {
     if (boardRect.width <= 0 || boardRect.height <= 0) return null;
     const relativeX = x - boardRect.left;
     const relativeY = y - boardRect.top;
@@ -359,16 +376,32 @@
   function readBoard(board) {
     if (!board.closest(".is2d")) return null;
     const blackOrientation = isBlackOrientation(board);
+    const boardRect = board.getBoundingClientRect();
+    const isCandidatePreview = board.id === "lfs-pv-preview";
     const position = Array.from({ length: 8 }, () => Array(8).fill(""));
+    const occupants = Array.from({ length: 8 }, () => Array(8).fill(null));
     let pieceCount = 0;
 
     for (const element of board.querySelectorAll(":scope > piece")) {
       if (element.classList.contains("ghost") || element.classList.contains("fading")) continue;
       const side = element.classList.contains("white") ? "w" : element.classList.contains("black") ? "b" : "";
       const type = pieceTypeNames.find(name => element.classList.contains(name));
-      const square = getLogicalSquare(element, board, blackOrientation);
-      if (!side || !type || !square || !isInside(square.row, square.col) || position[square.row][square.col]) return null;
+      const animationState = getPreviewAnimationState(element);
+      const square = getLogicalSquare(element, board, blackOrientation, boardRect, animationState);
+      if (!side || !type || !square || !isInside(square.row, square.col)) return null;
+      if (position[square.row][square.col]) {
+        if (!isCandidatePreview) return null;
+        const previous = occupants[square.row][square.col];
+        const replace = type === "king"
+          || (previous.type !== "king" && previous.animating && !animationState);
+        if (replace) {
+          position[square.row][square.col] = side + pieceCodes[type];
+          occupants[square.row][square.col] = { type, animating: Boolean(animationState) };
+        }
+        continue;
+      }
       position[square.row][square.col] = side + pieceCodes[type];
+      occupants[square.row][square.col] = { type, animating: Boolean(animationState) };
       pieceCount++;
     }
 
@@ -819,6 +852,9 @@
   function initialize() {
     if (!interactionListenersAdded) {
       document.addEventListener("lfs-hover-preview-change", event => scheduleRender(event.detail));
+      document.addEventListener("lfs-pv-animation-position", event => {
+        if (event.detail?.id === "lfs-pv-preview") scheduleRender(event.detail);
+      });
       document.addEventListener("pointerdown", event => {
         lastPointerPosition = { x: event.clientX, y: event.clientY };
         if (event.button !== 0 || typeof event.target?.closest !== "function") return;

@@ -1,5 +1,5 @@
 (() => {
-  const boardSelector = "body[data-board] .cg-wrap cg-board, .mini-game cg-board";
+  const boardSelector = "body[data-board] .cg-wrap cg-board, .mini-game cg-board, cg-board#lfs-pv-preview";
   const svgNamespace = "http://www.w3.org/2000/svg";
   const pieceTypes = ["pawn", "knight", "bishop", "rook", "queen", "king"];
   const pieceCodes = { pawn: "P", knight: "N", bishop: "B", rook: "R", queen: "Q", king: "K" };
@@ -9,6 +9,9 @@
   let documentObserver = null;
 
   document.addEventListener("lfs-hover-preview-change", event => scheduleRender(event.detail));
+  document.addEventListener("lfs-pv-animation-position", event => {
+    if (event.detail?.id === "lfs-pv-preview") scheduleRender(event.detail);
+  });
 
   function isInside(row, col) {
     return row >= 0 && row < 8 && col >= 0 && col < 8;
@@ -60,24 +63,6 @@
     if (target) return target;
     const rect = element.getBoundingClientRect();
     return getLogicalSquareAtPoint(board, rect.left + rect.width / 2, rect.top + rect.height / 2, blackOrientation, boardRect ?? undefined);
-  }
-
-  function getAnimationSnapshot(board) {
-    const moving = [];
-    for (const element of board.querySelectorAll(":scope > piece[data-lfs-pv-animation-source-square]")) {
-      const animationState = getPreviewAnimationState(element);
-      if (animationState) moving.push({ element, animationState });
-    }
-    if (!moving.length) return null;
-
-    const blackOrientation = isBlackOrientation(board);
-    const boardRect = board.getBoundingClientRect();
-    const positions = [];
-    for (const { element, animationState } of moving) {
-      const square = getLogicalSquare(element, board, blackOrientation, animationState, boardRect);
-      if (square) positions.push(`${element.dataset.piece}:${square.row},${square.col}`);
-    }
-    return positions.length ? positions.join("|") : null;
   }
 
   function readPosition(board) {
@@ -339,27 +324,13 @@
     }
   }
 
-  function scheduleBoardFrame(board, entry) {
-    if (entry.frame) return;
-    entry.frame = requestAnimationFrame(() => {
-      entry.frame = 0;
-      const animationSnapshot = getAnimationSnapshot(board);
-      if (entry.dirty || animationSnapshot !== entry.animationSnapshot) {
-        entry.dirty = false;
-        entry.animationSnapshot = animationSnapshot;
-        renderBoard(board, entry);
-      }
-      if (animationSnapshot && settings?.enabled && settings.kingMovementFieldsEnabled) {
-        scheduleBoardFrame(board, entry);
-      }
-    });
-  }
-
   function scheduleRender(board) {
     const entry = observedBoards.get(board);
-    if (!entry) return;
-    entry.dirty = true;
-    scheduleBoardFrame(board, entry);
+    if (!entry || entry.frame) return;
+    entry.frame = requestAnimationFrame(() => {
+      entry.frame = 0;
+      renderBoard(board, entry);
+    });
   }
 
   function isRelevantMutation(mutation) {
@@ -388,7 +359,7 @@
 
     for (const board of boards) {
       if (observedBoards.has(board)) continue;
-      const entry = { overlays: new Map(), frame: 0, dirty: false, animationSnapshot: null, observer: null, orientationObserver: null, resizeObserver: null };
+      const entry = { overlays: new Map(), frame: 0, observer: null, orientationObserver: null, resizeObserver: null };
       entry.observer = new MutationObserver(mutations => {
         if (mutations.some(isRelevantMutation)) scheduleRender(board);
       });

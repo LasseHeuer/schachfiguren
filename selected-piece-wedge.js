@@ -88,6 +88,9 @@
   }
 
   document.addEventListener("lfs-hover-preview-change", event => scheduleRender(event.detail));
+  document.addEventListener("lfs-pv-animation-position", event => {
+    if (event.detail?.id === "lfs-pv-preview") scheduleRender(event.detail);
+  });
 
   function updatePointerPosition(event) {
     lastPointerPosition = { x: event.clientX, y: event.clientY };
@@ -219,7 +222,20 @@
     return { color, type, element };
   }
 
-  function getPieceScreenSquare(element, board, blackOrientation, boardRect) {
+  function getPreviewAnimationState(element) {
+    if (!element.dataset?.lfsPvAnimationSourceSquare) return null;
+    const animations = element.getAnimations?.() ?? [];
+    if (animations.some(animation => animation.playState === "running")) return "running";
+    return animations.some(animation => animation.playState === "pending") ? "pending" : null;
+  }
+
+  function getPieceScreenSquare(element, board, blackOrientation, boardRect, animationState = getPreviewAnimationState(element)) {
+    if (animationState === "pending") {
+      const source = element.dataset.lfsPvAnimationSourceSquare?.toLowerCase();
+      const match = /^([a-h])([1-8])$/.exec(source ?? "");
+      if (match) return logicalToScreen({ row: 8 - Number(match[2]), col: match[1].charCodeAt(0) - 97 }, blackOrientation);
+    }
+    if (animationState === "running") return getScreenSquare(element, board, boardRect);
     const moveKey = (globalThis.LichessMoveAnimation?.getDestinationKey(element)
       ?? (element.classList.contains("anim") ? element.getAttribute("data-lfs-move-key") : null))?.toLowerCase();
     const match = /^([a-h])([1-8])$/.exec(moveKey ?? "");
@@ -232,14 +248,29 @@
   function readPosition(board) {
     const blackOrientation = board.closest(".cg-wrap")?.classList.contains("orientation-black") ?? false;
     const boardRect = board.getBoundingClientRect();
+    const isCandidatePreview = board.id === "lfs-pv-preview";
     const position = Array.from({ length: 8 }, () => Array(8).fill(null));
+    const occupants = Array.from({ length: 8 }, () => Array(8).fill(null));
 
     for (const element of board.querySelectorAll(":scope > piece")) {
       if (element.classList.contains("ghost") || element.classList.contains("fading")) continue;
       const piece = getPiece(element);
-      const square = getPieceScreenSquare(element, board, blackOrientation, boardRect);
-      if (!piece || !square || position[square.row][square.col]) return null;
+      const animationState = getPreviewAnimationState(element);
+      const square = getPieceScreenSquare(element, board, blackOrientation, boardRect, animationState);
+      if (!piece || !square) return null;
+      if (position[square.row][square.col]) {
+        if (!isCandidatePreview) return null;
+        const previous = occupants[square.row][square.col];
+        const replace = piece.type === "king"
+          || (previous.type !== "king" && previous.animating && !animationState);
+        if (replace) {
+          position[square.row][square.col] = piece;
+          occupants[square.row][square.col] = { type: piece.type, animating: Boolean(animationState) };
+        }
+        continue;
+      }
       position[square.row][square.col] = piece;
+      occupants[square.row][square.col] = { type: piece.type, animating: Boolean(animationState) };
     }
 
     const selected = [...board.querySelectorAll(":scope > square.selected")]

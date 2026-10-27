@@ -72,6 +72,8 @@
   let normalRoundBoardHeight = 0;
   let normalRoundFrame;
   let pvPreviewFrame;
+  let pvAnimationPositionFrame;
+  let pvAnimationPositionSnapshot = null;
   let pvPreview;
   let pvPreviewBoard;
   let pvPreviewSlider;
@@ -675,6 +677,70 @@
     pvPreviewFrame = requestAnimationFrame(syncPvPreview);
   }
 
+  function getPvAnimationPositionSnapshot(board) {
+    const moving = [];
+    for (const piece of board.querySelectorAll(":scope > piece[data-lfs-pv-animation-source-square]")) {
+      const animations = piece.getAnimations();
+      const state = animations.some(animation => animation.playState === "running")
+        ? "running"
+        : animations.some(animation => animation.playState === "pending") ? "pending" : null;
+      if (state) moving.push({ piece, state });
+    }
+    if (!moving.length) return null;
+
+    const boardRect = board.getBoundingClientRect();
+    const blackOrientation = board.closest(".cg-wrap")?.classList.contains("orientation-black") ?? false;
+    const positions = [];
+    for (const { piece, state } of moving) {
+      let row;
+      let col;
+      if (state === "running" && boardRect.width && boardRect.height) {
+        const rect = piece.getBoundingClientRect();
+        const screenCol = Math.max(0, Math.min(7, Math.floor(((rect.left + rect.width / 2 - boardRect.left) / boardRect.width) * 8)));
+        const screenRow = Math.max(0, Math.min(7, Math.floor(((rect.top + rect.height / 2 - boardRect.top) / boardRect.height) * 8)));
+        row = blackOrientation ? 7 - screenRow : screenRow;
+        col = blackOrientation ? 7 - screenCol : screenCol;
+      } else {
+        const square = (state === "pending" ? piece.dataset.lfsPvAnimationSourceSquare : piece.dataset.square)?.toLowerCase();
+        if (!/^[a-h][1-8]$/.test(square ?? "")) continue;
+        row = 8 - Number(square[1]);
+        col = square.charCodeAt(0) - 97;
+      }
+      positions.push(`${piece.dataset.piece}:${row},${col}`);
+    }
+    return positions.length ? positions.join("|") : null;
+  }
+
+  function hasPvAnimationAnalysis() {
+    return settings.enabled && settings.analysisEnabled && (
+      settings.kingMovementFieldsEnabled || settings.threatColoringEnabled || settings.selectedPieceWedgeEnabled
+      || settings.threatenedPieceOutlineEnabled || settings.defenseCirclesEnabled || settings.threatCenterOutlineEnabled
+      || settings.attackHighlightEnabled || settings.defenseHighlightEnabled || settings.highlightCascadesEnabled
+      || settings.highlightCascadeLinesEnabled
+    );
+  }
+
+  function schedulePvAnimationPositionTracking() {
+    if (pvAnimationPositionFrame || !pvPreview || !hasPvAnimationAnalysis()) return;
+    const board = pvPreview;
+    pvAnimationPositionFrame = requestAnimationFrame(() => {
+      pvAnimationPositionFrame = 0;
+      if (board !== pvPreview || !board.isConnected) return;
+      const snapshot = getPvAnimationPositionSnapshot(board);
+      if (snapshot !== pvAnimationPositionSnapshot) {
+        pvAnimationPositionSnapshot = snapshot;
+        document.dispatchEvent(new CustomEvent("lfs-pv-animation-position", { detail: board }));
+      }
+      if (snapshot && hasPvAnimationAnalysis()) schedulePvAnimationPositionTracking();
+    });
+  }
+
+  function resetPvAnimationPositionTracking() {
+    cancelAnimationFrame(pvAnimationPositionFrame);
+    pvAnimationPositionFrame = 0;
+    pvAnimationPositionSnapshot = null;
+  }
+
   function previewPvMove(slider, index, moves = [...(slider._lfsPvRow?.querySelectorAll(":scope > .pv-san") ?? [])]) {
     const row = slider._lfsPvRow;
     const move = moves[index];
@@ -802,6 +868,7 @@
   function clearPvPreview() {
     cancelAnimationFrame(pvPreviewFrame);
     pvPreviewFrame = 0;
+    resetPvAnimationPositionTracking();
     pvPreview?.remove();
     pvPreviewBoard?.removeAttribute("data-lfs-pv-preview");
     pvPreview = null;
@@ -844,6 +911,7 @@
 
     const sameBoard = pvPreviewBoard === board;
     if (!sameBoard) {
+      resetPvAnimationPositionTracking();
       pvPreview?.remove();
       pvPreview = null;
       pvPreviewBoard?.removeAttribute("data-lfs-pv-preview");
@@ -1020,6 +1088,7 @@
     pvPreviewSourceFen = pvPreviewFen;
     pvPreviewSourceOrientation = blackOrientation;
     pvPreviewSourceIndex = previewIndex;
+    schedulePvAnimationPositionTracking();
   }
 
   function clearZenOffset(board) {
@@ -1079,6 +1148,7 @@
     globalThis.LichessMoveAnimation?.update(settings);
 
     globalThis.LichessSelectedPieceWedge?.update(analysisSettings);
+    schedulePvAnimationPositionTracking();
 
     // 100% bevel reaches halfway along each edge; 100% rounding makes a circle.
     const bevel = settings.boardBevelPercent / 2;

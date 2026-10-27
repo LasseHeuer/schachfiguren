@@ -434,7 +434,7 @@ test("king movement fields follow preview animation distances and board orientat
   const context = vm.createContext({ document: { addEventListener() {}, createElementNS: element } });
   const source = readFileSync(join(__dirname, "king-movement-fields.js"), "utf8");
   vm.runInContext(source.replace("  globalThis.LichessKingMovementFields = {", `
-    globalThis.testing = { fillOverlay, getAnimationSnapshot, getDestinationState, readPosition, renderBoard, renderPreview, configure(value) { settings = value; } };
+    globalThis.testing = { fillOverlay, getDestinationState, readPosition, renderBoard, renderPreview, configure(value) { settings = value; } };
     globalThis.LichessKingMovementFields = {`), context);
   const api = context.testing;
   let previewKingRect = { left: 0, top: 0, width: 100, height: 100 };
@@ -484,14 +484,12 @@ test("king movement fields follow preview animation distances and board orientat
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 800 })
   };
   const entry = { overlays: new Map([[previewKing, overlay]]) };
-  const sourceAnimationSnapshot = api.getAnimationSnapshot(animationBoard);
   api.renderBoard(animationBoard, entry);
   const sectorsBeforeMove = overlaySvg.children[0].attributes.d;
   previewKingRect = { ...previewKingRect, left: 517.5 };
   const kingAfterMidpoint = api.readPosition(animationBoard).kings[0];
   assert.equal(kingAfterMidpoint.row, 4);
   assert.equal(kingAfterMidpoint.col, 5);
-  assert.notEqual(api.getAnimationSnapshot(animationBoard), sourceAnimationSnapshot);
   api.renderBoard(animationBoard, entry);
   assert.notEqual(overlaySvg.children[0].attributes.d, sectorsBeforeMove);
 
@@ -504,10 +502,8 @@ test("king movement fields follow preview animation distances and board orientat
   previewRookRect = { left: 37.5, top: 37.5, width: 25, height: 25 };
   api.renderBoard(animationBoard, entry);
   assert.equal(overlaySvg.children.length, 0);
-  const rookSourceSnapshot = api.getAnimationSnapshot(animationBoard);
   previewRookRect = { ...previewRookRect, left: 437.5 };
   assert.equal(api.readPosition(animationBoard).position[0][4], "bR");
-  assert.notEqual(api.getAnimationSnapshot(animationBoard), rookSourceSnapshot);
   api.renderBoard(animationBoard, entry);
   assert.ok(overlaySvg.children.length > 0);
 
@@ -2601,11 +2597,12 @@ ${marker}`);
     }
     assert.equal(await evaluate("Boolean(window.testing)"), true, "the browser loaded the production renderer");
     await t.test("candidate sliders expose both colors to board analysis and render preview markers", async () => {
+      let liveAnimationResult = null;
       const contentSource = readFileSync(join(root, "content.js"), "utf8");
       const contentMarker = "  chrome.runtime.onMessage.addListener";
       assert.ok(contentSource.includes(contentMarker));
       await evaluate(contentSource.replace(contentMarker, `
-        globalThis.pvTesting = { syncPvLineSliders, previewPvMove, clearPvPreview,
+        globalThis.pvTesting = { syncPvLineSliders, previewPvMove, clearPvPreview, schedulePvAnimationPositionTracking,
           configure(value) { settings = normalize(value); } };
         return;
 ${contentMarker}`));
@@ -2622,14 +2619,17 @@ ${contentMarker}`));
           wrapper.style.width = wrapper.style.height = '${size}px';
           const box = document.createElement('div');
           box.className = 'pv_box'; box.dataset.fen = 'base';
-          box.innerHTML = '<div class="pv"><span class="pv-san" data-board="q6k/8/8/8/8/8/8/R6K w - - 0 1|a2a1">Ra1</span></div>';
+          box.innerHTML = '<div class="pv"><span class="pv-san" data-board="q6k/8/8/8/8/8/8/R6K w - - 0 1|a2a1">Ra1</span><span class="pv-san" data-board="q6k/8/8/8/8/8/8/4R2K b - - 1 1|a1e1">Re1</span></div>';
           document.body.append(box);
           globalThis.LichessLastMoveLine = { createPreviewLine() { return null; } };
           const options = LichessSettings.normalize({ enabled: true, disableAnimations: true, pieceSet: 'cage',
             threatenedPieceOutlineEnabled: true, defenseCirclesEnabled: true,
-            threatCenterOutlineEnabled: false, selectedPieceWedgeEnabled: true,
-            selectedPieceWedgeOnlySelected: false });
+            threatCenterOutlineEnabled: false, kingMovementFieldsEnabled: false, selectedPieceWedgeEnabled: true,
+            selectedPieceWedgeOnlySelected: false, threatColoringEnabled: true,
+            threatAttackDisplayMode: 'lines', threatDefenseDisplayMode: 'lines' });
           testing.configure(options); pvTesting.configure(options);
+          LichessThreatCoding.update(options);
+          LichessKingMovementFields.update(options);
           pvTesting.syncPvLineSliders();
           const slider = box.querySelector('input');
           pvTesting.previewPvMove(slider, 0);
@@ -2652,6 +2652,34 @@ ${contentMarker}`));
           });
           testing.observeBoard(preview);
           await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          let liveAnimation = null;
+          if ('${orientation}' === 'white' && ${size} === 512) {
+            const rook = preview.querySelector(':scope > piece.white.rook');
+            const previewRect = preview.getBoundingClientRect();
+            const cellWidth = previewRect.width / 8;
+            const cellHeight = previewRect.height / 8;
+            let screenCol = 0;
+            Object.defineProperty(rook, 'getBoundingClientRect', { configurable: true, value: () => ({
+              left: previewRect.left + screenCol * cellWidth,
+              top: previewRect.top + 7 * cellHeight,
+              width: cellWidth,
+              height: cellHeight
+            }) });
+            Object.defineProperty(rook, 'getAnimations', { configurable: true, value: () => [{ playState: 'running' }] });
+            rook.dataset.lfsPvAnimationSourceSquare = 'a1';
+            pvTesting.schedulePvAnimationPositionTracking();
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            const beforeThreat = preview.style.getPropertyValue('--lfs-threat-background');
+            const paths = () => [...preview.querySelectorAll('svg.lfs-threat-arc path, svg.lfs-selected-piece-wedge path')]
+              .map(path => path.getAttribute('d')).join('|');
+            const beforePaths = paths();
+            screenCol = 4;
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+            liveAnimation = {
+              threatUpdated: preview.style.getPropertyValue('--lfs-threat-background') !== beforeThreat,
+              linesAndWedgesUpdated: paths() !== beforePaths
+            };
+          }
           const output = {
             matchingColors,
             duplicateFigures: preview.querySelectorAll(':scope > span.lfs-pv-piece').length,
@@ -2659,7 +2687,8 @@ ${contentMarker}`));
               piece.classList.contains('white') ? 'white' : piece.classList.contains('black') ? 'black' : 'unknown'),
             rook: parsed?.position[${orientation === "black" ? 0 : 7}][${orientation === "black" ? 7 : 0}]?.type,
             queen: parsed?.position[${orientation === "black" ? 7 : 0}][${orientation === "black" ? 7 : 0}]?.type,
-            markers: preview.querySelectorAll('svg[data-lfs-board-overlay] path').length
+            markers: preview.querySelectorAll('svg[data-lfs-board-overlay] path').length,
+            liveAnimation
           };
           pvTesting.clearPvPreview(); box.remove();
           document.documentElement.style.cssText = originalRootStyle;
@@ -2674,7 +2703,9 @@ ${contentMarker}`));
         assert.deepEqual(result.matchingColors, [true, true], "both player colors must use the normal board rendering");
         assert.equal(result.duplicateFigures, 0, "preview pieces must not be drawn twice");
         assert.ok(result.markers > 0, "the candidate position must have visible analysis paths");
+        if (result.liveAnimation) liveAnimationResult = result.liveAnimation;
       }
+      assert.deepEqual(liveAnimationResult, { threatUpdated: true, linesAndWedgesUpdated: true });
       assert.deepEqual(runtimeErrors, []);
     });
     await t.test("zen clocks follow both half-board contours and shrink along their paths", async () => {
