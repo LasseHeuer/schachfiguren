@@ -93,10 +93,15 @@
   });
 
   function updatePointerPosition(event) {
-    lastPointerPosition = { x: event.clientX, y: event.clientY };
-    const eventBoard = typeof event.target?.closest === "function"
+    const clientX = event.clientX ?? event.detail?.clientX;
+    const clientY = event.clientY ?? event.detail?.clientY;
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return;
+    lastPointerPosition = { x: clientX, y: clientY };
+    const requestedBoard = event.detail?.board;
+    const hitBoard = typeof event.target?.closest === "function"
       ? event.target.closest(boardSelector)
       : null;
+    const eventBoard = requestedBoard ?? globalThis.LichessMovePreview?.getOverlayBoard(hitBoard) ?? hitBoard;
     const previousBoard = pointerOverBoard;
     pointerOverBoard = eventBoard;
     const boardsToUpdate = new Set([eventBoard, previousBoard]);
@@ -111,12 +116,12 @@
       const shouldUpdatePreview = board === eventBoard || entry.previewPieceSvg || hasDraggingPiece;
       const rect = shouldUpdatePreview ? board.getBoundingClientRect() : null;
       const insideBoard = board === eventBoard && rect.width && rect.height
-        && event.clientX >= rect.left && event.clientX < rect.right
-        && event.clientY >= rect.top && event.clientY < rect.bottom;
+        && clientX >= rect.left && clientX < rect.right
+        && clientY >= rect.top && clientY < rect.bottom;
       const nextHoveredSquare = insideBoard && rect.width && rect.height
         ? {
-          row: Math.floor((event.clientY - rect.top) * 8 / rect.height),
-          col: Math.floor((event.clientX - rect.left) * 8 / rect.width)
+          row: Math.floor((clientY - rect.top) * 8 / rect.height),
+          col: Math.floor((clientX - rect.left) * 8 / rect.width)
         }
         : null;
       if (entry.hoveredSquare?.row !== nextHoveredSquare?.row || entry.hoveredSquare?.col !== nextHoveredSquare?.col) {
@@ -126,13 +131,13 @@
       if (!insideBoard && !entry.previewPieceSvg && !hasDraggingPiece) continue;
       if (!entry.previewPieceSvg && !hasDraggingPiece && !board.querySelector(":scope > square.selected")) continue;
 
-      const preview = globalThis.LichessThreatCoding?.getInteractionPreview(board, event.clientX, event.clientY);
+      const preview = globalThis.LichessThreatCoding?.getInteractionPreview(board, clientX, clientY);
       if (preview?.isHoverPreview) {
         const now = performance.now();
         const sourceKey = `${preview.source.row},${preview.source.col}`;
         const previous = entry.previewPointerMotion;
-        const x = (event.clientX - rect.left) * 8 / rect.width;
-        const y = (event.clientY - rect.top) * 8 / rect.height;
+        const x = (clientX - rect.left) * 8 / rect.width;
+        const y = (clientY - rect.top) * 8 / rect.height;
         const elapsed = previous ? now - previous.time : 0;
         const targetKey = `${preview.source.row},${preview.source.col}:${preview.target.row},${preview.target.col}`;
         const heldTargetKey = previous && elapsed < 90 && previous.sourceKey === sourceKey
@@ -173,6 +178,7 @@
   }
 
   document.addEventListener("pointermove", updatePointerPosition, true);
+  document.addEventListener("lfs-move-preview-pointermove", updatePointerPosition);
   document.addEventListener("pointerover", event => {
     if (event.target?.closest?.(boardSelector) !== pointerOverBoard) updatePointerPosition(event);
   }, true);
@@ -248,7 +254,7 @@
   function readPosition(board) {
     const blackOrientation = board.closest(".cg-wrap")?.classList.contains("orientation-black") ?? false;
     const boardRect = board.getBoundingClientRect();
-    const isCandidatePreview = board.id === "lfs-pv-preview";
+    const isCandidatePreview = board.id === "lfs-pv-preview" || board.id === "lfs-move-preview";
     const position = Array.from({ length: 8 }, () => Array(8).fill(null));
     const occupants = Array.from({ length: 8 }, () => Array(8).fill(null));
 

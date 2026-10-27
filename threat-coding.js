@@ -9,8 +9,8 @@
   const pieceTypeNames = ["pawn", "knight", "bishop", "rook", "queen", "king"];
   const pieceCodes = { pawn: "P", knight: "N", bishop: "B", rook: "R", queen: "Q", king: "K" };
   const pieceValues = { P: 1, N: 3, B: 3, R: 5, Q: 9, K: 100 };
-  const boardSelector = "body[data-board] .cg-wrap cg-board, .mini-game cg-board, cg-board#lfs-pv-preview";
-  const selectedSquareSelector = "body[data-board] .cg-wrap cg-board > square.selected, .mini-game cg-board > square.selected";
+  const boardSelector = "body[data-board] .cg-wrap cg-board, .mini-game cg-board, cg-board#lfs-pv-preview, cg-board#lfs-move-preview";
+  const selectedSquareSelector = "body[data-board] .cg-wrap cg-board > square.selected, .mini-game cg-board > square.selected, cg-board#lfs-move-preview > square.selected";
   // Standard blend functions operate on encoded sRGB channels in [0, 1].
   const rgbBlendModes = Object.freeze({
     normal: (base, tint) => tint,
@@ -377,7 +377,7 @@
     if (!board.closest(".is2d")) return null;
     const blackOrientation = isBlackOrientation(board);
     const boardRect = board.getBoundingClientRect();
-    const isCandidatePreview = board.id === "lfs-pv-preview";
+    const isCandidatePreview = board.id === "lfs-pv-preview" || board.id === "lfs-move-preview";
     const position = Array.from({ length: 8 }, () => Array(8).fill(""));
     const occupants = Array.from({ length: 8 }, () => Array(8).fill(null));
     let pieceCount = 0;
@@ -739,6 +739,7 @@
   }
 
   function getInteractionPreview(board, x = lastPointerPosition?.x, y = lastPointerPosition?.y) {
+    if (board.id === "lfs-move-preview") return null;
     const dragPreview = getDragPreviewState(board);
     if (dragPreview) {
       clearKnightHoverGap(board);
@@ -794,7 +795,7 @@
 
   function containsMainBoard(node) {
     return node.nodeType === Node.ELEMENT_NODE && (
-      node.matches(".main-board, .mini-game, .cg-wrap, cg-board") ||
+      node.matches(".main-board, .mini-game, .cg-wrap, cg-board#lfs-move-preview") ||
       Boolean(node.querySelector(boardSelector))
     );
   }
@@ -882,7 +883,10 @@
           return;
         }
         if (settings?.enabled) {
-          const selected = document.querySelector(selectedSquareSelector);
+          const previewBoard = document.querySelector("cg-board#lfs-move-preview");
+          const selected = previewBoard
+            ? previewBoard.querySelector(":scope > square.selected")
+            : document.querySelector(selectedSquareSelector);
           if (selected) document.dispatchEvent(new CustomEvent("lfs-hover-preview-change", { detail: selected.parentElement }));
         }
       };

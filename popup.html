@@ -17,6 +17,7 @@
         <button class="tab active" id="tab-figuren" type="button" role="tab" aria-selected="true" aria-controls="panel-figuren" data-tab="figuren">Figuren</button>
         <button class="tab" id="tab-brett" type="button" role="tab" aria-selected="false" aria-controls="panel-brett" data-tab="brett" tabindex="-1">Brett</button>
         <button class="tab" id="tab-zuege" type="button" role="tab" aria-selected="false" aria-controls="panel-zuege" data-tab="zuege" tabindex="-1">Zuege</button>
+        <button class="tab" id="tab-pfeile" type="button" role="tab" aria-selected="false" aria-controls="panel-pfeile" data-tab="pfeile" tabindex="-1">Pfeile</button>
         <button class="tab" id="tab-bedrohungen" type="button" role="tab" aria-selected="false" aria-controls="panel-bedrohungen" data-tab="bedrohungen" tabindex="-1">Analyse</button>
         <button class="tab" id="tab-hover" type="button" role="tab" aria-selected="false" aria-controls="panel-hover" data-tab="hover" tabindex="-1">Hover</button>
         <button class="tab" id="tab-effekte" type="button" role="tab" aria-selected="false" aria-controls="panel-effekte" data-tab="effekte" tabindex="-1">Effekte</button>
@@ -118,6 +119,20 @@
           <label class="switch-setting"><span>Letzten Zug markieren</span><input type="checkbox" data-setting="markLastMove" role="switch"></label>
           <label class="switch-setting" data-depends-on="moveIndicatorMode=dots"><span>Quadratische Dots</span><input type="checkbox" data-setting="squareMoveDots" role="switch"></label>
           <label class="switch-setting" data-depends-on="moveIndicatorMode=dots"><span>Bewegungsdots in Spielerfarbe</span><input type="checkbox" data-setting="moveDotsPlayerColor" role="switch"></label>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-pfeile" role="tabpanel" aria-labelledby="tab-pfeile" data-panel="pfeile" hidden>
+        <label class="select-setting"><span>Nutzerpfeile</span><select data-setting="userArrowMode"><option value="normal">Normale Pfeile</option><option value="rightClickPreview">Rechtsklick-Zugvorschau</option></select></label>
+        <div class="range-grid single-range">
+          <label class="range-setting"><span>Linienbreite (% der Feldbreite)</span><output data-value-for="userArrowWidthPercent"></output><input type="range" min="0.5" max="20" step="0.5" data-setting="userArrowWidthPercent"></label>
+          <label class="range-setting"><span>Deckkraft</span><output data-value-for="userArrowOpacity"></output><input type="range" min="0" max="100" step="1" data-setting="userArrowOpacity"></label>
+          <label class="range-setting" data-depends-on="userArrowMode=rightClickPreview"><span>Rundung der Zugknicke</span><output data-value-for="userArrowCornerRadiusPercent"></output><input type="range" min="0" max="100" step="1" data-setting="userArrowCornerRadiusPercent"></label>
+          <label class="switch-setting"><span>Gestrichelte Linie</span><input type="checkbox" data-setting="userArrowDashed" role="switch"></label>
+          <div class="range-grid" data-depends-on="userArrowDashed">
+            <label class="range-setting"><span>Strichlänge (% der Feldbreite)</span><output data-value-for="userArrowDashLengthPercent"></output><input type="range" min="1" max="100" step="1" data-setting="userArrowDashLengthPercent"></label>
+            <label class="range-setting"><span>Abstand (% der Feldbreite)</span><output data-value-for="userArrowDashGapPercent"></output><input type="range" min="0" max="100" step="1" data-setting="userArrowDashGapPercent"></label>
+          </div>
         </div>
       </section>
 

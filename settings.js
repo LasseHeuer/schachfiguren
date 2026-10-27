@@ -37,6 +37,13 @@
     engineArrowHeadSizePercent: 90,
     engineArrowStartOffsetPercent: 28,
     engineArrowEndOffsetPercent: 0,
+    userArrowMode: "rightClickPreview",
+    userArrowWidthPercent: 3,
+    userArrowOpacity: 100,
+    userArrowCornerRadiusPercent: 25,
+    userArrowDashLengthPercent: 5,
+    userArrowDashGapPercent: 3,
+    userArrowDashed: false,
     soundSettings: {
       berserk: { source: "website", volume: 76 },
       capture: { source: "custom:set down.wav", volume: 38 },
@@ -245,6 +252,11 @@
     engineArrowHeadSizePercent: [50, 200],
     engineArrowStartOffsetPercent: [0, 40],
     engineArrowEndOffsetPercent: [0, 40],
+    userArrowWidthPercent: [0.5, 20],
+    userArrowOpacity: [0, 100],
+    userArrowCornerRadiusPercent: [0, 100],
+    userArrowDashLengthPercent: [1, 100],
+    userArrowDashGapPercent: [0, 100],
     wedgeBaseWidthPercent: [1, 50],
     wedgeTipWidthPercent: [0.5, 25],
     wedgeGlowWidthPercent: [0, 50],
@@ -403,6 +415,9 @@
     if (!["both", "lines", "hatch", "none"].includes(result.threatMoveFieldDisplayMode)) {
       result.threatMoveFieldDisplayMode = defaults.threatMoveFieldDisplayMode;
     }
+    if (!["normal", "rightClickPreview"].includes(result.userArrowMode)) {
+      result.userArrowMode = defaults.userArrowMode;
+    }
     const displayModes = ["segments", "lines", "square", "wedge"];
     const legacyDisplayMode = displayModes.includes(values.threatDisplayMode) ? values.threatDisplayMode : defaults.threatAttackDisplayMode;
     for (const key of ["threatAttackDisplayMode", "threatDefenseDisplayMode"]) {
@@ -486,6 +501,7 @@
       "moveOutlineStraightDiagonals",
       "analysisGraphColors",
       "engineArrowOutlineEnabled",
+      "userArrowDashed",
       "showPlayTimeInHours",
       "analysisEnabled",
       "removeOutlines",

@@ -1211,6 +1211,7 @@
       root.style.setProperty(`--lfs-piece-${piece}`, `url("${chrome.runtime.getURL(asset)}")`);
     }
 
+    globalThis.LichessMovePreview?.update(settings);
     root.toggleAttribute("data-lfs-ready", true);
     syncAnalysisToolbar();
     syncBoardLayout();

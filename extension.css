@@ -872,8 +872,136 @@ html:not([data-lfs-disabled]) #lfs-pv-preview {
   visibility: visible !important;
 }
 
+html:not([data-lfs-disabled]) #lfs-move-preview {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 2147483647 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  visibility: visible !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-move-preview > piece.lfs-move-preview-piece {
+  position: absolute !important;
+  z-index: 3 !important;
+  display: block !important;
+  width: 12.5% !important;
+  height: 12.5% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
+  pointer-events: none !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-move-preview > svg.lfs-move-preview-paths {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 2 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: visible !important;
+  pointer-events: none !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-move-preview > svg.lfs-move-preview-paths path,
+html:not([data-lfs-disabled]) #lfs-move-preview-drag > svg.lfs-move-preview-drag-paths path {
+  stroke-linecap: butt !important;
+  marker-end: none !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-move-preview[data-lfs-move-preview-dragging] > piece.lfs-move-preview-candidate-piece,
+html:not([data-lfs-disabled]) #lfs-move-preview[data-lfs-move-preview-dragging] > square.last-move,
+html:not([data-lfs-disabled]) #lfs-move-preview[data-lfs-move-preview-dragging] > svg.lfs-last-move-outline {
+  opacity: 0 !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-move-preview-drag {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 2147483647 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: visible !important;
+  pointer-events: none !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-move-preview-drag > piece.lfs-move-preview-drag-piece {
+  position: absolute !important;
+  z-index: 2 !important;
+  display: block !important;
+  width: 12.5% !important;
+  height: 12.5% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: translate(-50%, -50%) !important;
+  pointer-events: none !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-move-preview-drag > svg.lfs-move-preview-drag-paths {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: visible !important;
+  pointer-events: none !important;
+}
+
+html:not([data-lfs-disabled]) piece.lfs-move-preview-drag-source {
+  opacity: 0 !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-move-promotion-choice {
+  position: absolute !important;
+  z-index: 2147483647 !important;
+  display: flex !important;
+  width: 40% !important;
+  height: 10% !important;
+  border: 1px solid rgb(0 0 0 / 45%) !important;
+  background: rgb(255 255 255 / 96%) !important;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 35%) !important;
+  pointer-events: auto !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-move-promotion-choice > button {
+  flex: 1 1 25% !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-right: 1px solid rgb(0 0 0 / 20%) !important;
+  background: transparent !important;
+  font: 700 24px/1 sans-serif !important;
+  cursor: pointer !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-move-promotion-choice > button:last-child {
+  border-right: 0 !important;
+}
+
+html:not([data-lfs-disabled]) .cg-wrap:has(cg-board[data-lfs-move-preview-active]) cg-board:not(#lfs-move-preview) > :is(piece, square, svg),
+html:not([data-lfs-disabled]) .cg-wrap:has(cg-board[data-lfs-move-preview-active]) :is(.cg-shapes, .cg-shapes-below, .cg-custom-svgs) {
+  opacity: 0 !important;
+}
+
+html:not([data-lfs-disabled]) .cg-wrap:has(cg-board[data-lfs-move-preview-active]) :is(.cg-shapes, .cg-shapes-below, .cg-custom-svgs) {
+  display: none !important;
+}
+
+html:not([data-lfs-disabled]) .cg-wrap:has(cg-board[data-lfs-move-preview-active]) cg-board:not(#lfs-move-preview)::before,
+html:not([data-lfs-disabled]) .cg-wrap:has(cg-board[data-lfs-move-preview-active]) cg-board:not(#lfs-move-preview)::after {
+  opacity: 0 !important;
+}
+
 html[data-lfs-zen-mode] body #lfs-pv-preview,
-html[data-lfs-zen-mode] body #lfs-pv-preview * {
+html[data-lfs-zen-mode] body #lfs-pv-preview *,
+html[data-lfs-zen-mode] body #lfs-move-preview,
+html[data-lfs-zen-mode] body #lfs-move-preview *,
+html[data-lfs-zen-mode] body #lfs-move-preview-drag,
+html[data-lfs-zen-mode] body #lfs-move-preview-drag *,
+html[data-lfs-zen-mode] body #lfs-move-promotion-choice,
+html[data-lfs-zen-mode] body #lfs-move-promotion-choice * {
   visibility: visible !important;
 }
 

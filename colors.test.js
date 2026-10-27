@@ -908,6 +908,36 @@ test("hover preview anticipation uses the configured default and clamps saved va
   }
 });
 
+test("user arrow settings use stable defaults and supported limits", () => {
+  const defaults = settings.normalize();
+  assert.equal(defaults.userArrowMode, "rightClickPreview");
+  assert.equal(defaults.userArrowWidthPercent, 3);
+  assert.equal(defaults.userArrowOpacity, 100);
+  assert.equal(defaults.userArrowCornerRadiusPercent, 25);
+  assert.equal(defaults.userArrowDashLengthPercent, 5);
+  assert.equal(defaults.userArrowDashGapPercent, 3);
+  assert.equal(defaults.userArrowDashed, false);
+  for (const mode of ["normal", "rightClickPreview"]) {
+    assert.equal(settings.normalize({ userArrowMode: mode }).userArrowMode, mode);
+  }
+  assert.equal(settings.normalize({ userArrowMode: "unsupported" }).userArrowMode, "rightClickPreview");
+  for (const [key, entries] of Object.entries({
+    userArrowWidthPercent: [[0.5, 0.5], [12, 12], [25, 20], [-1, 0.5], ["invalid", 3]],
+    userArrowOpacity: [[0, 0], [45, 45], [120, 100], [-1, 0], ["invalid", 100]],
+    userArrowCornerRadiusPercent: [[0, 0], [25, 25], [100, 100], [-1, 0], [120, 100], ["invalid", 25]],
+    userArrowDashLengthPercent: [[1, 1], [50, 50], [120, 100], [0, 1], ["invalid", 5]],
+    userArrowDashGapPercent: [[0, 0], [30, 30], [120, 100], [-1, 0], ["invalid", 3]]
+  })) {
+    for (const [saved, expected] of entries) {
+      const normalized = settings.normalize({ [key]: saved });
+      assert.equal(normalized[key], expected, `${key}=${saved}`);
+      assert.equal(settings.normalize(normalized)[key], expected, `${key} normalization is stable`);
+    }
+  }
+  assert.equal(settings.normalize({ userArrowDashed: 0 }).userArrowDashed, false);
+  assert.equal(settings.normalize({ userArrowDashed: 1 }).userArrowDashed, true);
+});
+
 test("empty move-field radius has a stable default and supported limits", () => {
   assert.equal(settings.normalize().threatMoveFieldRadius, 0.35);
   for (const [saved, expected] of [[0.1, 0.1], [0.48, 0.48], [0.7, 0.7], [-1, 0.1], [1, 0.7], ["invalid", 0.35]]) {

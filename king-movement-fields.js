@@ -1,5 +1,5 @@
 (() => {
-  const boardSelector = "body[data-board] .cg-wrap cg-board, .mini-game cg-board, cg-board#lfs-pv-preview";
+  const boardSelector = "body[data-board] .cg-wrap cg-board, .mini-game cg-board, cg-board#lfs-pv-preview, cg-board#lfs-move-preview";
   const svgNamespace = "http://www.w3.org/2000/svg";
   const pieceTypes = ["pawn", "knight", "bishop", "rook", "queen", "king"];
   const pieceCodes = { pawn: "P", knight: "N", bishop: "B", rook: "R", queen: "Q", king: "K" };
@@ -69,7 +69,7 @@
     if (!board.closest(".is2d")) return null;
     const blackOrientation = isBlackOrientation(board);
     const boardRect = board.getBoundingClientRect();
-    const isCandidatePreview = board.id === "lfs-pv-preview";
+    const isCandidatePreview = board.id === "lfs-pv-preview" || board.id === "lfs-move-preview";
     const position = Array.from({ length: 8 }, () => Array(8).fill(""));
     const occupants = Array.from({ length: 8 }, () => Array(8).fill(null));
     const kings = [];
