@@ -558,6 +558,33 @@ test("king movement fields follow preview animation distances and board orientat
   assert.equal(api.getDestinationState(position, { row: 0, col: 0, color: "w" }, { row: 1, col: 0 }), "threat");
   api.fillOverlay(cornerSvg, position, { row: 0, col: 0, color: "w" }, false);
   assert.equal((cornerSvg.children[0].attributes.d.match(/A/g) ?? []).length, 6);
+
+  for (const [color, enemy] of [["w", "b"], ["b", "w"]]) {
+    const capturePosition = Array.from({ length: 8 }, () => Array(8).fill(""));
+    const captureKing = { row: 1, col: 3, color };
+    const target = { row: 0, col: 4 };
+    capturePosition[1][3] = `${color}K`;
+    capturePosition[0][4] = `${enemy}R`;
+    assert.equal(api.getDestinationState(capturePosition, captureKing, target), "open");
+    for (const blackOrientation of [false, true]) {
+      const captureSvg = element();
+      api.fillOverlay(captureSvg, capturePosition, captureKing, blackOrientation);
+      assert.equal((captureSvg.children[0].attributes.d.match(/A/g) ?? []).length, 4);
+      assert.equal(capturePosition[0][4], `${enemy}R`);
+    }
+    capturePosition[0][7] = `${enemy}R`;
+    assert.equal(api.getDestinationState(capturePosition, captureKing, target), "threat");
+    const defendedSvg = element();
+    api.fillOverlay(defendedSvg, capturePosition, captureKing, false);
+    assert.equal((defendedSvg.children[0].attributes.d.match(/A/g) ?? []).length, 5);
+    capturePosition[0][7] = "";
+    capturePosition[2][2] = `${enemy}B`;
+    assert.equal(api.getDestinationState(capturePosition, captureKing, target), "threat");
+    capturePosition[0][4] = `${color}R`;
+    assert.equal(api.getDestinationState(capturePosition, captureKing, target), "piece");
+    capturePosition[0][4] = `${enemy}K`;
+    assert.equal(api.getDestinationState(capturePosition, captureKing, target), "piece");
+  }
 });
 
 test("preview filters respect custom piece colors and System Rund uses a circular inner cage", async () => {

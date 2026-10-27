@@ -398,6 +398,48 @@ test("playlist click still starts directly when all saved cards are scheduled fo
   assert.equal(assigned[0], "/training/Abc12");
 });
 
+test("removing the active puzzle keeps native continuation in the playlist", () => {
+  const { api, assigned, persisted } = loadList("puzzle-playlist.js", `
+    removePlaylistItem, handleNativePuzzleContinue,
+    setup: value => { playlist = normalizePlaylist(value); render = () => {}; puzzleId = () => "Def34"; },
+    reload: () => { playlist = normalizePlaylist(testPersisted[storageKey]); },
+    getPlaylist: () => playlist
+  `);
+  api.setup({ items: ["Abc12", "Def34", "Ghi56", "Jkl78"], activeQueue: ["Abc12", "Def34", "Ghi56", "Jkl78"], activeIndex: 1 });
+  api.removePlaylistItem("Def34");
+  api.removePlaylistItem("Abc12");
+  api.removePlaylistItem("Ghi56");
+  api.reload();
+  assert.deepEqual(Array.from(api.getPlaylist().activeQueue), ["Def34", "Jkl78"]);
+  assert.equal(api.getPlaylist().activeIndex, 0);
+  assert.equal(api.getPlaylist().items.some(item => item.id === "Def34"), false);
+  let prevented = false;
+  let stopped = false;
+  api.handleNativePuzzleContinue({
+    target: { closest: () => ({}) },
+    preventDefault: () => { prevented = true; },
+    stopImmediatePropagation: () => { stopped = true; }
+  });
+  assert.ok(prevented && stopped);
+  assert.equal(assigned.at(-1), "/training/Jkl78");
+  assert.equal(persisted.lfsPuzzlePlaylist.items[0].attempts, 1);
+  assert.deepEqual(Array.from(persisted.lfsPuzzlePlaylist.activeQueue), ["Jkl78"]);
+  assert.equal(persisted.lfsPuzzlePlaylist.activeIndex, 0);
+});
+
+test("removing the last active puzzle finishes the playlist session", () => {
+  const { api, assigned, persisted } = loadList("puzzle-playlist.js", `
+    removePlaylistItem, handleNativePuzzleContinue,
+    setup: value => { playlist = normalizePlaylist(value); render = () => {}; puzzleId = () => "Abc12"; }
+  `);
+  api.setup({ items: ["Abc12"], activeQueue: ["Abc12"], activeIndex: 0 });
+  api.removePlaylistItem("Abc12");
+  api.handleNativePuzzleContinue({ target: { closest: () => ({}) }, preventDefault() {}, stopImmediatePropagation() {} });
+  assert.equal(assigned.at(-1), "/#puzzle-playlist");
+  assert.equal(persisted.lfsPuzzlePlaylist.activeIndex, null);
+  assert.equal(persisted.lfsPuzzlePlaylist.activeQueue.length, 0);
+});
+
 function listDocument() {
   const createElement = tag => ({
     tagName: tag, children: [], dataset: {}, attributes: {}, className: "", textContent: "",

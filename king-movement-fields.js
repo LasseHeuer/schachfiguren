@@ -183,13 +183,13 @@
   function getDestinationState(position, king, target, nextPosition = null, attackers = null) {
     if (!isInside(target.row, target.col)) return "edge";
     const occupant = position[target.row][target.col];
-    if (occupant) return "piece";
+    if (occupant && (occupant[0] === king.color || occupant[1] === "K")) return "piece";
 
     const candidatePosition = nextPosition ?? position.map(row => [...row]);
     if (!nextPosition) candidatePosition[king.row][king.col] = "";
     candidatePosition[target.row][target.col] = `${king.color}K`;
-    const attacked = isSquareAttacked(candidatePosition, target, king.color === "w" ? "b" : "w", attackers);
-    if (nextPosition) candidatePosition[target.row][target.col] = "";
+    const attacked = isSquareAttacked(candidatePosition, target, king.color === "w" ? "b" : "w", occupant ? null : attackers);
+    if (nextPosition) candidatePosition[target.row][target.col] = occupant;
     return attacked ? "threat" : "open";
   }
 

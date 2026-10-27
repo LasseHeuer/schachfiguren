@@ -44,10 +44,12 @@
     }
     const itemIds = new Set(items.map(item => item.id));
     const legacyActiveIndex = Number.isInteger(value?.activeIndex) && value.activeIndex >= 0 ? value.activeIndex : null;
+    const activeId = Array.isArray(value?.activeQueue) && legacyActiveIndex !== null
+      ? value.activeQueue[legacyActiveIndex] : items[legacyActiveIndex]?.id;
     const activeQueue = Array.isArray(value?.activeQueue)
-      ? [...new Set(value.activeQueue.filter(id => typeof id === "string" && itemIds.has(id)))]
+      ? [...new Set(value.activeQueue.filter(id => typeof id === "string" && (itemIds.has(id) || (id === activeId && /^[a-zA-Z0-9_-]{4,}$/.test(id)))))]
       : legacyActiveIndex !== null ? items.map(item => item.id) : [];
-    const activeIndex = legacyActiveIndex !== null && legacyActiveIndex < activeQueue.length ? legacyActiveIndex : null;
+    const activeIndex = legacyActiveIndex !== null && activeQueue.includes(activeId) ? activeQueue.indexOf(activeId) : null;
     return { items, activeQueue, activeIndex };
   }
 
@@ -376,10 +378,9 @@
     if (!playlist.items.some(item => item.id === removedId)) return;
     const items = playlist.items.filter(item => item.id !== removedId);
     const queueIndex = playlist.activeQueue.indexOf(removedId);
-    const activeQueue = playlist.activeQueue.filter(id => id !== removedId);
+    const activeQueue = playlist.activeQueue.filter((id, index) => id !== removedId || index === playlist.activeIndex);
     let activeIndex = playlist.activeIndex;
-    if (queueIndex === activeIndex) activeIndex = null;
-    else if (activeIndex !== null && queueIndex >= 0 && queueIndex < activeIndex) activeIndex--;
+    if (activeIndex !== null && queueIndex >= 0 && queueIndex < activeIndex) activeIndex--;
     savePlaylist({ items, activeQueue: activeIndex === null ? [] : activeQueue, activeIndex });
   }
 
