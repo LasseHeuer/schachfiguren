@@ -360,6 +360,13 @@
       </section>
 
       <section class="panel" id="panel-zen" role="tabpanel" aria-labelledby="tab-zen" data-panel="zen" hidden>
+        <details class="analysis-subsection">
+          <summary>Hintergrundfarbe</summary>
+          <label class="switch-setting"><span><strong>Hintergrund anzeigen</strong></span><input type="checkbox" data-setting="zenBackgroundEnabled" role="switch"></label>
+          <div class="range-grid single-range" data-depends-on="zenBackgroundEnabled">
+            <label class="range-setting" title="Maximale Beimischung der Farbe des materiell führenden Spielers"><span>Farbmischung bei Vorteil</span><output data-value-for="zenBackgroundTintPercent"></output><input type="range" min="0" max="40" step="1" data-setting="zenBackgroundTintPercent"></label>
+          </div>
+        </details>
         <p class="zen-note">Darstellung der Spieluhren im Zenmodus.</p>
         <label class="switch-setting"><span><strong>Zeit nur im roten Bereich anzeigen</strong><small>Die Zahl erscheint erst bei höchstens 10 Sekunden Restzeit.</small></span><input type="checkbox" data-setting="zenClockShowTimeOnlyWhenLow" role="switch"></label>
         <div class="range-grid single-range">

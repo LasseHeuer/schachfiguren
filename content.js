@@ -64,6 +64,7 @@
   let zenClockOverlay;
   let zenClockRows;
   let zenClockSources = { top: null, bottom: null };
+  let analysisClocks = null;
   const zenClockMaxTimes = new WeakMap();
   const zenClockProgress = new WeakMap();
   let normalRoundApp;
@@ -513,19 +514,26 @@
     row.style.width = `${boardRect.width}px`;
     const margin = settings.zenClockMarginPx;
     const thickness = Number.parseFloat(zenClockOverlay.style.getPropertyValue("--lfs-zen-clock-line-thickness"));
-    const distance = margin + thickness / 2;
-    const padding = margin + thickness;
-    const width = boardRect.width + padding * 2;
-    const height = boardRect.height + padding * 2;
-    bar.style.left = `${boardRect.left - padding}px`;
-    bar.style.top = `${boardRect.top - padding}px`;
+    const pixelRatio = window.devicePixelRatio || 1;
+    const overlap = 0.5 / pixelRatio;
+    const distance = margin + thickness / 2 - overlap;
+    const padding = margin + thickness - overlap;
+    // Align stroke edges to device pixels while keeping them inside the board edge.
+    const barLeft = Math.ceil((boardRect.left - margin + overlap) * pixelRatio) / pixelRatio - thickness;
+    const barTop = Math.ceil((boardRect.top - margin + overlap) * pixelRatio) / pixelRatio - thickness;
+    const barRight = Math.floor((boardRect.left + boardRect.width + margin - overlap) * pixelRatio) / pixelRatio + thickness;
+    const barBottom = Math.floor((boardRect.top + boardRect.height + margin - overlap) * pixelRatio) / pixelRatio + thickness;
+    const width = barRight - barLeft;
+    const height = barBottom - barTop;
+    bar.style.left = `${barLeft}px`;
+    bar.style.top = `${barTop}px`;
     bar.style.width = `${width}px`;
     bar.style.height = `${height}px`;
     bar.setAttribute("viewBox", `0 0 ${width} ${height}`);
     const shapePercent = settings.boardFieldShape === "round" ? settings.boardRoundPercent : settings.boardBevelPercent;
     const corner = settings.boardBevelEnabled ? boardRect.width * shapePercent / 1600 : 0;
     const rounded = corner > 0 && settings.boardFieldShape === "round";
-    // Offset the contour so the inner stroke edge stays outside the board.
+    // Slightly overlap the board to avoid an antialiasing gap.
     const radius = corner > 0 ? corner + distance * (rounded ? 1 : 2 - Math.SQRT2) : 0;
     const left = thickness / 2;
     const right = width - left;
@@ -570,8 +578,8 @@
     return clocks;
   }
 
-  function syncZenClockOverlay(clocks, boardRect) {
-    if (!boardRect?.width || !boardRect.height || !clocks.length) {
+  function syncZenClockOverlay(clocks, boardRect, analysis = null) {
+    if (!boardRect?.width || !boardRect.height || !clocks.length && !analysis) {
       if (zenClockOverlay) {
         zenClockOverlay.removeAttribute("data-active");
         for (const side of ["top", "bottom"]) zenClockRows[side].row.hidden = true;
@@ -589,14 +597,27 @@
     zenClockOverlay.style.setProperty("--lfs-zen-clock-line-thickness", `${lineThickness}px`);
     zenClockOverlay.style.setProperty("--lfs-zen-clock-line-gap", `${settings.zenClockLineGapPx}px`);
 
-    clocks.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
-    const topClock = clocks[0];
-    const bottomClock = clocks.length > 1 ? clocks.at(-1) : topClock.classList.contains("rclock-bottom") ? topClock : null;
-    zenClockSources = { top: topClock === bottomClock ? null : topClock, bottom: bottomClock };
+    if (!analysis) {
+      clocks.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
+      const topClock = clocks[0];
+      const bottomClock = clocks.length > 1 ? clocks.at(-1) : topClock.classList.contains("rclock-bottom") ? topClock : null;
+      zenClockSources = { top: topClock === bottomClock ? null : topClock, bottom: bottomClock };
+    } else zenClockSources = { top: null, bottom: null };
     setZenClockPlayerColors();
     let running = false;
     for (const side of ["top", "bottom"]) {
-      running = updateZenClock(side, zenClockSources[side]) || running;
+      if (analysis) {
+        const clockRow = zenClockRows[side];
+        const progress = analysis[clockRow.row.dataset.playerColor];
+        clockRow.row.hidden = !Number.isFinite(progress) || progress < 0 || progress > 100;
+        clockRow.row.removeAttribute("data-running");
+        clockRow.row.removeAttribute("data-critical");
+        clockRow.time.hidden = true;
+        if (!clockRow.row.hidden) {
+          clockRow.progress = progress;
+          updateZenClockStroke(clockRow);
+        }
+      } else running = updateZenClock(side, zenClockSources[side]) || running;
       positionZenClock(side, boardRect);
     }
     if (running) scheduleZenClockProgress();
@@ -608,7 +629,8 @@
     const boardRect = board?.getBoundingClientRect();
     const root = zenBoard?.closest(".round__app, .analyse__board, .analyse, .bot-game, .puzzle, .study__main, .study, main")
       ?? zenBoard?.parentElement;
-    return syncZenClockOverlay(root ? visibleClocks(root) : [], boardRect);
+    const isAnalysis = Boolean(zenBoard?.closest(".analyse"));
+    return syncZenClockOverlay(isAnalysis ? [] : root ? visibleClocks(root) : [], boardRect, isAnalysis ? analysisClocks : null);
   }
 
   function scheduleZenClockUpdate() {
@@ -618,6 +640,13 @@
       syncZenClockOverlayForBoard();
     });
   }
+
+  window.addEventListener("message", event => {
+    if (event.source !== window || event.origin !== location.origin || event.data?.channel !== "lfs-analysis-clocks") return;
+    analysisClocks = event.data.clocks && typeof event.data.clocks === "object" ? event.data.clocks : null;
+    scheduleZenClockUpdate();
+  });
+  window.postMessage({ channel: "lfs-move-preview-state-request" }, location.origin);
 
   function scheduleZenSideUpdate() {
     cancelAnimationFrame(zenSideFrame);
@@ -673,7 +702,7 @@
     place(topMaterial, materialLeft, boardRect.top);
     place(bottomMaterial, materialLeft, boardRect.bottom - (bottomMaterialRect?.height ?? 0));
 
-    syncZenClockOverlay(visibleClocks(root), boardRect);
+    syncZenClockOverlayForBoard();
   }
 
   function schedulePvPreviewSync() {

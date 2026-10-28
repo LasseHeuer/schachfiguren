@@ -102,6 +102,10 @@ test("right-click move preview stays visual and restores the live board", {
     const file = path.slice(1);
     if (path.endsWith(".svg")) {
       response.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
+      if (/^\/(system_rund|system_eckig|system_pixel|rund|rund_comic)\/[a-z0-9_]+\.svg$/.test(path) && existsSync(join(root, path.slice(1)))) {
+        response.end(readFileSync(join(root, path.slice(1))));
+        return;
+      }
       response.end('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M 10 10 L 90 90"/></svg>');
       return;
     }
@@ -198,6 +202,230 @@ test("right-click move preview stays visual and restores the live board", {
     }
     assert.equal(await evaluate("Boolean(window.LichessMovePreview)"), true);
 
+    await t.test("Chromium paints drags above board overlays, including clipped edges and Zen", async t => {
+      await send("Emulation.setDeviceMetricsOverride", { width: 640, height: 640, deviceScaleFactor: 1, mobile: false });
+      await evaluate(`(() => {
+        document.body.style.cssText = 'width:640px;height:640px';
+        document.querySelector('.main-board').style.margin = '48px';
+        document.documentElement.style.setProperty('--lfs-white-piece-color', '#e03030');
+        document.documentElement.style.setProperty('--lfs-black-piece-color', '#3030e0');
+      })()`);
+      for (const pieceSet of ["system_rund", "system_eckig", "system_pixel", "rund", "rund_comic"]) {
+        for (const shape of ["square", "bevel", "round"]) {
+          for (const zen of [false, true]) {
+            const label = `${pieceSet}/${shape}/${zen ? "zen" : "normal"}`;
+            await evaluate(`(() => {
+              const root = document.documentElement;
+              root.toggleAttribute('data-lfs-rund-comic', ${pieceSet === "rund_comic"});
+              root.toggleAttribute('data-lfs-board-bevel', ${shape !== "square"});
+              root.toggleAttribute('data-lfs-zen-mode', ${zen});
+              root.style.setProperty('--lfs-board-outer-clip', ${JSON.stringify(shape === "round" ? "inset(0 round 28px)" : "polygon(5% 0,95% 0,100% 5%,100% 95%,95% 100%,5% 100%,0 95%,0 5%)")});
+              for (const color of ['w', 'b']) for (const role of ['k', 'r']) {
+                root.style.setProperty('--lfs-piece-' + color + role, 'url(/${pieceSet}/b' + role + '.svg)');
+              }
+              document.querySelector('.cg-wrap').toggleAttribute('data-lfs-zen-board', ${zen});
+              document.querySelector('.cg-wrap').style.transform = ${JSON.stringify(zen ? "translate(3px, 4px)" : "none")};
+              previewSettings.pieceSet = ${JSON.stringify(pieceSet)};
+              LichessKingMovementFields.update(previewSettings);
+              setBoardFen('7k/8/8/8/8/8/8/R3K3 w - - 0 1');
+            })()`);
+            await settle();
+            const offset = zen ? { x: 51, y: 52 } : { x: 48, y: 48 };
+            for (const role of ["king", "rook"]) {
+              await mouse("mousePressed", offset.x + (role === "king" ? 288 : 32), offset.y + 480);
+              for (const point of [{ x: offset.x + 288, y: offset.y + 416 }, { x: offset.x + 2, y: offset.y + 2 }]) {
+                await mouse("mouseMoved", point.x, point.y);
+                await settle();
+                const result = await evaluate(`(() => {
+                  const layer = document.querySelector('#lfs-move-preview-drag');
+                  const piece = layer?.querySelector('piece');
+                  if (!piece) return { missing: true };
+                  // Temporarily enable hit testing on visual-only layers to measure paint order.
+                  const nodes = [...document.querySelectorAll('.cg-wrap, .cg-wrap *')];
+                  const saved = nodes.map(node => [node, node.style.getPropertyValue('pointer-events'), node.style.getPropertyPriority('pointer-events')]);
+                  for (const node of nodes) node.style.setProperty('pointer-events', 'auto', 'important');
+                  const hit = document.elementFromPoint(${point.x}, ${point.y});
+                  const outsideHit = document.elementFromPoint(${point.x - 12}, ${point.y});
+                  const above = layer.contains(hit);
+                  const outside = layer.contains(outsideHit);
+                  for (const [node, value, priority] of saved) {
+                    if (value) node.style.setProperty('pointer-events', value, priority);
+                    else node.style.removeProperty('pointer-events');
+                  }
+                  const rect = piece.getBoundingClientRect();
+                  const group = piece.querySelector('.lfs-king-movement-group');
+                   return { above, outside, opacity: getComputedStyle(piece).opacity,
+                     center: [rect.x + rect.width / 2, rect.y + rect.height / 2],
+                     parentMask: getComputedStyle(piece).maskImage,
+                    groupImage: group && getComputedStyle(group, '::before').backgroundImage,
+                    groupMask: group && getComputedStyle(group, '::before').maskImage };
+                })()`);
+                assert.equal(result.above, true, `${label}/${role}: drag must paint above board and threat/king overlays`);
+                assert.equal(result.outside, true, `${label}/${role}: drag must not be clipped at the board edge`);
+                assert.equal(result.opacity, "1", `${label}/${role}: dragged pieces must remain fully opaque`);
+                assert.deepEqual(result.center, [point.x, point.y], `${label}/${role}: pointer and figure stay aligned`);
+                if (role === "king") {
+                  assert.equal(result.parentMask, "none", `${label}: king sectors must not be masked by the parent`);
+                  assert.notEqual(pieceSet === "rund_comic" ? result.groupImage : result.groupMask, "none", `${label}: king retains its actual figure`);
+                }
+              }
+              await mouse("mouseReleased", offset.x + 2, offset.y + 2, "right", 0);
+              await evaluate("window.dispatchEvent(new Event('blur')); LichessMovePreview.restore()");
+              await settle();
+            }
+          }
+        }
+      }
+      await t.test("black round king screenshot retains an open center instead of a solid blue disc", async () => {
+        await evaluate(`(() => {
+          document.documentElement.removeAttribute('data-lfs-rund-comic');
+          document.documentElement.removeAttribute('data-lfs-zen-mode');
+          document.documentElement.removeAttribute('data-lfs-board-bevel');
+          document.querySelector('.cg-wrap').style.transform = 'none';
+          document.querySelector('.cg-wrap').removeAttribute('data-lfs-zen-board');
+          document.documentElement.style.setProperty('--lfs-piece-bk', 'url(/system_rund/bk.svg)');
+          previewSettings.pieceSet = 'system_rund';
+          LichessKingMovementFields.update(previewSettings);
+          setBoardFen('8/8/8/8/4k3/8/8/4K3 b - - 0 1');
+        })()`);
+        await settle();
+        const captureRing = async y => {
+          const shot = await send('Page.captureScreenshot', {
+            format: 'png', clip: { x: 304, y, width: 64, height: 64, scale: 1 }
+          });
+          return evaluate(`(async () => {
+            const image = new Image();
+            image.src = 'data:image/png;base64,${shot.data}';
+            await image.decode();
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = 64;
+            const context = canvas.getContext('2d');
+            context.drawImage(image, 0, 0);
+            return [...context.getImageData(59, 32, 1, 1).data];
+          })()`);
+        };
+        const boardKingRing = await captureRing(304);
+        await mouse('mousePressed', 336, 336);
+        await mouse('mouseMoved', 336, 272);
+        await settle();
+        assert.equal(await evaluate(`getComputedStyle(document.querySelector('#lfs-move-preview-drag .lfs-king-movement-group'), '::before').transform`), 'matrix(-1, 0, 0, -1, 0, 0)');
+        const screenshot = await send('Page.captureScreenshot', { format: 'png', clip: { x: 304, y: 240, width: 64, height: 64, scale: 1 } });
+        const draggedPixels = await evaluate(`(async () => {
+          const image = new Image();
+          image.src = 'data:image/png;base64,${screenshot.data}';
+          await image.decode();
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = 64;
+          const context = canvas.getContext('2d');
+          context.drawImage(image, 0, 0);
+          return { center: [...context.getImageData(32, 32, 1, 1).data], ring: [...context.getImageData(59, 32, 1, 1).data] };
+        })()`);
+        assert.deepEqual(draggedPixels.ring, [48, 48, 224, 255], 'screenshot must contain the visible blue king ring above the board');
+        assert.deepEqual(draggedPixels.ring, boardKingRing, 'the dragged king must retain the board king\'s exact color and opacity');
+        assert.notDeepEqual(draggedPixels.center, draggedPixels.ring, 'the center must remain open, not become a solid blue circle');
+        await mouse('mouseReleased', 336, 272, 'right', 0);
+        await evaluate('LichessMovePreview.restore()');
+        await evaluate(`(() => {
+          document.documentElement.style.setProperty('--lfs-piece-wk', 'url(/system_rund/bk.svg)');
+          previewSettings.pieceSet = 'system_rund';
+          LichessKingMovementFields.update(previewSettings);
+          const wrap = document.querySelector('.cg-wrap');
+          wrap.classList.remove('orientation-black');
+          wrap.classList.add('orientation-white');
+          setBoardFen('4k3/8/8/8/8/8/8/4K3 w - - 0 1');
+        })()`);
+        await settle();
+        const boardWhiteRing = await captureRing(496);
+        assert.deepEqual(boardWhiteRing, [224, 48, 48, 255], "the board king uses the fully opaque player color");
+        await mouse('mousePressed', 336, 528, 'right', 2);
+        await mouse('mouseMoved', 336, 464, 'right', 2);
+        await settle();
+        const draggedWhiteScreenshot = await send('Page.captureScreenshot', {
+          format: 'png', clip: { x: 304, y: 432, width: 64, height: 64, scale: 1 }
+        });
+        const draggedWhiteRing = await evaluate(`(async () => {
+          const image = new Image(); image.src = 'data:image/png;base64,${draggedWhiteScreenshot.data}'; await image.decode();
+          const canvas = document.createElement('canvas'); canvas.width = canvas.height = 64;
+          const context = canvas.getContext('2d'); context.drawImage(image, 0, 0);
+          return [...context.getImageData(59, 32, 1, 1).data];
+        })()`);
+        assert.deepEqual(draggedWhiteRing, boardWhiteRing, "the white king keeps its exact board color and opacity while right-dragging");
+        await mouse('mouseReleased', 336, 464, 'right', 0);
+        await evaluate('LichessMovePreview.restore()');
+      });
+      await evaluate(`(() => {
+        for (const name of ['data-lfs-rund-comic', 'data-lfs-board-bevel', 'data-lfs-zen-mode']) document.documentElement.removeAttribute(name);
+        document.querySelector('.cg-wrap').removeAttribute('data-lfs-zen-board');
+        document.querySelector('.cg-wrap').style.removeProperty('transform');
+        document.querySelector('.main-board').style.removeProperty('margin');
+        document.body.style.cssText = '';
+        previewSettings.pieceSet = LichessSettings.defaults.pieceSet;
+        LichessKingMovementFields.update(previewSettings);
+        setBoardFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+      })()`);
+      await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
+    });
+
+    await t.test("all piece types stay fully opaque during right-click dragging", async () => {
+      await evaluate("setBoardFen('7k/8/8/8/8/8/P7/RNBQK2R w - - 0 1')");
+      await settle();
+      const pieces = [
+        { role: "king", from: [288, 480], to: [288, 416] },
+        { role: "queen", from: [224, 480], to: [224, 416] },
+        { role: "bishop", from: [160, 480], to: [96, 416] },
+        { role: "knight", from: [96, 480], to: [160, 352] },
+        { role: "rook", from: [480, 480], to: [480, 416] },
+        { role: "pawn", from: [32, 416], to: [32, 352] }
+      ];
+      for (const { role, from, to } of pieces) {
+        await mouse("mousePressed", ...from, "right", 2);
+        await mouse("mouseMoved", ...to, "right", 2);
+        await settle();
+        const opacity = await evaluate(`(() => {
+          const piece = document.querySelector('#lfs-move-preview-drag > piece.lfs-move-preview-drag-piece');
+          return { role: piece?.classList.contains('${role}'), opacity: piece && getComputedStyle(piece).opacity,
+            fields: piece?.querySelector('.lfs-king-movement-group') && getComputedStyle(piece.querySelector('.lfs-king-movement-group')).opacity };
+        })()`);
+        assert.equal(opacity.role, true, `${role} should be the dragged figure`);
+        assert.equal(opacity.opacity, "1", `${role} should stay fully opaque`);
+        if (role === "king") assert.equal(opacity.fields, "1", "king segments should stay fully opaque");
+        await mouse("mouseReleased", ...to, "right", 0);
+        await evaluate("LichessMovePreview.restore()");
+        await settle();
+      }
+    });
+
+    await t.test("opponent figures keep their rotation without king fields and 3D remains unchanged", async () => {
+      await evaluate(`(() => {
+        previewSettings.kingMovementFieldsEnabled = false;
+        LichessKingMovementFields.update(previewSettings);
+        setBoardFen('4k3/8/8/8/8/8/8/4K3 b - - 0 1');
+      })()`);
+      await settle();
+      await mouse('mousePressed', 288, 32);
+      await mouse('mouseMoved', 288, 96);
+      await settle();
+      assert.equal(await evaluate(`getComputedStyle(document.querySelector('#lfs-move-preview-drag > piece'), '::before').transform`), 'matrix(-1, 0, 0, -1, 0, 0)');
+      assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag .lfs-king-movement-group')"), null);
+      await mouse('mouseReleased', 288, 96, 'right', 0);
+      await evaluate(`(() => {
+        LichessMovePreview.restore();
+        document.querySelector('.is2d').className = 'is3d';
+        previewSettings.kingMovementFieldsEnabled = true;
+        LichessKingMovementFields.update(previewSettings);
+        setBoardFen('4k3/8/8/8/8/8/8/4K3 w - - 0 1');
+      })()`);
+      await settle();
+      await mouse('mousePressed', 288, 480);
+      await mouse('mouseMoved', 288, 416);
+      await settle();
+      assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag, #lfs-move-preview, .lfs-king-movement-group')"), null,
+        'the existing 2D-only preview must not replace native 3D figures');
+      await mouse('mouseReleased', 288, 416, 'right', 0);
+      await evaluate(`document.querySelector('.is3d').className = 'is2d'; setBoardFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1')`);
+      await settle();
+    });
+
     await t.test("drag sequence, highlights, wheel and restore preserve the original board", async () => {
       await evaluate("(() => { const piece = document.querySelector('.main-board cg-board > piece.white.pawn[data-key=e2]'); piece.removeAttribute('data-key'); piece.style.left = '0%'; piece.style.top = '0%'; piece.style.transform = 'translate(400%, 600%)'; })()");
       await drag("e2", "e5");
@@ -218,7 +446,7 @@ test("right-click move preview stays visual and restores the live board", {
       assert.equal(await evaluate("getComputedStyle(document.querySelector('#lfs-move-preview svg.lfs-last-move-outline')).opacity"), "0");
       await mouse("mouseReleased", 288, 288, "right", 0);
       await settle();
-      assert.equal(await evaluate("document.querySelector('#lfs-move-preview > piece.white.pawn')?.dataset.key"), "e4");
+      assert.equal(await evaluate("document.querySelector('#lfs-move-preview > piece.white.pawn[data-key=e4]')?.dataset.key"), "e4");
       assert.equal(await evaluate("getComputedStyle(document.querySelector('#lfs-move-preview > piece.white.pawn[data-key=e4]')).opacity"), "1");
       assert.equal(await evaluate("document.querySelector('#lfs-move-preview').hasAttribute('data-lfs-threat-board')"), true);
       assert.ok(await evaluate("document.querySelectorAll('#lfs-move-preview [data-lfs-king-movement-fields]').length > 0"));
@@ -289,21 +517,209 @@ test("right-click move preview stays visual and restores the live board", {
       assert.equal(await evaluate("document.getElementById('lfs-move-preview')"), null);
     });
 
-    await t.test("wedge and last-move highlights follow the preview board during drag and hover", async () => {
-      await evaluate("setBoardFen('4k3/8/8/8/8/R7/8/R3K3 w - - 0 1')");
+    await t.test("king movement fields follow a right-click king drag", async () => {
+      await evaluate("document.documentElement.style.setProperty('--lfs-piece-wk', 'url(/white-king.svg)')");
+      await evaluate("setBoardFen('7k/5r2/8/8/8/8/8/4K3 w - - 0 1')");
       await settle();
-      await mouse("mousePressed", 32, 480, "right", 2);
-      await mouse("mouseMoved", 32, 416, "right", 2);
+      await mouse("mousePressed", 288, 480, "right", 2);
+      await settle();
+      const initialPath = await evaluate("document.querySelector('#lfs-move-preview > piece.white.king[data-key=e1] .lfs-king-movement-fields path')?.getAttribute('d')");
+      assert.ok(initialPath);
+      assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag > piece.white.king .lfs-king-movement-fields path')?.getAttribute('d')"), initialPath,
+        "the dragged king keeps its sectors while the pointer is on its origin field");
+      assert.deepEqual(await evaluate(`(() => {
+        const preview = LichessThreatCoding.getInteractionPreview(document.querySelector('#lfs-move-preview'));
+        return { source: [preview?.source.row, preview?.source.col], target: [preview?.target.row, preview?.target.col], legal: preview?.legal };
+      })()`), { source: [7, 4], target: [7, 4], legal: false });
+      await evaluate("window.previewPointerUpdates = 0; document.addEventListener('lfs-move-preview-pointermove', () => window.previewPointerUpdates++)");
+
+      await mouse("mouseMoved", 288, 416, "right", 2);
+      await settle();
+      const draggedKing = await evaluate("document.querySelector('#lfs-move-preview > piece.white.king[data-key=e2] .lfs-king-movement-fields path')?.getAttribute('d')");
+      assert.ok(draggedKing);
+      assert.notEqual(draggedKing, initialPath, "king segments should reflect the dragged destination");
+      assert.deepEqual(await evaluate(`(() => {
+        const preview = LichessThreatCoding.getInteractionPreview(document.querySelector('#lfs-move-preview'));
+        return { source: [preview?.source.row, preview?.source.col], target: [preview?.target.row, preview?.target.col], legal: preview?.legal };
+      })()`), { source: [7, 4], target: [6, 4], legal: true });
+      assert.equal(await evaluate("getComputedStyle(document.querySelector('#lfs-move-preview > piece.white.king[data-key=e2]')).opacity"), "0");
+      assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag > piece.white.king > span.lfs-king-movement-group > svg.lfs-king-movement-fields path')?.getAttribute('d')"), draggedKing);
+      const dragFieldsStyle = await evaluate(`(() => {
+        const group = document.querySelector('#lfs-move-preview-drag > piece.white.king > span.lfs-king-movement-group');
+        const svg = group.querySelector('svg.lfs-king-movement-fields');
+        const source = document.querySelector('.main-board cg-board > piece.white.king[data-key=e1]');
+        const sourceGroup = source.querySelector(':scope > span.lfs-king-movement-group');
+        const sourceSvg = sourceGroup.querySelector('svg.lfs-king-movement-fields');
+        return { zIndex: getComputedStyle(svg).zIndex, mask: getComputedStyle(group, '::before').maskImage,
+          shape: getComputedStyle(group, '::before').content, fill: getComputedStyle(svg.querySelector('path')).fill,
+          dragOpacity: getComputedStyle(group, '::before').opacity, sourceOpacity: getComputedStyle(sourceGroup, '::before').opacity,
+          dragColor: getComputedStyle(group, '::before').backgroundColor, sourceColor: getComputedStyle(sourceGroup, '::before').backgroundColor,
+          dragPathOpacity: getComputedStyle(svg.querySelector('path')).opacity,
+          sourcePathOpacity: getComputedStyle(sourceSvg.querySelector('path')).opacity };
+      })()`);
+      assert.equal(dragFieldsStyle.zIndex, "3");
+      assert.notEqual(dragFieldsStyle.mask, "none");
+      assert.equal(dragFieldsStyle.shape, '""');
+      assert.notEqual(dragFieldsStyle.fill, "none");
+      assert.equal(dragFieldsStyle.dragOpacity, dragFieldsStyle.sourceOpacity);
+      assert.equal(dragFieldsStyle.dragColor, dragFieldsStyle.sourceColor);
+      assert.equal(dragFieldsStyle.dragPathOpacity, dragFieldsStyle.sourcePathOpacity);
+
+      await mouse("mouseMoved", 224, 480, "right", 2);
+      await settle();
+      const updatedKing = await evaluate("document.querySelector('#lfs-move-preview > piece.white.king[data-key=d1] .lfs-king-movement-fields path')?.getAttribute('d')");
+      assert.ok(updatedKing);
+      assert.notEqual(updatedKing, draggedKing, "king segments should update as the pointer enters another field");
+      assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag > piece.white.king > span.lfs-king-movement-group > svg.lfs-king-movement-fields path')?.getAttribute('d')"), updatedKing);
+      await mouse("mouseMoved", 226, 482, "right", 2);
+      await mouse("mouseMoved", 230, 485, "right", 2);
+      await settle();
+      assert.equal(await evaluate("window.previewPointerUpdates"), 2, "updates are limited to changes between board fields");
+
+      await mouse("mouseMoved", 288, 480, "right", 2);
+      await settle();
+      assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag > piece.white.king .lfs-king-movement-fields path')?.getAttribute('d')"), initialPath,
+        "returning to the origin restores the king sectors");
+      await mouse("mouseMoved", 290, 482, "right", 2);
+      await settle();
+      assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag > piece.white.king .lfs-king-movement-fields path')?.getAttribute('d')"), initialPath);
+      await mouse("mouseMoved", 224, 480, "right", 2);
+      await settle();
+
+      await mouse("mouseReleased", 224, 480, "right", 0);
+      await settle();
+      assert.equal(await evaluate("document.querySelector('#lfs-move-preview > piece.white.king[data-key=d1] .lfs-king-movement-fields path')?.getAttribute('d')"), updatedKing);
+      assert.equal(await evaluate("getComputedStyle(document.querySelector('#lfs-move-preview > piece.white.king[data-key=d1]')).opacity"), "1");
+      await mouse("mousePressed", 32, 32, "left", 1);
+      await mouse("mouseReleased", 32, 32, "left", 0);
+      await settle();
+    });
+
+    await t.test("king nodes and visible sectors stay stable over repeated moves and animation frames", async () => {
+      await evaluate("setBoardFen('7k/5r2/8/8/8/8/8/4K3 w - - 0 1')");
+      await settle();
+      await mouse("mousePressed", 288, 480);
+      await settle();
+      await evaluate(`(() => {
+        window.stableKings = [...document.querySelectorAll('#lfs-move-preview > piece.king, #lfs-move-preview-drag > piece.king')]
+          .map(piece => ({ piece, group: piece.querySelector('.lfs-king-movement-group'),
+            svg: piece.querySelector('.lfs-king-movement-fields'), path: piece.querySelector('.lfs-king-movement-fields path') }));
+        const previewCarrier = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        previewCarrier.setAttribute('data-lfs-board-overlay', 'king-preview-stability-test');
+        previewCarrier.setAttribute('viewBox', '0 0 8 8');
+        previewCarrier.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none';
+        window.previewKingGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        previewCarrier.append(previewKingGroup);
+        document.querySelector('#lfs-move-preview').append(previewCarrier);
+        LichessKingMovementFields.renderPreview(previewKingGroup,
+          LichessMovePreview.getDragPreviewState(document.querySelector('#lfs-move-preview')), null);
+        const previewSvg = previewKingGroup.querySelector(':scope > svg.lfs-king-preview-fields');
+        window.stablePreviewKingFields = { svg: previewSvg, path: previewSvg?.querySelector('path') };
+        if (!stablePreviewKingFields.path) throw new Error('right-drag hover preview must render king fields');
+        window.kingDetachments = 0;
+        window.kingObserver = new MutationObserver(records => {
+          for (const record of records) for (const removed of record.removedNodes) {
+            const trackedNodeRemoved = stableKings.some(ref =>
+              [ref.piece, ref.group, ref.svg, ref.path].some(node => node && (removed === node || removed.contains(node))))
+              || [stablePreviewKingFields.svg, stablePreviewKingFields.path]
+                .some(node => node && (removed === node || removed.contains(node)));
+            if (trackedNodeRemoved) kingDetachments++;
+          }
+        });
+        kingObserver.observe(document.querySelector('.cg-wrap'), { childList: true, subtree: true });
+      })()`);
+      for (let cycle = 0; cycle < 5; cycle++) {
+        for (const [x, y] of [[288, 480], [288, 416], [224, 480], [288, 480]]) {
+          for (let move = 0; move < 3; move++) {
+            await mouse("mouseMoved", x + move, y + move);
+            const result = await evaluate(`(async () => {
+              const failures = [];
+              for (let frame = 0; frame < 4; frame++) {
+                await new Promise(resolve => requestAnimationFrame(resolve));
+                for (const ref of stableKings) {
+                  if (!ref.piece.isConnected || ref.piece.querySelector('.lfs-king-movement-group') !== ref.group
+                    || ref.group.querySelector('svg') !== ref.svg || ref.svg.querySelector('path') !== ref.path) failures.push('identity');
+                }
+                const previewFields = stablePreviewKingFields;
+                LichessKingMovementFields.renderPreview(previewKingGroup,
+                  LichessMovePreview.getDragPreviewState(document.querySelector('#lfs-move-preview')), null);
+                if (!previewFields.svg.isConnected
+                  || previewKingGroup.querySelector(':scope > svg.lfs-king-preview-fields') !== previewFields.svg
+                  || previewFields.svg.querySelector('path') !== previewFields.path) failures.push('preview identity');
+                const previewStyle = getComputedStyle(previewFields.path);
+                if (previewStyle.visibility !== 'visible' || previewStyle.display === 'none' || previewStyle.fill === 'none'
+                  || !previewFields.path.getBoundingClientRect().width) failures.push('preview visibility');
+                const ref = stableKings.find(ref => ref.piece.closest('#lfs-move-preview-drag'));
+                const preview = LichessMovePreview.getDragPreviewState(document.querySelector('#lfs-move-preview'));
+                const oracle = document.createElement('piece');
+                LichessKingMovementFields.renderDragPreview(oracle, preview.position, preview.target, preview.blackOrientation);
+                if (ref.path.getAttribute('d') !== oracle.querySelector('path')?.getAttribute('d')) failures.push('segments');
+                const style = getComputedStyle(ref.path);
+                if (style.visibility !== 'visible' || style.display === 'none' || style.fill === 'none'
+                  || Number(style.opacity) !== 1 || Number(getComputedStyle(ref.piece).opacity) !== 1
+                  || !ref.path.getBoundingClientRect().width) failures.push('visibility');
+              }
+              return { failures, detachments: kingDetachments, kings: stableKings.length };
+            })()`);
+            assert.deepEqual(result, { failures: [], detachments: 0, kings: 3 }, `cycle ${cycle}, field ${x}/${y}, move ${move}`);
+          }
+        }
+      }
+      assert.equal(await evaluate("kingDetachments"), 0, "neither dragged nor interaction-preview king fields detach during updates");
+      await evaluate("kingObserver.disconnect()");
+      await mouse("mouseReleased", 288, 480, "right", 0);
+      await evaluate("previewKingGroup.parentElement?.remove()");
+      await evaluate("LichessMovePreview.restore()");
+      await settle();
+    });
+
+    await t.test("wedge and last-move highlights follow the preview board during drag and hover", async () => {
+      await evaluate("setBoardFen('4k3/8/p7/8/8/R7/8/R3K3 w - - 0 1')");
+      await settle();
+      await mouse("mousePressed", 32, 352, "right", 2);
       await settle();
       await evaluate("new Promise(resolve => setTimeout(resolve, 80))");
-      assert.equal(await evaluate("document.querySelector('#lfs-move-preview > piece.white.rook[data-key=a2]') !== null"), true);
-      assert.equal(await evaluate("getComputedStyle(document.querySelector('#lfs-move-preview > piece.white.rook[data-key=a2]')).opacity"), "0");
-      assert.ok(await evaluate("document.querySelectorAll('#lfs-move-preview piece[data-lfs-defense-highlight]').length > 0"));
-      assert.equal(await evaluate("document.querySelector('#lfs-move-preview svg[data-lfs-board-overlay=between-pieces]') !== null"), true);
-
-      await mouse("mouseReleased", 32, 416, "right", 0);
+      const sourceLines = await evaluate("document.querySelectorAll('svg.lfs-threat-arc path').length");
+      assert.ok(sourceLines >= 2, "the origin field should show attack and defense lines");
+      assert.ok(await evaluate(`(() => {
+        window.dragCascadeLines = [...document.querySelectorAll('#lfs-move-preview svg[data-lfs-board-overlay] g > path[stroke^="url(#lfs-highlight-line-"]')];
+        window.detachedDragLines = 0;
+        window.checkDragLines = event => {
+          if (event.detail?.id === 'lfs-move-preview' && dragCascadeLines.some(path => !path.isConnected)) detachedDragLines++;
+        };
+        document.addEventListener('lfs-hover-preview-change', checkDragLines);
+        return dragCascadeLines.length;
+      })()`), "the test must exercise animated cascade lines, not static threat arcs");
+      await mouse("mouseMoved", 32, 288, "right", 2);
       await settle();
-      assert.equal(await evaluate("getComputedStyle(document.querySelector('#lfs-move-preview > piece.white.rook[data-key=a2]')).opacity"), "1");
+      await evaluate("new Promise(resolve => setTimeout(resolve, 80))");
+      assert.equal(await evaluate("document.querySelector('#lfs-move-preview > piece.white.rook[data-key=a4]') !== null"), true);
+      assert.equal(await evaluate("getComputedStyle(document.querySelector('#lfs-move-preview > piece.white.rook[data-key=a4]')).opacity"), "0");
+      assert.ok(await evaluate("document.querySelectorAll('#lfs-move-preview piece[data-lfs-defense-highlight]').length > 0"));
+      const firstTargetLines = await evaluate("document.querySelectorAll('svg.lfs-threat-arc path').length");
+      assert.ok(firstTargetLines >= 2, "attack and defense lines should persist on the first destination");
+      assert.ok(await evaluate("document.querySelectorAll('#lfs-move-preview g > path[stroke^=\"url(#lfs-highlight-line-\"]').length"),
+        "a field change must keep attack/defense cascade lines on the board");
+      assert.equal(await evaluate("detachedDragLines"), 0, "rebuilding the board must not interrupt active lines before their renderer updates");
+      await evaluate("dragCascadeLines = [...document.querySelectorAll('#lfs-move-preview g > path[stroke^=\"url(#lfs-highlight-line-\"]')]");
+      assert.deepEqual(await evaluate(`(() => {
+        const preview = LichessThreatCoding.getInteractionPreview(document.querySelector('#lfs-move-preview'));
+        return { source: [preview?.source.row, preview?.source.col], target: [preview?.target.row, preview?.target.col], legal: preview?.legal };
+      })()`), { source: [5, 0], target: [4, 0], legal: true });
+      await mouse("mouseMoved", 32, 224, "right", 2);
+      await settle();
+      await evaluate("new Promise(resolve => setTimeout(resolve, 80))");
+      assert.ok(await evaluate("document.querySelectorAll('svg.lfs-threat-arc path').length >= 2"),
+        "attack and defense lines should persist when entering another destination");
+      assert.equal(await evaluate("document.querySelector('#lfs-move-preview > piece.white.rook[data-key=a5]') !== null"), true);
+      assert.ok(await evaluate("document.querySelectorAll('#lfs-move-preview g > path[stroke^=\"url(#lfs-highlight-line-\"]').length"),
+        "active cascade lines survive multiple field changes without another pointer move");
+      assert.equal(await evaluate("detachedDragLines"), 0, "subsequent field changes also preserve active overlays");
+      await evaluate("document.removeEventListener('lfs-hover-preview-change', checkDragLines)");
+
+      await mouse("mouseReleased", 32, 224, "right", 0);
+      await settle();
+      assert.equal(await evaluate("getComputedStyle(document.querySelector('#lfs-move-preview > piece.white.rook[data-key=a5]')).opacity"), "1");
       await mouse("mouseMoved", 96, 416, "left", 0);
       await mouse("mouseMoved", 34, 416, "left", 0);
       await settle();

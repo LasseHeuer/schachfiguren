@@ -347,6 +347,10 @@
     drag.path = path;
     drag.blackOrientation = blackOrientation;
     updateArrowPath(path, [drag.source, drag.source], blackOrientation);
+    if (pieceCode[1] === "K") {
+      globalThis.LichessKingMovementFields?.renderDragPreview(
+        piece, drag.state.board, drag.source, blackOrientation);
+    }
   }
 
   function dispatchPreviewPointerMove(drag, x, y) {
@@ -371,11 +375,17 @@
     const source = screenSquare(drag.source, blackOrientation);
     drag.path.setAttribute("d", `M ${source.col * 12.5 + 6.25} ${source.row * 12.5 + 6.25} L ${pointerX} ${pointerY}`);
     if (drag.targetKey === (legal ? targetKey : null)) {
-      dispatchPreviewPointerMove(drag, x, y);
       return;
     }
     drag.target = legal ? target : null;
     drag.targetKey = legal ? targetKey : null;
+    const draggedPiece = drag.state.board[drag.source.row][drag.source.col];
+    if (draggedPiece?.[1] === "K") {
+      const previewState = legal ? boardLogic.applyMove(drag.state, drag.source, target) : drag.state;
+      const blackOrientation = getWrapper(drag.board)?.classList.contains("orientation-black") ?? false;
+      globalThis.LichessKingMovementFields?.renderDragPreview(
+        drag.piece, previewState.board, legal ? target : drag.source, blackOrientation);
+    }
     updateSessionDragPreview(drag, drag.target);
     dispatchPreviewPointerMove(drag, x, y);
   }
@@ -530,7 +540,16 @@
     session.blackOrientation = getWrapper(session.board)?.classList.contains("orientation-black") ?? false;
     overlay.className = "cg-board";
     overlay.toggleAttribute("data-lfs-move-preview-dragging", pending?.board === session.board);
-    overlay.replaceChildren();
+    // Keep pieces (and their king fields) connected across drag target changes.
+    const pieces = new Map([...overlay.querySelectorAll(":scope > piece")]
+      .map(piece => [piece.dataset.previewPieceId, piece]));
+    for (const child of [...overlay.children]) {
+      if (!child.matches("piece, [data-lfs-board-overlay]")) child.remove();
+    }
+    const pieceIds = session.dragPreview
+      ? movePieceIds(session.states[session.index], session.pieceIdStates[session.index],
+        session.dragPreview.from, session.dragPreview.to)
+      : session.pieceIdStates[session.index];
     session.svg = createSvgElement("svg", { viewBox: "0 0 100 100", "aria-hidden": "true" });
     session.svg.classList.add("lfs-move-preview-paths");
     overlay.append(session.svg);
@@ -541,16 +560,24 @@
         const piece = state.board[row][col];
         if (!piece) continue;
         const screen = screenSquare({ row, col }, session.blackOrientation);
-        const element = document.createElement("piece");
-        element.className = `${piece[0] === "w" ? "white" : "black"} ${typeNames[piece[1]]} lfs-move-preview-piece`;
+        const pieceId = pieceIds[row][col];
+        let element = pieces.get(pieceId);
+        pieces.delete(pieceId);
+        if (!element) {
+          element = document.createElement("piece");
+          element.dataset.previewPieceId = pieceId;
+          overlay.append(element);
+        }
+        const className = `${piece[0] === "w" ? "white" : "black"} ${typeNames[piece[1]]} lfs-move-preview-piece`;
+        if (!element.classList.contains(typeNames[piece[1]])) element.className = className;
         const dragSquare = session.dragPreview?.to ?? (pending?.board === session.board ? pending.source : null);
-        if (dragSquare?.row === row && dragSquare.col === col) element.classList.add("lfs-move-preview-candidate-piece");
+        element.classList.toggle("lfs-move-preview-candidate-piece", dragSquare?.row === row && dragSquare.col === col);
         element.dataset.key = boardLogic.squareKey({ row, col });
         element.style.left = `${screen.col * 12.5}%`;
         element.style.top = `${screen.row * 12.5}%`;
-        overlay.append(element);
       }
     }
+    for (const element of pieces.values()) element.remove();
     const baseKey = `${boardLogic.getPlacement(state)} ${state.turn}`;
     overlay.dataset.position = baseKey;
     session.board.dataset.lfsMovePreviewActive = "";
@@ -729,6 +756,28 @@
     else render(session);
   }
 
+  function getDragPreviewState(board) {
+    const session = active;
+    if (!session || session.overlay !== board) return null;
+    const drag = pending?.board === session.board ? pending : null;
+    const preview = session.dragPreview;
+    const source = preview?.from ?? drag?.source;
+    if (!source) return null;
+    const state = session.states[session.index];
+    return {
+      position: preview?.state.board ?? state.board,
+      source,
+      target: preview?.to ?? source,
+      color: state.turn,
+      pieceId: session.pieceIdStates[session.index][source.row][source.col],
+      basePosition: state.board,
+      blackOrientation: session.blackOrientation,
+      legal: Boolean(preview),
+      isHoverPreview: false,
+      isDragging: Boolean(drag || preview)
+    };
+  }
+
   function makeMove(board, from, to, baseState, promotion = "Q") {
     const startsSession = !active || active.board !== board;
     const initial = startsSession ? (baseState ?? readBaseState(board)) : null;
@@ -817,13 +866,11 @@
     pending = { board, source, state, legalTargets, pointerId: event.pointerId };
     if (!active && legalTargets.size) {
       const session = startSession(board, state);
-      if (session) {
-        session.provisional = true;
-        render(session);
-      }
+      if (session) session.provisional = true;
     }
     createDragVisual(pending);
     updateDragVisual(pending, event.clientX, event.clientY);
+    if (active?.board === board) render(active);
   }, true);
 
   document.addEventListener("pointermove", event => {
@@ -933,6 +980,7 @@
     update,
     restore,
     isActive: () => Boolean(active),
-    getOverlayBoard: board => active?.board === board ? active.overlay : null
+    getOverlayBoard: board => active?.board === board ? active.overlay : null,
+    getDragPreviewState
   };
 })();

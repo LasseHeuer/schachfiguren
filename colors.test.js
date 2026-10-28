@@ -8,6 +8,47 @@ const colors = globalThis.LichessColors;
 const settings = globalThis.LichessSettings;
 const threats = globalThis.LichessThreatCoding;
 
+test("game analysis publishes only known mainline clock states", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const messages = [];
+  const events = {};
+  let observing = false;
+  const nodes = [{ ply: 0, clock: 6000, fen: "start" }, { ply: 1, clock: 3000, fen: "one" },
+    { ply: 2, clock: 4500, fen: "two" }, { ply: 3, clock: 0, fen: "three" }];
+  const analysis = { asyncReady: true, chessground: {}, data: { game: { id: "abcdefgh" } },
+    mainline: nodes, nodeList: nodes.slice(0, 3), node: nodes[2] };
+  const window = { site: { analysis }, lichess: { events: { on(name, fn) { events[name] = fn; } } },
+    postMessage(value) { messages.push(value); }, addEventListener() {} };
+  const context = vm.createContext({ window, location: { pathname: "/game/abcdefgh/white", origin: "https://lichess.org" },
+    document: { addEventListener() {} }, MutationObserver: class { observe() { observing = true; } disconnect() {} },
+    requestAnimationFrame(fn) { fn(); } });
+  vm.runInContext(readFileSync(join(__dirname, "move-preview-main.js"), "utf8"), context);
+  assert.equal(observing, true);
+  const clocks = () => JSON.parse(JSON.stringify(messages.filter(message => message.channel === "lfs-analysis-clocks").at(-1).clocks));
+  assert.deepEqual(clocks(), { white: 50, black: 75 });
+  analysis.nodeList = nodes.slice(0, 4); analysis.node = nodes[3]; events.ply();
+  assert.deepEqual(clocks(), { white: 0, black: 75 });
+  analysis.nodeList = [nodes[0], { ply: 1, clock: 1000 }]; events.ply();
+  assert.equal(clocks(), null);
+  delete nodes[2].clock; analysis.nodeList = nodes.slice(0, 3); events.ply();
+  assert.deepEqual(clocks(), { white: 50 });
+  analysis.ongoing = true; events.ply();
+  assert.equal(clocks(), null);
+  // Clock values from Lichess game HqjDTU4A, in centiseconds; initial is in seconds.
+  const gameNodes = [{ ply: 0, clock: 18000, fen: "start" }, { ply: 1, clock: 18000, fen: "one" },
+    { ply: 2, clock: 18000, fen: "two" }, { ply: 3, clock: 17776, fen: "three" },
+    { ply: 4, clock: 17928, fen: "four" }];
+  analysis.ongoing = false;
+  analysis.data = { game: { id: "HqjDTU4A" }, clock: { initial: 180, increment: 0 } };
+  analysis.mainline = gameNodes; analysis.nodeList = gameNodes.slice(); analysis.node = gameNodes[4];
+  events.ply();
+  assert.deepEqual(clocks(), { white: 17776 / 18000 * 100, black: 17928 / 18000 * 100 });
+  analysis.nodeList = gameNodes.slice(0, 1); analysis.node = gameNodes[0]; events.ply();
+  assert.deepEqual(clocks(), { white: 100, black: 100 });
+});
+
 test("promotion preview cycles through promotion pieces at its configured interval", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");
@@ -424,14 +465,27 @@ test("king movement fields follow preview animation distances and board orientat
   const { join } = require("node:path");
   const element = () => ({
     attributes: {}, children: [],
+    get firstElementChild() { return this.children[0] ?? null; },
+    getAttribute(key) { return this.attributes[key] ?? null; },
     setAttribute(key, value) { this.attributes[key] = value; },
     removeAttribute(key) { delete this.attributes[key]; },
-    classList: { add() {} },
-    querySelector() { return null; },
-    append(child) { this.children.push(child); },
+    className: "",
+    classList: { add(name) { this.element.className = name; }, element: null },
+    querySelector(selector) {
+      if (selector === ":scope > svg.lfs-king-preview-fields") return this.children.find(child => child.className === "lfs-king-preview-fields") ?? null;
+      return null;
+    },
+    append(child) { child.parentNode = this; this.children.push(child); },
+    remove() { this.parentNode.children.splice(this.parentNode.children.indexOf(this), 1); this.parentNode = null; },
     replaceChildren() { this.children = []; }
   });
-  const context = vm.createContext({ document: { addEventListener() {}, createElementNS: element } });
+  const createElement = element;
+  const createElementWithClass = () => {
+    const node = createElement();
+    node.classList.element = node;
+    return node;
+  };
+  const context = vm.createContext({ document: { addEventListener() {}, createElementNS: createElementWithClass } });
   const source = readFileSync(join(__dirname, "king-movement-fields.js"), "utf8");
   vm.runInContext(source.replace("  globalThis.LichessKingMovementFields = {", `
     globalThis.testing = { fillOverlay, getDestinationState, readPosition, renderBoard, renderPreview, configure(value) { settings = value; } };
@@ -544,6 +598,31 @@ test("king movement fields follow preview animation distances and board orientat
   assert.equal(previewGroup.children[0].attributes.y, "4");
   assert.equal(previewGroup.children[0].attributes.filter, "url(#preview-highlight)");
   assert.equal(previewGroup.children[0].children[0].attributes.fill, settings.normalize({ pieceSet: "system_eckig" }).whitePieceColor);
+  const previewSvg = previewGroup.children[0];
+  const previewPath = previewSvg.children[0];
+  const previewPathData = previewPath.attributes.d;
+  previewPosition[3][3] = "";
+  previewPosition[2][2] = "wK";
+  api.renderPreview(previewGroup, {
+    position: previewPosition,
+    source: { row: 4, col: 4 },
+    target: { row: 2, col: 2 },
+    blackOrientation: true
+  }, null);
+  assert.equal(previewGroup.children.length, 1, "preview updates retain one persistent SVG");
+  assert.equal(previewGroup.children[0], previewSvg, "preview updates keep the SVG connected");
+  assert.equal(previewSvg.children[0], previewPath, "preview updates keep the path connected");
+  assert.equal(previewSvg.attributes.x, "3");
+  assert.equal(previewSvg.attributes.y, "3");
+  assert.notEqual(previewPath.attributes.d, previewPathData, "the same path node refreshes sectors");
+  previewPosition[2][2] = "";
+  api.renderPreview(previewGroup, {
+    position: previewPosition,
+    source: { row: 4, col: 4 },
+    target: { row: 2, col: 2 },
+    blackOrientation: true
+  }, null);
+  assert.equal(previewGroup.children.length, 0, "the preview SVG is removed only when there is no king");
   api.configure(settings.normalize({ pieceSet: "system_rund" }));
   position[3][4] = "";
   const emptySvg = element();
@@ -1292,7 +1371,8 @@ test("board preview updates do not trigger round layout and synthetic scroll fee
   const calls = [];
   const context = vm.createContext({
     LichessSettings: settings,
-    window: { addEventListener() {} },
+    window: { addEventListener() {}, postMessage() {} },
+    location: { origin: "https://lichess.org" },
     document: { addEventListener() {}, documentElement: { hasAttribute: () => zenMode } },
     chrome: {
       runtime: { onMessage: { addListener() {} } },
@@ -2771,8 +2851,9 @@ ${contentMarker}`));
       assert.ok(contentSource.includes(clockMarker));
       await evaluate(contentSource.replace(clockMarker, `
         globalThis.clockTesting = {
-          ensureZenClockOverlay, positionZenClock, updateZenClock,
+          ensureZenClockOverlay, positionZenClock, updateZenClock, syncZenClockOverlay,
           configure(value) { settings = normalize(value); },
+          setBoard(value) { zenBoard = value; },
           get rows() { return zenClockRows; }
         };
         return;
@@ -2816,10 +2897,10 @@ ${clockMarker}`));
           return results;
         })()`);
         for (const [index, clock] of result.entries()) {
-          assert.deepEqual(clock.start, [3, size / 2 + 10]);
-          assert.deepEqual(clock.finish, [size + 17, size / 2 + 10]);
-          assert.ok(Math.abs(clock.middle[0] - (size / 2 + 10)) < 0.01);
-          assert.ok(Math.abs(clock.middle[1] - (index === 0 ? 3 : size + 17)) < 0.01);
+          assert.deepEqual(clock.start, [3, size / 2 + 9]);
+          assert.deepEqual(clock.finish, [size + 15, size / 2 + 9]);
+          assert.ok(Math.abs(clock.middle[0] - (size / 2 + 9)) < 0.01);
+          assert.ok(Math.abs(clock.middle[1] - (index === 0 ? 3 : size + 15)) < 0.01);
           assert.equal(clock.rounded, shape === "round");
           assert.equal(clock.half, "50 100");
           assert.equal(clock.zero, "0 100");
@@ -2829,11 +2910,84 @@ ${clockMarker}`));
           assert.equal(clock.runningVisible, true);
           assert.equal(clock.flowing, true);
           assert.equal(clock.outside, true);
-          assert.deepEqual(clock.bar, [40, 70]);
+          assert.deepEqual(clock.bar, [41, 71]);
         }
       }
+      for (const scale of [1, 1.25, 2]) {
+        await send("Emulation.setDeviceMetricsOverride", { width: 800, height: 800, deviceScaleFactor: scale, mobile: false });
+        const result = await evaluate(`(() => {
+          document.documentElement.setAttribute('data-lfs-zen-mode', '');
+          clockTesting.configure({ boardBevelEnabled: false, zenClockMarginPx: 0 });
+          const overlay = document.querySelector('#lfs-zen-clock-overlay');
+          const thickness = Math.round(3 * ${scale}) / ${scale};
+          overlay.style.setProperty('--lfs-zen-clock-line-thickness', thickness + 'px');
+          const rect = { left: 50.23, top: 80.41, width: 512.37, height: 512.37, bottom: 592.78 };
+          return ['top', 'bottom'].map(side => {
+            clockTesting.positionZenClock(side, rect);
+            const { fill } = clockTesting.rows[side];
+            const matrix = fill.getScreenCTM();
+            const start = fill.getPointAtLength(0), end = fill.getPointAtLength(fill.getTotalLength());
+            const middle = fill.getPointAtLength(fill.getTotalLength() / 2);
+            const left = matrix.e + start.x - thickness / 2;
+            const right = matrix.e + end.x + thickness / 2;
+            const edge = matrix.f + middle.y + (side === 'top' ? -1 : 1) * thickness / 2;
+            return { left, right, edge, thickness, rect };
+          });
+        })()`);
+        for (const [index, clock] of result.entries()) {
+          for (const edge of [clock.left, clock.right, clock.edge]) {
+            assert.ok(Math.abs(edge * scale - Math.round(edge * scale)) < 0.03);
+          }
+          assert.ok(clock.left + clock.thickness >= clock.rect.left);
+          assert.ok(clock.right - clock.thickness <= clock.rect.left + clock.rect.width);
+          assert.ok(index === 0 ? clock.edge + clock.thickness >= clock.rect.top : clock.edge - clock.thickness <= clock.rect.bottom);
+        }
+      }
+      const analysisResult = await evaluate(`(() => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'cg-wrap orientation-black';
+        wrapper.append(document.createElement('cg-board')); document.body.append(wrapper);
+        clockTesting.setBoard(wrapper);
+        const rect = { left: 50, top: 80, width: 320, height: 320, bottom: 400 };
+        clockTesting.syncZenClockOverlay([], rect, { white: 25, black: 75 });
+        const rows = clockTesting.rows;
+        const result = ['top', 'bottom'].map(side => ({ color: rows[side].row.dataset.playerColor,
+          line: rows[side].fill.getAttribute('stroke-dasharray'), hidden: rows[side].time.hidden }));
+        clockTesting.syncZenClockOverlay([], rect, { black: 0 });
+        result.push({ topHidden: rows.top.row.hidden, bottomHidden: rows.bottom.row.hidden,
+          line: rows.bottom.fill.getAttribute('stroke-dasharray') });
+        wrapper.remove();
+        return result;
+      })()`);
+      assert.deepEqual(analysisResult, [{ color: "white", line: "25 100", hidden: true },
+        { color: "black", line: "75 100", hidden: true }, { topHidden: true, bottomHidden: false, line: "0 100" }]);
+      await evaluate("document.documentElement.removeAttribute('data-lfs-zen-mode')");
       await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
       assert.deepEqual(runtimeErrors, []);
+    });
+    await t.test("zen controls become opaque on hover", async () => {
+      await evaluate(`(() => {
+        document.documentElement.setAttribute('data-lfs-zen-mode', '');
+        for (const id of ['lfs-analysis-toolbar', 'lfs-zen-toggle']) {
+          if (!document.getElementById(id)) {
+            const element = document.createElement('div');
+            element.id = id;
+            element.dataset.testZenControl = '';
+            document.documentElement.append(element);
+          }
+        }
+      })()`);
+      await send("DOM.enable");
+      await send("CSS.enable");
+      const { root: documentRoot } = await send("DOM.getDocument");
+      for (const id of ["lfs-analysis-toolbar", "lfs-zen-toggle"]) {
+        const { nodeId } = await send("DOM.querySelector", { nodeId: documentRoot.nodeId, selector: `#${id}` });
+        assert.equal(await evaluate(`getComputedStyle(document.getElementById('${id}')).opacity`), "0.25");
+        await send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: ["hover"] });
+        assert.equal(await evaluate(`getComputedStyle(document.getElementById('${id}')).opacity`), "1");
+        await send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: [] });
+      }
+      await evaluate("document.documentElement.removeAttribute('data-lfs-zen-mode'); document.querySelectorAll('[data-test-zen-control]').forEach(element => element.remove())");
     });
     await t.test("rook outlines include occupied a6 destinations from a2 for moves and premoves", async () => {
       for (const destinationClass of ["move-dest", "premove-dest"]) {
@@ -3610,6 +3764,41 @@ ${clockMarker}`));
         sandbox.remove(); return failures;
       })()`);
       assert.deepEqual(failures, []);
+    });
+    await t.test("zen background uses a solid color layer behind the board", async () => {
+      await evaluate(`(() => {
+        chrome.storage = { local: { get: (_, callback) => callback({ zenBackgroundTintPercent: 12 }) },
+          onChanged: { addListener() {} } };
+        const board = document.querySelector('.cg-wrap');
+        board.setAttribute('data-lfs-zen-board', '');
+        const top = document.createElement('div'); top.className = 'material material-top'; top.textContent = '+3';
+        const bottom = document.createElement('div'); bottom.className = 'material material-bottom';
+        board.parentElement.classList.add('analyse__board'); board.parentElement.append(top, bottom);
+        document.documentElement.setAttribute('data-lfs-zen-mode', '');
+      })()`);
+      await evaluate(readFileSync(join(root, "zen-background.js"), "utf8"));
+      const result = await evaluate(`(async () => {
+        const background = document.querySelector('#lfs-zen-background');
+        const rect = background.getBoundingClientRect();
+        return { hidden: background.hidden, width: rect.width, height: rect.height,
+          color: background.style.backgroundColor,
+          boardOnTop: !!document.elementFromPoint(250, 250)?.closest('[data-lfs-zen-board]') };
+      })()`);
+      assert.equal(result.hidden, false);
+      assert.equal(result.width, 512);
+      assert.equal(result.height, 512);
+      assert.match(result.color, /^color-mix\(/);
+      assert.equal(result.boardOnTop, true);
+      const hover = await evaluate(`(() => {
+        document.documentElement.setAttribute('data-lfs-board-hover', '');
+        const overlay = getComputedStyle(document.documentElement, '::after');
+        return { background: overlay.backgroundColor, filter: overlay.backdropFilter };
+      })()`);
+      assert.deepEqual(hover, { background: "rgba(0, 0, 0, 0)", filter: "none" });
+      await evaluate("document.documentElement.removeAttribute('data-lfs-board-hover')");
+      await evaluate("document.documentElement.removeAttribute('data-lfs-zen-mode')");
+      assert.equal(await evaluate("document.querySelector('#lfs-zen-background').hidden"), true);
+      assert.deepEqual(runtimeErrors, []);
     });
   } finally {
     socket?.close();

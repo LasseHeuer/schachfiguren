@@ -258,9 +258,9 @@
     const renderKey = JSON.stringify([pathData, color, settings.pieceSet]);
     if (renderedOverlayKeys.get(svg) === renderKey) return;
     renderedOverlayKeys.set(svg, renderKey);
-    svg.replaceChildren();
+    let path = svg.firstElementChild;
     if (paths.length) {
-      svg.append(createSvgElement("path", {
+      const attributes = {
         d: pathData,
         fill: color,
         stroke: color,
@@ -268,24 +268,70 @@
         "stroke-linejoin": "miter",
         "fill-rule": "nonzero",
         "shape-rendering": settings.pieceSet === "system_rund" ? "geometricPrecision" : "crispEdges"
-      }));
-    }
+      };
+      if (!path) {
+        path = createSvgElement("path");
+        svg.append(path);
+      }
+      for (const [name, value] of Object.entries(attributes)) {
+        if (path.getAttribute(name) !== value) path.setAttribute(name, value);
+      }
+    } else path?.remove();
   }
 
   function renderPreview(group, preview, highlightFilterId) {
-    group.querySelector(":scope > svg.lfs-king-preview-fields")?.remove();
-    if (!settings?.enabled || !settings.kingMovementFieldsEnabled) return;
+    let svg = group.querySelector(":scope > svg.lfs-king-preview-fields");
+    if (!settings?.enabled || !settings.kingMovementFieldsEnabled) {
+      svg?.remove();
+      return;
+    }
     const piece = preview.position[preview.target.row][preview.target.col];
-    if (piece?.[1] !== "K") return;
+    if (piece?.[1] !== "K") {
+      svg?.remove();
+      return;
+    }
     const source = logicalToScreen(preview.source, preview.blackOrientation);
-    const svg = createSvgElement("svg", {
-      x: source.col, y: source.row, width: 1, height: 1,
-      viewBox: "0 0 1 1", "aria-hidden": "true", "pointer-events": "none"
-    });
-    svg.classList.add("lfs-king-preview-fields");
+    if (!svg) {
+      svg = createSvgElement("svg", { viewBox: "0 0 1 1", "aria-hidden": "true", "pointer-events": "none" });
+      svg.classList.add("lfs-king-preview-fields");
+      group.append(svg);
+    }
+    const attributes = { x: source.col, y: source.row, width: 1, height: 1 };
+    for (const [name, value] of Object.entries(attributes)) {
+      const stringValue = String(value);
+      if (svg.getAttribute(name) !== stringValue) svg.setAttribute(name, stringValue);
+    }
     fillOverlay(svg, preview.position, { ...preview.target, color: piece[0] }, preview.blackOrientation);
-    if (highlightFilterId) svg.setAttribute("filter", `url(#${highlightFilterId})`);
-    group.append(svg);
+    const filter = highlightFilterId ? `url(#${highlightFilterId})` : null;
+    if (svg.getAttribute("filter") !== filter) {
+      if (filter) svg.setAttribute("filter", filter);
+      else svg.removeAttribute("filter");
+    }
+  }
+
+  function renderDragPreview(pieceElement, position, target, blackOrientation) {
+    let group = pieceElement.querySelector(":scope > span.lfs-king-movement-group");
+    let svg = group?.querySelector(":scope > svg.lfs-king-movement-fields");
+    const piece = target && position?.[target.row]?.[target.col];
+    if (!settings?.enabled || !settings.kingMovementFieldsEnabled || piece?.[1] !== "K") {
+      group?.remove();
+      pieceElement.removeAttribute("data-lfs-king-movement-fields");
+      return;
+    }
+    if (!group) {
+      group = document.createElement("span");
+      group.classList.add("lfs-king-movement-group");
+      pieceElement.append(group);
+      pieceElement.setAttribute("data-lfs-king-movement-fields", "");
+    }
+    if (!svg) {
+      svg = createSvgElement("svg", {
+        viewBox: "0 0 1 1", "aria-hidden": "true", "pointer-events": "none"
+      });
+      svg.classList.add("lfs-king-movement-fields");
+      group.append(svg);
+    }
+    fillOverlay(svg, position, { ...target, color: piece[0] }, blackOrientation);
   }
 
   function renderBoard(board, entry) {
@@ -403,5 +449,5 @@
     initialize();
   }
 
-  globalThis.LichessKingMovementFields = { update, renderPreview };
+  globalThis.LichessKingMovementFields = { update, renderPreview, renderDragPreview };
 })();

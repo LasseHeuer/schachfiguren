@@ -739,7 +739,7 @@
   }
 
   function getInteractionPreview(board, x = lastPointerPosition?.x, y = lastPointerPosition?.y) {
-    if (board.id === "lfs-move-preview") return null;
+    if (board.id === "lfs-move-preview") return globalThis.LichessMovePreview?.getDragPreviewState(board) ?? null;
     const dragPreview = getDragPreviewState(board);
     if (dragPreview) {
       clearKnightHoverGap(board);
