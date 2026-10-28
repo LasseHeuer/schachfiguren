@@ -523,6 +523,70 @@ main.lobby:has(> .lfs-playlist-page) {
   font-size: 0.75rem;
 }
 
+html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar,
+html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar * {
+  visibility: visible !important;
+}
+
+html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar {
+  position: fixed !important;
+  top: var(--lfs-zen-toolbar-top, auto) !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: var(--lfs-zen-toolbar-left, 8px) !important;
+  z-index: 2147483647 !important;
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  gap: 4px !important;
+  width: var(--lfs-zen-toolbar-width, auto) !important;
+  max-width: calc(100vw - 16px) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
+  translate: none !important;
+}
+
+html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar:not([data-solved="true"]) {
+  display: none !important;
+}
+
+html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-button {
+  display: flex !important;
+  flex: 1 1 0 !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: auto !important;
+  min-width: 0 !important;
+  min-height: 2.15rem !important;
+  padding: 0.25rem 0.35rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--c-bg-high, oklch(0.949119254399155 0.000000035377467 89.875562714212)) !important;
+  color: var(--c-font, oklch(0.321092509068037 0.000000011968401 89.875562741511)) !important;
+  font: 600 0.75rem/1.2 system-ui, sans-serif !important;
+  text-align: center !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-toolbar-remove {
+  margin: 0 !important;
+}
+
+html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-review-ratings {
+  display: contents !important;
+}
+
+html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-button:focus,
+html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-button:focus-visible {
+  outline: 1px solid var(--c-font, oklch(0.321092509068037 0.000000011968401 89.875562741511)) !important;
+  outline-offset: -1px !important;
+}
+
 :is(.lfs-playlist-page, .lfs-playlist-toolbar) :is(button, a, ol):focus-visible {
   outline: 2px solid var(--c-primary, oklch(0.621819458576841 0.155684874547398 131.916927625873));
   outline-offset: 2px;
@@ -1105,7 +1169,8 @@ html:not([data-lfs-disabled])[data-lfs-board-bevel] body[data-board] .is2d .cg-w
   background: var(--lfs-board-gap-active) !important;
 }
 
-html:not([data-lfs-disabled])[data-lfs-board-bevel] body[data-board] .is2d .cg-wrap {
+html:not([data-lfs-disabled])[data-lfs-board-bevel] body[data-board] .is2d .cg-wrap > cg-container,
+html:not([data-lfs-disabled])[data-lfs-board-bevel] body[data-board] .is2d .cg-wrap > cg-board {
   clip-path: var(--lfs-board-outer-clip) !important;
 }
 

@@ -15,6 +15,7 @@
   let observedPuzzle;
   let renderedPlaylistKey;
   let scheduled = false;
+  let zenToolbarFrame;
   let dueRefreshTimer;
   let dueRefreshAt;
 
@@ -398,6 +399,7 @@
 
     const savedIndex = playlist.items.findIndex(item => item.id === id);
     const savedItem = savedIndex >= 0 ? playlist.items[savedIndex] : null;
+    const zenMode = Boolean(document.documentElement?.hasAttribute?.("data-lfs-zen-mode"));
     const saveDescription = savedIndex < 0 ? "In Playlist speichern" : "Aus Playlist entfernen";
 
     if (!puzzleMenuSaveButton) {
@@ -414,10 +416,11 @@
     }
     if (puzzleToolbar.parentElement !== toolbarParent) toolbarParent.append(puzzleToolbar);
 
-    const viewKey = JSON.stringify([id, savedItem, playlist.activeQueue, playlist.activeIndex, isComplete, ratedThisVisit]);
+    const viewKey = JSON.stringify([id, savedItem, playlist.activeQueue, playlist.activeIndex, isComplete, ratedThisVisit, zenMode]);
     if (puzzleToolbar.dataset.viewKey === viewKey && puzzleMenuSaveButton.parentElement === puzzleToolbar) return;
     puzzleToolbar.dataset.viewKey = viewKey;
     puzzleToolbar.dataset.puzzleId = id;
+    puzzleToolbar.dataset.solved = String(isComplete);
     puzzleMenuSaveButton.dataset.puzzleId = id;
     puzzleMenuSaveButton.textContent = saveDescription;
     puzzleMenuSaveButton.className = `lfs-playlist-button ${savedIndex < 0 ? "lfs-playlist-primary" : "lfs-playlist-quiet lfs-playlist-toolbar-remove"}`;
@@ -446,6 +449,9 @@
       }
     }
     puzzleToolbar.append(puzzleMenuSaveButton);
+    if (zenMode && isComplete && !isActivePuzzle) {
+      puzzleToolbar.append(makeButton("Nächstes Rätsel", "native-next"));
+    }
 
     if (puzzleToolbar.dataset.handlerBound) return;
     puzzleToolbar.dataset.handlerBound = "true";
@@ -463,13 +469,23 @@
         if (index < 0 || grade < 1 || grade > 4) return;
         const items = [...playlist.items];
         items[index] = scheduler.schedule(items[index], grade, Date.now());
-        savePlaylist({ ...playlist, items });
+        const next = { ...playlist, items };
+        playlist = normalizePlaylist(next);
+        const isActive = playlist.activeIndex !== null && playlist.activeQueue[playlist.activeIndex] === currentId;
+        if (isActive && continuePlaylist(currentId)) return;
+        savePlaylist(next, advanceNativePuzzle);
+      } else if (control.dataset.action === "native-next") {
+        advanceNativePuzzle();
       } else if (control.dataset.action === "finish") {
         finishPlaylistSession();
       } else if (control.dataset.action === "next" && playlist.activeIndex !== null) {
         continuePlaylist(puzzleId());
       }
     });
+  }
+
+  function advanceNativePuzzle() {
+    document.querySelector(".puzzle__feedback.after .continue")?.click?.();
   }
 
   function continuePlaylist(currentId) {
@@ -528,6 +544,34 @@
     ensureHomeClickHandler();
     ensurePlaylistPageClickHandler();
     renderPuzzleToolbar();
+    scheduleZenToolbarPosition();
+  }
+
+  function positionZenToolbar() {
+    if (!puzzleToolbar) return;
+    const zenMode = Boolean(document.documentElement?.hasAttribute?.("data-lfs-zen-mode"));
+    if (!zenMode || puzzleToolbar.dataset.solved !== "true") {
+      for (const property of ["--lfs-zen-toolbar-left", "--lfs-zen-toolbar-top", "--lfs-zen-toolbar-width"]) {
+        puzzleToolbar.style.removeProperty(property);
+      }
+      return;
+    }
+    const board = document.querySelector(".puzzle__board cg-board");
+    const rect = board?.getBoundingClientRect?.();
+    if (!rect?.width || !rect?.height) return;
+    const gap = 6;
+    const height = puzzleToolbar.getBoundingClientRect().height;
+    const top = Math.min(rect.bottom + gap, Math.max(gap, window.innerHeight - height - gap));
+    puzzleToolbar.style.setProperty("--lfs-zen-toolbar-left", `${rect.left}px`);
+    puzzleToolbar.style.setProperty("--lfs-zen-toolbar-top", `${top}px`);
+    puzzleToolbar.style.setProperty("--lfs-zen-toolbar-width", `${rect.width}px`);
+  }
+
+  function scheduleZenToolbarPosition() {
+    cancelAnimationFrame(zenToolbarFrame);
+    zenToolbarFrame = requestAnimationFrame(() => {
+      zenToolbarFrame = requestAnimationFrame(positionZenToolbar);
+    });
   }
 
   function observePuzzleState() {
@@ -566,7 +610,11 @@
   });
 
   new MutationObserver(scheduleRender).observe(document, { childList: true, subtree: true });
+  if (document.documentElement) {
+    new MutationObserver(scheduleRender).observe(document.documentElement, { attributes: true, attributeFilter: ["data-lfs-zen-mode"] });
+  }
   window.addEventListener("popstate", scheduleRender);
   window.addEventListener("hashchange", scheduleRender);
+  window.addEventListener("resize", scheduleZenToolbarPosition);
   document.addEventListener("click", handleNativePuzzleContinue, true);
 })();
