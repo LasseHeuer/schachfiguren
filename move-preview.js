@@ -434,17 +434,27 @@
     panel.id = "lfs-move-promotion-choice";
     panel.setAttribute("role", "group");
     panel.setAttribute("aria-label", "Umwandlungsfigur wählen");
-    for (const type of ["Q", "R", "B", "N"]) {
+    const blackOrientation = getWrapper(drag.board)?.classList.contains("orientation-black") ?? false;
+    const screen = screenSquare(drag.target, blackOrientation);
+    const direction = screen.row === 7 ? -1 : 1;
+    panel.dataset.direction = direction < 0 ? "up" : "down";
+    for (const [index, type] of ["Q", "R", "B", "N"].entries()) {
       const button = document.createElement("button");
       button.type = "button";
       button.dataset.promotion = type;
       button.setAttribute("aria-label", type);
-      button.textContent = type;
-      button.style.color = drag.state.turn === "w" ? settings.whitePieceColor : settings.blackPieceColor;
+      const squareRow = screen.row + direction * index;
+      button.dataset.lfsPromotionTone = (screen.col + squareRow) % 2 === 0 ? "light" : "dark";
+      const piece = document.createElement("piece");
+      piece.className = `${drag.state.turn === "w" ? "white" : "black"} ${typeNames[type]}`;
+      piece.setAttribute("aria-hidden", "true");
+      button.append(piece);
       panel.append(button);
     }
     drag.board.closest(".cg-wrap").append(panel);
     drag.promotionPanel = panel;
+    panel.style.left = `${screen.col * 12.5}%`;
+    panel.style.top = direction < 0 ? "50%" : "0%";
   }
 
   function clearPromotionChoice(drag) {
@@ -938,9 +948,6 @@
       drag.piece.style.top = `${(screen.row + 0.5) * 12.5}%`;
       pendingPromotion = drag;
       showPromotionChoice(drag);
-      const panel = drag.promotionPanel;
-      panel.style.left = `${Math.min(screen.col * 12.5, 50)}%`;
-      panel.style.top = `${Math.min(screen.row * 12.5, 82)}%`;
       return;
     }
     clearDragVisual(drag);

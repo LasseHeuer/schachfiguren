@@ -1163,27 +1163,46 @@ html:not([data-lfs-disabled]) #lfs-move-promotion-choice {
   position: absolute !important;
   z-index: 2147483647 !important;
   display: flex !important;
-  width: 40% !important;
-  height: 10% !important;
-  border: 1px solid rgb(0 0 0 / 45%) !important;
-  background: rgb(255 255 255 / 96%) !important;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 35%) !important;
+  flex-direction: column !important;
+  width: 12.5% !important;
+  height: 50% !important;
   pointer-events: auto !important;
 }
 
+html:not([data-lfs-disabled]) #lfs-move-promotion-choice[data-direction="up"] {
+  flex-direction: column-reverse !important;
+}
+
 html:not([data-lfs-disabled]) #lfs-move-promotion-choice > button {
-  flex: 1 1 25% !important;
+  flex: 0 0 25% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   min-width: 0 !important;
+  width: 100% !important;
   padding: 0 !important;
   border: 0 !important;
-  border-right: 1px solid rgb(0 0 0 / 20%) !important;
-  background: transparent !important;
-  font: 700 24px/1 sans-serif !important;
+  background-color: transparent !important;
   cursor: pointer !important;
 }
 
-html:not([data-lfs-disabled]) #lfs-move-promotion-choice > button:last-child {
-  border-right: 0 !important;
+html:not([data-lfs-disabled]) #lfs-move-promotion-choice > button[data-lfs-promotion-tone="light"] {
+  background-color: var(--lfs-board-light-active) !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-move-promotion-choice > button[data-lfs-promotion-tone="dark"] {
+  background-color: var(--lfs-board-dark-active) !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-move-promotion-choice > button > piece {
+  position: relative !important;
+  inset: auto !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  transform: none !important;
+  pointer-events: none !important;
 }
 
 html:not([data-lfs-disabled]) .cg-wrap:has(cg-board[data-lfs-move-preview-active]) cg-board:not(#lfs-move-preview) > :is(piece, square, svg),

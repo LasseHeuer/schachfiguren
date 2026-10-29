@@ -180,17 +180,19 @@ test("right-click move preview stays visual and restores the live board", {
     const settle = () => evaluate("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
     const mouse = (type, x, y, button = "right", buttons = button === "right" ? 2 : 1, modifiers = 0) =>
       send("Input.dispatchMouseEvent", { type, x, y, button, buttons, modifiers });
-    const drag = async (from, to, black = false) => {
+    const drag = async (from, to, black = false, alt = false) => {
       const logical = key => ({ col: key.charCodeAt(0) - 97, row: 8 - Number(key[1]) });
       const screen = key => {
         const point = logical(key);
         if (black) { point.col = 7 - point.col; point.row = 7 - point.row; }
         return { x: (point.col + 0.5) * 64, y: (point.row + 0.5) * 64 };
       };
+      const button = alt ? "left" : "right";
+      const modifiers = alt ? 1 : 0;
       const start = screen(from), end = screen(to);
-      await mouse("mousePressed", start.x, start.y, "right", 2);
-      await mouse("mouseMoved", end.x, end.y, "right", 2);
-      await mouse("mouseReleased", end.x, end.y, "right", 0);
+      await mouse("mousePressed", start.x, start.y, button, alt ? 1 : 2, modifiers);
+      await mouse("mouseMoved", end.x, end.y, button, alt ? 1 : 2, modifiers);
+      await mouse("mouseReleased", end.x, end.y, button, 0, modifiers);
       await settle();
     };
 
@@ -823,10 +825,23 @@ test("right-click move preview stays visual and restores the live board", {
       await settle();
       await drag("a7", "a8");
       assert.deepEqual(await evaluate("[...document.querySelectorAll('#lfs-move-promotion-choice button')].map(button => button.dataset.promotion)"), ["Q", "R", "B", "N"]);
-      await mouse("mousePressed", 160, 25, "left", 1);
-      await mouse("mouseReleased", 160, 25, "left", 0);
+      assert.deepEqual(await evaluate("[...document.querySelectorAll('#lfs-move-promotion-choice button piece')].map(piece => piece.classList[1])"), ["queen", "rook", "bishop", "knight"]);
+      await mouse("mousePressed", 32, 224, "left", 1);
+      await mouse("mouseReleased", 32, 224, "left", 0);
       await settle();
       assert.equal(await evaluate("document.querySelector('#lfs-move-preview > piece.white.knight[data-key=a8]') !== null"), true);
+      await mouse("mousePressed", 32, 32, "left", 1);
+      await mouse("mouseReleased", 32, 32, "left", 0);
+      await settle();
+
+      await evaluate("setBoardFen('4k3/P7/8/8/8/8/8/4K3 w - - 0 1')");
+      await settle();
+      await drag("a7", "a8", false, true);
+      assert.deepEqual(await evaluate("[...document.querySelectorAll('#lfs-move-promotion-choice button')].map(button => button.dataset.promotion)"), ["Q", "R", "B", "N"]);
+      await mouse("mousePressed", 32, 32, "left", 1);
+      await mouse("mouseReleased", 32, 32, "left", 0);
+      await settle();
+      assert.equal(await evaluate("document.querySelector('#lfs-move-preview > piece.white.queen[data-key=a8]') !== null"), true);
       await mouse("mousePressed", 32, 32, "left", 1);
       await mouse("mouseReleased", 32, 32, "left", 0);
       await settle();
