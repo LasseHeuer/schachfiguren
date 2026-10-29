@@ -435,11 +435,12 @@ test("right-click move preview stays visual and restores the live board", {
       assert.equal(await evaluate("document.getElementById('lfs-move-preview')"), null);
       assert.equal(await evaluate("document.getElementById('lfs-move-preview-drag')"), null);
 
-      await mouse("mousePressed", 288, 416, "left", 1, 1);
-      await mouse("mouseMoved", 288, 288, "left", 1, 1);
-      await settle();
-      assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag > piece')?.style.left"), "56.25%");
-      await mouse("mouseReleased", 288, 288, "left", 0, 1);
+       await mouse("mousePressed", 288, 416, "left", 1, 1);
+       await mouse("mouseMoved", 288, 288, "left", 1, 1);
+       await settle();
+       assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag > piece')?.style.left"), "56.25%");
+       assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag > square.selected')"), null);
+       await mouse("mouseReleased", 288, 288, "left", 0, 1);
       await settle();
       assert.equal(await evaluate("document.querySelector('#lfs-move-preview > piece.white.pawn[data-key=e4]')?.dataset.key"), "e4");
       assert.equal(await evaluate("document.querySelector('.main-board cg-board > piece.white.pawn') !== null"), true);
@@ -447,10 +448,11 @@ test("right-click move preview stays visual and restores the live board", {
       await settle();
 
       await mouse("mousePressed", 288, 416, "right", 2);
-      await mouse("mouseMoved", 288, 288, "right", 2);
-      await settle();
-      assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag > piece')?.style.left"), "56.25%");
-      assert.equal(await evaluate("document.querySelectorAll('#lfs-move-preview-drag > square.move-dest').length"), 2);
+       await mouse("mouseMoved", 288, 288, "right", 2);
+       await settle();
+       assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag > piece')?.style.left"), "56.25%");
+       assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag > square.selected')"), null);
+       assert.equal(await evaluate("document.querySelectorAll('#lfs-move-preview-drag > square.move-dest').length"), 2);
       assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag > svg[data-lfs-board-overlay] path[fill=none]') !== null"), true);
       assert.deepEqual(await evaluate(`(() => { const mix = document.querySelector('#lfs-move-preview-mix'); const style = getComputedStyle(mix); return { color: style.backgroundColor, opacity: style.opacity }; })()`), {
         color: "oklch(1 0 0)", opacity: "0.2"
@@ -748,6 +750,62 @@ test("right-click move preview stays visual and restores the live board", {
       await mouse("mouseReleased", 32, 480, "left", 0);
       await settle();
       assert.equal(await evaluate("document.getElementById('lfs-move-preview')"), null);
+    });
+
+    await t.test("right-click and Alt drags match left-click move-field indicators", async () => {
+      const fen = "7k/8/3p4/8/4Q3/8/8/4R2K w - - 0 1";
+      const source = { x: 288, y: 288 };
+      const capture = async boardExpression => evaluate(`(() => {
+        const board = ${boardExpression};
+        const interaction = LichessThreatCoding.getInteractionPreview(board);
+        const paths = [...board.querySelectorAll(':scope > svg.lfs-threat-arc path')]
+          .map(path => path.getAttribute('stroke') + ':' + path.getAttribute('d')).sort();
+        return { legalTargets: interaction?.legalTargets?.map(({ row, col }) => ({ row, col })) ?? null, paths };
+      })()`);
+      let legalTargets;
+      const previewPaths = [];
+
+      for (const { button, buttons, modifiers, label } of [
+        { button: "right", buttons: 2, modifiers: 0, label: "right-click" },
+        { button: "left", buttons: 1, modifiers: 1, label: "Alt" }
+      ]) {
+        await evaluate(`setBoardFen(${JSON.stringify(fen)})`);
+        await settle();
+        await mouse("mousePressed", source.x, source.y, button, buttons, modifiers);
+        await settle();
+        const preview = await capture("document.querySelector('#lfs-move-preview')");
+        assert.ok(preview.legalTargets?.some(target => target.row === 3 && target.col === 4),
+          `${label}: the e5 move field is included`);
+        assert.ok(preview.paths.length >= 2, `${label}: attack and defense lines are rendered`);
+        legalTargets ??= preview.legalTargets;
+        previewPaths.push({ label, paths: preview.paths });
+        await mouse("mouseReleased", source.x, source.y, button, 0, modifiers);
+        await evaluate("LichessMovePreview.restore()");
+        await settle();
+      }
+
+      await evaluate(`(() => {
+        setBoardFen(${JSON.stringify(fen)});
+        const board = document.querySelector('.cg-wrap > cg-board');
+        for (const { row, col } of ${JSON.stringify(legalTargets)}) {
+          const square = document.createElement('square');
+          square.className = 'move-dest';
+          square.style.left = (col * 12.5) + '%';
+          square.style.top = (row * 12.5) + '%';
+          board.append(square);
+        }
+      })()`);
+      await settle();
+      await mouse("mousePressed", source.x, source.y, "left", 1);
+      await mouse("mouseMoved", source.x, source.y, "left", 1);
+      await settle();
+      const leftClick = await capture("document.querySelector('.cg-wrap > cg-board')");
+      for (const preview of previewPaths) {
+        assert.deepEqual(preview.paths, leftClick.paths, `${preview.label} should match left-click move-field indicators`);
+      }
+      await mouse("mouseReleased", source.x, source.y, "left", 0);
+      await evaluate("LichessMovePreview.restore()");
+      await settle();
     });
 
     await t.test("page FEN supplies the black turn when the board has no turn class", async () => {

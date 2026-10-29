@@ -1,4 +1,34 @@
 (() => {
+  const playlistZenModeStorageKey = "lfsPuzzlePlaylistZenMode";
+  let restorePlaylistZenMode = false;
+  let zenRestorePageLoaded = document.readyState === "complete";
+  let zenRestoreLoadListener = false;
+  let zenRestoreLayoutSnapshot;
+  let zenRestoreStableFrames = 0;
+
+  function preparePlaylistZenRestore(root) {
+    if (!root || restorePlaylistZenMode) return;
+    if (!root.hasAttribute("data-lfs-zen-restore-pending")
+      && globalThis.sessionStorage?.getItem(playlistZenModeStorageKey) !== "true") return;
+    globalThis.sessionStorage?.removeItem(playlistZenModeStorageKey);
+    root.setAttribute("data-lfs-zen-mode", "");
+    root.setAttribute("data-lfs-zen-restore-pending", "");
+    restorePlaylistZenMode = true;
+    zenRestoreLayoutSnapshot = undefined;
+    zenRestoreStableFrames = 0;
+    if (!zenRestorePageLoaded && !zenRestoreLoadListener) {
+      zenRestoreLoadListener = true;
+      window.addEventListener("load", () => {
+        zenRestorePageLoaded = true;
+        zenRestoreLayoutSnapshot = undefined;
+        zenRestoreStableFrames = 0;
+        if (restorePlaylistZenMode) scheduleZenCenter();
+      }, { once: true });
+    }
+  }
+
+  preparePlaylistZenRestore(document.documentElement);
+
   function isAllowedSoundUrl(value) {
     if (typeof value !== "string") return false;
     if (value.startsWith("data:audio/") || value.startsWith(chrome.runtime.getURL("sounds/"))) return true;
@@ -164,6 +194,10 @@
         zenToggle.setAttribute("aria-label", `Zenmodus ${enabled ? "deaktivieren" : "aktivieren"}`);
         if (enabled) scheduleZenCenter();
         else {
+          restorePlaylistZenMode = false;
+          zenRestoreLayoutSnapshot = undefined;
+          zenRestoreStableFrames = 0;
+          document.documentElement.removeAttribute("data-lfs-zen-restore-pending");
           clearZenOffset(zenBoard);
           syncZenPromotionChoice();
           syncNormalRoundLayout();
@@ -232,14 +266,22 @@
     observeZenBoardOrientation(zenBoard);
     boardLayout?.toggleAttribute("data-lfs-board-layout", settings.boardTopGapPercent > 0);
     zenBoard?.toggleAttribute("data-lfs-zen-board", true);
+    if (restorePlaylistZenMode && zenBoard) {
+      zenToggle?.setAttribute("aria-pressed", "true");
+      zenToggle?.setAttribute("aria-label", "Zenmodus deaktivieren");
+    }
     if (zenToggle) {
       zenToggle.hidden = !zenBoard;
       zenToggle.disabled = !zenBoard;
     }
-    if (!zenBoard && document.documentElement.hasAttribute("data-lfs-zen-mode")) {
+    if (!zenBoard && !restorePlaylistZenMode && document.documentElement.hasAttribute("data-lfs-zen-mode")) {
       document.documentElement.removeAttribute("data-lfs-zen-mode");
       zenToggle?.setAttribute("aria-pressed", "false");
       zenToggle?.setAttribute("aria-label", "Zenmodus aktivieren");
+    }
+    if (restorePlaylistZenMode && zenBoard) {
+      zenToggle?.setAttribute("aria-pressed", "true");
+      zenToggle?.setAttribute("aria-label", "Zenmodus deaktivieren");
     }
     if (zenBoard && document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenCenter();
   }
@@ -326,27 +368,53 @@
 
   function scheduleZenCenter() {
     cancelAnimationFrame(zenCenterFrame);
-    zenCenterFrame = requestAnimationFrame(() => {
-      if (!zenBoard || !document.documentElement.hasAttribute("data-lfs-zen-mode")) return;
-      const board = zenBoard.querySelector("cg-board");
-      if (!board) return;
-      const boardRect = board.getBoundingClientRect();
-      if (!boardRect.width || !boardRect.height) return;
-      const offsetX = parseFloat(zenBoard.style.getPropertyValue("--lfs-zen-offset-x")) || 0;
-      const offsetY = parseFloat(zenBoard.style.getPropertyValue("--lfs-zen-offset-y")) || 0;
-      const deltaX = window.innerWidth / 2 - boardRect.left - boardRect.width / 2;
-      const deltaY = window.innerHeight * (0.5 - settings.zenBoardUpPercent / 100) - boardRect.top - boardRect.height / 2;
-      if (Math.abs(deltaX) >= 0.01 || Math.abs(deltaY) >= 0.01) {
-        zenBoard.style.setProperty("--lfs-zen-offset-x", `${offsetX + deltaX}px`);
-        zenBoard.style.setProperty("--lfs-zen-offset-y", `${offsetY + deltaY}px`);
-        // Chessground clears its cached pointer bounds on scroll, not on CSS translation.
-        document.dispatchEvent(new Event("scroll"));
+    if (restorePlaylistZenMode) {
+      zenRestoreLayoutSnapshot = undefined;
+      zenRestoreStableFrames = 0;
+    }
+    zenCenterFrame = requestAnimationFrame(centerZenBoard);
+  }
+
+  function centerZenBoard() {
+    if (!zenBoard || !document.documentElement.hasAttribute("data-lfs-zen-mode")) return;
+    if (restorePlaylistZenMode && !zenRestorePageLoaded) return;
+    const board = zenBoard.querySelector("cg-board");
+    if (!board) return;
+    let boardRect = board.getBoundingClientRect();
+    if (!boardRect.width || !boardRect.height) return;
+    if (restorePlaylistZenMode) {
+      syncZenPromotionChoice();
+      syncZenSideElements();
+      boardRect = board.getBoundingClientRect();
+    }
+    const offsetX = parseFloat(zenBoard.style.getPropertyValue("--lfs-zen-offset-x")) || 0;
+    const offsetY = parseFloat(zenBoard.style.getPropertyValue("--lfs-zen-offset-y")) || 0;
+    const deltaX = window.innerWidth / 2 - boardRect.left - boardRect.width / 2;
+    const deltaY = window.innerHeight * (0.5 - settings.zenBoardUpPercent / 100) - boardRect.top - boardRect.height / 2;
+    if (Math.abs(deltaX) >= 0.01 || Math.abs(deltaY) >= 0.01) {
+      zenBoard.style.setProperty("--lfs-zen-offset-x", `${offsetX + deltaX}px`);
+      zenBoard.style.setProperty("--lfs-zen-offset-y", `${offsetY + deltaY}px`);
+      // Chessground clears its cached pointer bounds on scroll, not on CSS translation.
+      document.dispatchEvent(new Event("scroll"));
+    }
+    if (restorePlaylistZenMode) {
+      const snapshot = [boardRect.left - offsetX, boardRect.top - offsetY, boardRect.width, boardRect.height];
+      const stable = zenRestoreLayoutSnapshot?.every((value, index) => Math.abs(value - snapshot[index]) < 0.5);
+      zenRestoreStableFrames = stable ? zenRestoreStableFrames + 1 : 0;
+      zenRestoreLayoutSnapshot = snapshot;
+      if (zenRestoreStableFrames < 6) {
+        zenCenterFrame = requestAnimationFrame(centerZenBoard);
+        return;
       }
-      requestAnimationFrame(() => {
-        syncZenPromotionChoice();
-        syncZenSideElements();
-        schedulePvPreviewSync();
-      });
+      document.documentElement.removeAttribute("data-lfs-zen-restore-pending");
+      restorePlaylistZenMode = false;
+      zenRestoreLayoutSnapshot = undefined;
+      zenRestoreStableFrames = 0;
+    }
+    requestAnimationFrame(() => {
+      syncZenPromotionChoice();
+      syncZenSideElements();
+      schedulePvPreviewSync();
     });
   }
 
@@ -1360,12 +1428,14 @@
 
   function applyWhenReady() {
     if (document.documentElement) {
+      preparePlaylistZenRestore(document.documentElement);
       apply(document.documentElement);
       return;
     }
 
     new MutationObserver((_, observer) => {
       if (!document.documentElement) return;
+      preparePlaylistZenRestore(document.documentElement);
       apply(document.documentElement);
       observer.disconnect();
     }).observe(document, { childList: true });
@@ -1521,10 +1591,11 @@
     });
     if (hasPreviewMutation) schedulePvPreviewSync();
     const hasLayoutMutation = records.some(record => {
-      if (!record.addedNodes.length && !record.removedNodes.length) return false;
       const changedNodes = [...record.addedNodes, ...record.removedNodes];
-      if (changedNodes.every(isTransientOverlayNode) || isInsideTransientOverlay(targetElement(record))) return false;
+      const classMutation = record.type === "attributes" && record.attributeName === "class";
+      if (!changedNodes.length && !classMutation) return false;
       const target = targetElement(record);
+      if ((changedNodes.length && changedNodes.every(isTransientOverlayNode)) || isInsideTransientOverlay(target)) return false;
       // Piece/preview updates inside the fixed-size board do not change its layout.
       if (target?.closest("cg-board")) return false;
       const isBoardLayout = Boolean(target?.closest(".puzzle, .analyse, .round__app, .bot-game, .study__main, main"))

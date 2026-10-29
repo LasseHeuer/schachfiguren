@@ -1,5 +1,11 @@
 (() => {
   const storageKey = "lfsPuzzlePlaylist";
+  const zenModeStorageKey = "lfsPuzzlePlaylistZenMode";
+  if (document.documentElement && sessionStorage.getItem(zenModeStorageKey) === "true") {
+    document.documentElement.setAttribute("data-lfs-zen-mode", "");
+    document.documentElement.setAttribute("data-lfs-zen-restore-pending", "");
+    sessionStorage.removeItem(zenModeStorageKey);
+  }
   const homePanelId = "lfs-puzzle-playlist-home";
   const puzzleToolbarId = "lfs-puzzle-playlist-toolbar";
   const scheduler = globalThis.LichessPuzzleScheduler;
@@ -106,6 +112,15 @@
 
   function trainingPath(id) {
     return `/training/${encodeURIComponent(id)}`;
+  }
+
+  function navigateToPlaylistPuzzle(id) {
+    if (document.documentElement?.hasAttribute?.("data-lfs-zen-mode")) {
+      sessionStorage.setItem(zenModeStorageKey, "true");
+    } else {
+      sessionStorage.removeItem(zenModeStorageKey);
+    }
+    location.assign(trainingPath(id));
   }
 
   function isDue(item, now = Date.now()) {
@@ -498,7 +513,7 @@
     }
     const items = playlist.items.map(item => item.id === nextId ? { ...item, attempts: item.attempts + 1 } : item);
     savePlaylist({ ...playlist, items, activeIndex: nextIndex }, () => {
-      location.assign(trainingPath(nextId));
+      navigateToPlaylistPuzzle(nextId);
     });
     return true;
   }

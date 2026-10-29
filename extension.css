@@ -736,8 +736,24 @@ html[data-lfs-zen-mode] .material * {
   visibility: visible !important;
 }
 
+html[data-lfs-zen-mode][data-lfs-zen-restore-pending] body * {
+  visibility: hidden !important;
+}
+
 html[data-lfs-zen-mode] [data-lfs-zen-board] {
   translate: var(--lfs-zen-offset-x, 0px) var(--lfs-zen-offset-y, 0px) !important;
+  opacity: 1;
+  transition: opacity 120ms ease-out;
+}
+
+html[data-lfs-zen-mode][data-lfs-zen-restore-pending] [data-lfs-zen-board] {
+  opacity: 0 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-lfs-zen-mode] [data-lfs-zen-board] {
+    transition: none;
+  }
 }
 
 html[data-lfs-zen-mode] body .material[data-lfs-zen-side] {
@@ -1051,6 +1067,14 @@ html:not([data-lfs-disabled]):not([data-lfs-move-outline-mode])[data-lfs-square-
 
 html:not([data-lfs-disabled])[data-lfs-move-outline-mode] #lfs-move-preview-drag > square.move-dest {
   background: none !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-move-preview-drag > square[data-lfs-contested-move-dest] {
+  background: none !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-move-preview-drag > square[data-lfs-move-outline] {
+  background-image: none !important;
 }
 
 html:not([data-lfs-disabled]) .is2d .cg-wrap #lfs-move-preview-drag[data-lfs-selected-piece-color="w"] {

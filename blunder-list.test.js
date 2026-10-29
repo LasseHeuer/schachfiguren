@@ -9,17 +9,30 @@ function loadList(file, exports, extra = {}) {
   const writes = [];
   const dispatched = [];
   const persisted = {};
+  const session = new Map();
+  const rootAttributes = new Set();
   const locks = new Map();
   const context = vm.createContext({
     URLSearchParams, TextDecoder, Date, setTimeout, clearTimeout,
     fetch: async () => ({ ok: true, text: async () => "" }),
     document: {
+      documentElement: {
+        hasAttribute: name => rootAttributes.has(name),
+        setAttribute: name => rootAttributes.add(name),
+        removeAttribute: name => rootAttributes.delete(name),
+      },
       querySelector: () => ({ textContent: "Player", getAttribute: () => null }),
       addEventListener: () => {}, dispatchEvent: event => dispatched.push(event),
     },
     CustomEvent: class { constructor(type) { this.type = type; } },
     location: { pathname: "/", search: "", hash: "", assign: url => assigned.push(url) },
+    sessionStorage: {
+      getItem: key => session.get(key) ?? null,
+      setItem: (key, value) => session.set(key, String(value)),
+      removeItem: key => session.delete(key),
+    },
     testPersisted: persisted,
+    testSession: session,
     navigator: { locks: { request: (key, action) => {
       const lock = (locks.get(key) ?? Promise.resolve()).then(action);
       locks.set(key, lock);
@@ -396,6 +409,37 @@ test("playlist click still starts directly when all saved cards are scheduled fo
   api.ensureHomeClickHandler();
   context.click({ target: { closest: () => ({ dataset: { action: "open" } }) } });
   assert.equal(assigned[0], "/training/Abc12");
+});
+
+test("playlist continuation preserves zen mode when moving to the next puzzle", async () => {
+  const { api, assigned, context, settle } = loadList("puzzle-playlist.js", `
+    continuePlaylist,
+    setup: value => { playlist = normalizePlaylist(value); render = () => {}; },
+    enableZen: () => document.documentElement.setAttribute("data-lfs-zen-mode", ""),
+    getPlaylist: () => playlist
+  `);
+  api.setup({ items: [{ id: "Abc12" }, { id: "Def34" }], activeQueue: ["Abc12", "Def34"], activeIndex: 0 });
+  api.enableZen();
+  api.continuePlaylist("Abc12");
+  await settle();
+  assert.equal(assigned.at(-1), "/training/Def34");
+  assert.equal(context.testSession.get("lfsPuzzlePlaylistZenMode"), "true");
+  assert.equal(api.getPlaylist().activeIndex, 1);
+});
+
+test("playlist restores zen mode before the next puzzle renders", () => {
+  const attributes = new Set();
+  let markerRemoved = false;
+  loadList("puzzle-playlist.js", "", {
+    document: { documentElement: { setAttribute: name => attributes.add(name) } },
+    sessionStorage: {
+      getItem: key => key === "lfsPuzzlePlaylistZenMode" && !markerRemoved ? "true" : null,
+      removeItem: () => { markerRemoved = true; },
+    },
+  });
+  assert.ok(attributes.has("data-lfs-zen-mode"));
+  assert.ok(attributes.has("data-lfs-zen-restore-pending"));
+  assert.equal(markerRemoved, true);
 });
 
 test("removing the active puzzle keeps native continuation in the playlist", () => {

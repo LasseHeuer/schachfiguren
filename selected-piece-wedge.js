@@ -903,20 +903,24 @@
     return preview;
   }
 
-  function getMoveDestinationLines(board, position, source, blackOrientation) {
+  function getMoveDestinationLines(board, position, source, blackOrientation, legalTargets = null) {
     const piece = position[source.row]?.[source.col];
     if (!piece) return { targetKeys: new Set(), threats: [], defenseSegments: [] };
 
-    const destinations = [...board.querySelectorAll(":scope > square.move-dest")]
-      .map(square => ({ square, target: getScreenSquare(square, board) }))
-      .filter(({ target }) => target);
+    const destinations = legalTargets
+      ? legalTargets.map(({ row, col, square }) => ({ square: square ?? null, target: { row, col } }))
+      : [...board.querySelectorAll(":scope > square.move-dest")]
+        .map(square => ({ square, target: getScreenSquare(square, board) }))
+        .filter(({ target }) => target);
     const positionKey = getPositionKey(position);
     const destinationKey = destinations.map(({ target }) => `${target.row},${target.col}`).join(";");
     const cacheKey = `${positionKey}:${source.row},${source.col}:${blackOrientation}:${destinationKey}:${settings.threatenedPieceOutlineEnabled}:${settings.defenseCirclesEnabled}:${settings.threatMoveFieldDisplayMode}:${settings.threatMoveFieldRadius}:${settings.whitePieceColor}:${settings.blackPieceColor}`;
     const cached = moveDestinationPreviewCache.get(board);
     if (cached?.key === cacheKey) {
       for (const { square, target } of destinations) {
-        if (cached.result.targetKeys.has(`${target.row},${target.col}`)) square.setAttribute("data-lfs-contested-move-dest", "");
+        if (square && cached.result.targetKeys.has(`${target.row},${target.col}`)) {
+          square.setAttribute("data-lfs-contested-move-dest", "");
+        }
       }
       return cached.result;
     }
@@ -956,7 +960,9 @@
       })));
     }
     for (const { square, target } of destinations) {
-      if (result.targetKeys.has(`${target.row},${target.col}`)) square.setAttribute("data-lfs-contested-move-dest", "");
+      if (square && result.targetKeys.has(`${target.row},${target.col}`)) {
+        square.setAttribute("data-lfs-contested-move-dest", "");
+      }
     }
     moveDestinationPreviewCache.set(board, { key: cacheKey, result });
     return result;
@@ -1000,7 +1006,7 @@
     }
   }
 
-  function updateMoveOutlinePreviews(board, position, source, piece, blackOrientation) {
+  function updateMoveOutlinePreviews(board, position, source, piece, blackOrientation, legalTargets = null) {
     clearMoveOutlineMarkers(board);
     const markWidth = settings?.threatCenterOutlineStyle === "hatching"
       ? settings.threatCenterHatchThicknessPercent
@@ -1012,9 +1018,12 @@
     const pieceElement = piece.element ?? getDraggingPiece(board);
     const previews = [];
     const checkedTargets = new Set();
-    for (const square of board.querySelectorAll(":scope > square.move-dest, :scope > square.premove-dest")) {
-      const target = getScreenSquare(square, board);
-      if (!target) continue;
+    const destinations = legalTargets
+      ? legalTargets.map(({ row, col, square }) => ({ square: square ?? null, target: { row, col } }))
+      : [...board.querySelectorAll(":scope > square.move-dest, :scope > square.premove-dest")]
+        .map(square => ({ square, target: getScreenSquare(square, board) }))
+        .filter(({ target }) => target);
+    for (const { square, target } of destinations) {
       const targetKey = `${target.row},${target.col}`;
       if (checkedTargets.has(targetKey)) continue;
       checkedTargets.add(targetKey);
@@ -1026,7 +1035,7 @@
       if (!outline) continue;
 
       const outlineValue = `${outline.color}:${piece.color}:${piece.type}`;
-      square.setAttribute("data-lfs-move-outline", outlineValue);
+      square?.setAttribute("data-lfs-move-outline", outlineValue);
       previews.push({
         ...outline,
         piece: { ...piece, element: pieceElement },
@@ -1397,6 +1406,12 @@
       }
     }
     return animating;
+  }
+
+  function getExpandedMoveFieldKey(preview, position, blackOrientation) {
+    if (!preview?.legal || (!preview.isHoverPreview && !preview.isDragging)) return null;
+    const target = logicalToScreen(preview.target, blackOrientation);
+    return position[target.row]?.[target.col] ? null : `${target.row},${target.col}`;
   }
 
   function blendRadius(configured, figureBased, segment) {
@@ -3393,15 +3408,17 @@
 
   // One outline for all connected move destinations. Shared straight edges are omitted; bevel corners
   // are kept as the connection between diagonal squares and dropped where three or four squares meet.
-  function renderMoveOutline(board, entry, selectedColor) {
+  function renderMoveOutline(board, entry, selectedColor, sourceSquare = null) {
     const targets = settings?.enabled && settings.moveIndicatorMode === "outline" && board.closest(".is2d")
       ? board.querySelectorAll(":scope > square.move-dest, :scope > square.premove-dest")
       : [];
+    const selectedSquares = [...board.querySelectorAll(":scope > square.selected")]
+      .map(square => getScreenSquare(square, board)).filter(Boolean);
     const cells = targets.length
-      ? [...targets, ...board.querySelectorAll(":scope > square.selected")]
-        .map(square => getScreenSquare(square, board)).filter(Boolean)
+      ? [...targets].map(square => getScreenSquare(square, board)).filter(Boolean)
+        .concat(selectedSquares, sourceSquare ? [sourceSquare] : [])
       : [];
-    entry.moveOutlineSvg = drawMoveOutline(board, entry.moveOutlineSvg, cells, selectedColor, "move");
+    entry.moveOutlineSvg = drawMoveOutline(board, entry.moveOutlineSvg, cells, selectedColor, "move", sourceSquare);
     if (entry.moveOutlineSvg) globalThis.LichessBoardOverlay.place(board, entry.moveOutlineSvg, "between-pieces");
     const premoveSquares = settings?.enabled && board.closest(".is2d")
       ? [...board.querySelectorAll(":scope > square.current-premove")].map(square => getScreenSquare(square, board)).filter(Boolean)
@@ -3438,7 +3455,7 @@
     }));
   }
 
-  function drawMoveOutline(board, svg, cells, selectedColor, idSuffix) {
+  function drawMoveOutline(board, svg, cells, selectedColor, idSuffix, sourceSquare = null) {
     if (!cells.length) {
       svg?.remove();
       return null;
@@ -3546,7 +3563,7 @@
     const straightSegments = [];
     if (settings.moveOutlineStraightDiagonals) {
       const origin = idSuffix === "move"
-        ? [...board.querySelectorAll(":scope > square.selected")].map(square => getScreenSquare(square, board)).find(Boolean)
+        ? sourceSquare ?? [...board.querySelectorAll(":scope > square.selected")].map(square => getScreenSquare(square, board)).find(Boolean)
         : cells[0];
       const occupied = new Set([...board.querySelectorAll(":scope > piece:not(.ghost)")]
         .map(piece => getScreenSquare(piece, board)).filter(Boolean).map(({ row, col }) => `${row},${col}`));
@@ -3867,13 +3884,14 @@
     const idleParsed = dragPreview && !dragPreview.isHoverPreview
       ? wedgeParsed
       : dragPreview?.isHoverPreview ? readPosition(board) : parsed;
-    const rawMoveDestinationLines = idleParsed?.selected
+      const rawMoveDestinationLines = idleParsed?.selected
       && (settings.threatenedPieceOutlineEnabled || settings.defenseCirclesEnabled)
-      ? getMoveDestinationLines(board, idleParsed.position, idleParsed.selected, idleParsed.blackOrientation)
+      ? getMoveDestinationLines(board, idleParsed.position, idleParsed.selected, idleParsed.blackOrientation, dragPreview?.legalTargets)
       : { targetKeys: new Set(), threats: [], defenseSegments: [] };
     // An empty field under the hovered figure uses figure-based radii; the change is animated in both directions.
-    const hoverMove = movePreview?.isHoverPreview && movePreview.legal && idleParsed ? logicalToScreen(movePreview.target, idleParsed.blackOrientation) : null;
-    const hoverFieldKey = hoverMove && !idleParsed.position[hoverMove.row][hoverMove.col] ? `${hoverMove.row},${hoverMove.col}` : null;
+    const hoverFieldKey = idleParsed
+      ? getExpandedMoveFieldKey(movePreview, idleParsed.position, idleParsed.blackOrientation)
+      : null;
     const blendsAnimating = advanceFigureBlends(entry, hoverFieldKey);
     if (blendsAnimating) scheduleRender(board);
     const blendOf = key => entry.figureBlends.get(key) ?? 0;
@@ -3909,7 +3927,8 @@
       wedgeParsed.position,
       wedgeParsed.selected,
       wedgeSelectedPiece,
-      wedgeParsed.blackOrientation
+      wedgeParsed.blackOrientation,
+      dragPreview?.legalTargets
     );
     const hoveredTarget = movePreview?.isHoverPreview && logicalToScreen(movePreview.target, parsed.blackOrientation);
     const otherMoveOutlinePreviews = moveOutlinePreviews.filter(({ target }) =>

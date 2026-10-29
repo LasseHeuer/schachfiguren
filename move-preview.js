@@ -316,7 +316,6 @@
     const pieceCode = drag.state.board[drag.source.row][drag.source.col];
     const blackOrientation = getWrapper(drag.board)?.classList.contains("orientation-black") ?? false;
     layer.dataset.lfsSelectedPieceColor = settings.moveDotsPlayerColor ? pieceCode[0] : "";
-    addSquare(layer, drag.source, "selected", blackOrientation);
     for (const key of drag.legalTargets) {
       const target = boardLogic.parseSquare(key);
       const occupied = target && drag.state.board[target.row][target.col];
@@ -367,7 +366,8 @@
     const piece = drag.piece;
     piece?.classList.add("ghost");
     globalThis.LichessSelectedPieceWedge?.renderMoveOutline(
-      drag.layer, drag.outlineEntry, settings.moveDotsPlayerColor ? drag.state.board[drag.source.row][drag.source.col][0] : null);
+      drag.layer, drag.outlineEntry, settings.moveDotsPlayerColor ? drag.state.board[drag.source.row][drag.source.col][0] : null,
+      screenSquare(drag.source, drag.blackOrientation));
     piece?.classList.remove("ghost");
   }
 
@@ -795,6 +795,8 @@
     const source = preview?.from ?? drag?.source;
     if (!source) return null;
     const state = session.states[session.index];
+    const dragSquares = new Map([...(drag?.layer?.querySelectorAll(":scope > square.move-dest") ?? [])]
+      .map(square => [square.dataset.key, square]));
     return {
       position: preview?.state.board ?? state.board,
       source,
@@ -803,6 +805,10 @@
       pieceId: session.pieceIdStates[session.index][source.row][source.col],
       basePosition: state.board,
       blackOrientation: session.blackOrientation,
+      legalTargets: drag ? [...drag.legalTargets].map(key => {
+        const target = boardLogic.parseSquare(key);
+        return target ? { ...target, square: dragSquares.get(key) ?? null } : null;
+      }).filter(Boolean) : null,
       legal: Boolean(preview),
       isHoverPreview: false,
       isDragging: Boolean(drag || preview)

@@ -205,6 +205,26 @@ test("empty move-field attacks and defenses share their configured radius in eve
   }
 });
 
+test("hover and drag previews expand the same empty destination field", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const context = vm.createContext({ document: { addEventListener() {} } });
+  const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
+  vm.runInContext(source.replace("  documentObserver = new MutationObserver", `
+    globalThis.testing = { getExpandedMoveFieldKey };
+    return;
+    documentObserver = new MutationObserver`), context);
+  const position = Array.from({ length: 8 }, () => Array(8).fill(null));
+  const preview = { target: { row: 3, col: 3 }, legal: true };
+
+  assert.equal(context.testing.getExpandedMoveFieldKey({ ...preview, isHoverPreview: true }, position, false), "3,3");
+  assert.equal(context.testing.getExpandedMoveFieldKey({ ...preview, isDragging: true }, position, false), "3,3");
+  assert.equal(context.testing.getExpandedMoveFieldKey({ ...preview, isDragging: true, legal: false }, position, false), null);
+  position[3][3] = "wP";
+  assert.equal(context.testing.getExpandedMoveFieldKey({ ...preview, isDragging: true }, position, false), null);
+});
+
 test("king move fields do not show defense lines or wedges", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");
@@ -234,6 +254,36 @@ test("king move fields do not show defense lines or wedges", () => {
   const queenMove = api.getMoveDestinationLines(board, positionFor("queen"), { row: 4, col: 4 }, false);
   assert.equal(queenMove.defenseSegments.length, 1, "other pieces still show defended move fields");
   assert.deepEqual([...queenMove.targetKeys], ["3,4"]);
+});
+
+test("move-field attacks and defenses use explicit drag destinations", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const context = vm.createContext({ document: { addEventListener() {} } });
+  const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
+  vm.runInContext(source.replace("  documentObserver = new MutationObserver", `
+    getScreenSquare = square => square;
+    globalThis.testing = { getMoveDestinationLines, configure(value) { settings = value; } };
+    return;
+    documentObserver = new MutationObserver`), context);
+  const api = context.testing;
+  const position = Array.from({ length: 8 }, () => Array(8).fill(null));
+  position[4][4] = { color: "w", type: "queen" };
+  position[7][4] = { color: "w", type: "rook" };
+  position[2][3] = { color: "b", type: "pawn" };
+  api.configure(settings.normalize({
+    threatenedPieceOutlineEnabled: true,
+    defenseCirclesEnabled: true,
+    threatMoveFieldDisplayMode: "lines"
+  }));
+
+  const preview = api.getMoveDestinationLines(
+    { querySelectorAll: () => [] }, position, { row: 4, col: 4 }, false, [{ row: 3, col: 4 }]
+  );
+  assert.equal(preview.threats.length, 1, "e5 is attacked after the queen moves there");
+  assert.equal(preview.defenseSegments.length, 1, "e5 is defended after the queen moves there");
+  assert.deepEqual([...preview.targetKeys], ["3,4"]);
 });
 
 test("highlight lines meet the rendered markers in either animation direction", () => {
@@ -765,11 +815,11 @@ test("move outlines keep rounded joins and share formatting with last-move previ
     globalThis.testing = { renderMoveOutline, renderLastMoveOutline, createLastMovePreview, getLastMoveOutlineCells, configure(value) { settings = value; } };
     return;
     documentObserver = new MutationObserver`), context);
-  const render = (cells, selected = [], pieces = [], premoves = []) => {
+  const render = (cells, selected = [], pieces = [], premoves = [], sourceSquare = null) => {
     const board = { closest: () => true, querySelectorAll: selector => selector.includes("selected") ? selected
       : selector.includes("current-premove") ? premoves : selector.includes("piece:") ? pieces : cells };
     const entry = {};
-    context.testing.renderMoveOutline(board, entry, null);
+    context.testing.renderMoveOutline(board, entry, null, sourceSquare);
     const html = entry.moveOutlineSvg.innerHTML;
     return { html, path: [...html.matchAll(/<path d="([^"]*)" fill="none"/g)][0][1] };
   };
@@ -861,6 +911,9 @@ test("move outlines keep rounded joins and share formatting with last-move previ
     assert.equal(entry.premoveOutlineSvg, null);
     assert.equal(removed, true);
   }
+  const dragOutline = render([{ row: 2, col: 3 }], [], [], [], { row: 2, col: 2 });
+  assert.ok(dragOutline.path.includes("M2 2L3 2"), "the drag outline includes the source field edge");
+  assert.ok(dragOutline.path.includes("M2 3L2 2"), "the drag outline encloses the source field");
   const outlineSettings = settings.normalize({
     enabled: true, markLastMove: true, moveDotsPlayerColor: true,
     whitePieceColor: "#abcdef", moveOutlineColor: "#123456", moveOutlineWidthPx: 3,
@@ -2576,6 +2629,41 @@ test("soft light uses the square root branch on bright backgrounds", () => {
   result.forEach(channel => assert.ok(Math.abs(channel - expected) < 0.001));
 });
 
+test("zen layout observer recenters on class-only puzzle layout changes", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const source = readFileSync(join(__dirname, "content.js"), "utf8");
+  const match = source.match(/const hasLayoutMutation = records\.some\(record => \{([\s\S]*?)\n    \}\);/);
+  assert.ok(match, "the production layout-mutation filter is present");
+  const context = vm.createContext({
+    targetElement: record => record.target,
+    isTransientOverlayNode: () => false,
+    isInsideTransientOverlay: () => false,
+    isZenClockMutation: () => false,
+    isZenMaterialMutation: () => false,
+    isZenOverlayMutation: () => false,
+    containsMatchingElement: () => false,
+    boardMountSelector: ".cg-wrap",
+  });
+  const hasLayoutMutation = vm.runInContext(`(record, zenMode) => {${match[1]}}`, context);
+  const puzzleTarget = insideBoard => ({
+    closest: selector => selector === "cg-board" ? (insideBoard ? {} : null)
+      : selector.includes(".puzzle") ? {} : null,
+  });
+  const classMutation = target => ({
+    type: "attributes",
+    attributeName: "class",
+    target,
+    addedNodes: [],
+    removedNodes: [],
+  });
+
+  assert.equal(hasLayoutMutation(classMutation(puzzleTarget(false)), true), true);
+  assert.equal(hasLayoutMutation(classMutation(puzzleTarget(true)), true), false);
+  assert.equal(hasLayoutMutation({ ...classMutation(puzzleTarget(false)), attributeName: "style" }, true), false);
+});
+
 test("all blend modes produce finite in-gamut colors at black and white boundaries", () => {
   for (const threatBlendMode of ["normal", "multiply", "screen", "overlay", "soft-light", "hard-light", "darken", "lighten", "difference"]) {
     for (const base of ["#000000", "#ffffff", "#808080"]) {
@@ -3003,6 +3091,22 @@ ${clockMarker}`));
         await send("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: [] });
       }
       await evaluate("document.documentElement.removeAttribute('data-lfs-zen-mode'); document.querySelectorAll('[data-test-zen-control]').forEach(element => element.remove())");
+    });
+    await t.test("zen restore keeps the board hidden until centering is ready", async () => {
+      const visibility = await evaluate(`(() => {
+        const board = document.createElement('div');
+        board.setAttribute('data-lfs-zen-board', '');
+        document.body.append(board);
+        document.documentElement.setAttribute('data-lfs-zen-mode', '');
+        document.documentElement.setAttribute('data-lfs-zen-restore-pending', '');
+        const pending = getComputedStyle(board).visibility;
+        document.documentElement.removeAttribute('data-lfs-zen-restore-pending');
+        const ready = getComputedStyle(board).visibility;
+        document.documentElement.removeAttribute('data-lfs-zen-mode');
+        board.remove();
+        return { pending, ready };
+      })()`);
+      assert.deepEqual(visibility, { pending: "hidden", ready: "visible" });
     });
     await t.test("rook outlines include occupied a6 destinations from a2 for moves and premoves", async () => {
       for (const destinationClass of ["move-dest", "premove-dest"]) {
