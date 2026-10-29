@@ -78,6 +78,8 @@ test("right-click move preview stays visual and restores the live board", {
       defensePreviewThresholdMs: 0,
       highlightCascadeLinesEnabled: true
     });
+    document.documentElement.toggleAttribute("data-lfs-move-outline-mode", previewSettings.moveIndicatorMode === "outline");
+    document.documentElement.toggleAttribute("data-lfs-square-move-dots", previewSettings.squareMoveDots);
     LichessMovePreview.update(previewSettings);
     LichessThreatCoding.update(previewSettings);
     LichessKingMovementFields.update(previewSettings);
@@ -176,8 +178,8 @@ test("right-click move preview stays visual and restores the live board", {
       return result.result.value;
     };
     const settle = () => evaluate("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
-    const mouse = (type, x, y, button = "right", buttons = button === "right" ? 2 : 1) =>
-      send("Input.dispatchMouseEvent", { type, x, y, button, buttons });
+    const mouse = (type, x, y, button = "right", buttons = button === "right" ? 2 : 1, modifiers = 0) =>
+      send("Input.dispatchMouseEvent", { type, x, y, button, buttons, modifiers });
     const drag = async (from, to, black = false) => {
       const logical = key => ({ col: key.charCodeAt(0) - 97, row: 8 - Number(key[1]) });
       const screen = key => {
@@ -241,7 +243,7 @@ test("right-click move preview stays visual and restores the live board", {
                   const piece = layer?.querySelector('piece');
                   if (!piece) return { missing: true };
                   // Temporarily enable hit testing on visual-only layers to measure paint order.
-                  const nodes = [...document.querySelectorAll('.cg-wrap, .cg-wrap *')];
+                  const nodes = [...document.querySelectorAll('.cg-wrap, .cg-wrap *')].filter(node => !node.matches('#lfs-move-preview-mix'));
                   const saved = nodes.map(node => [node, node.style.getPropertyValue('pointer-events'), node.style.getPropertyPriority('pointer-events')]);
                   for (const node of nodes) node.style.setProperty('pointer-events', 'auto', 'important');
                   const hit = document.elementFromPoint(${point.x}, ${point.y});
@@ -320,8 +322,8 @@ test("right-click move preview stays visual and restores the live board", {
           context.drawImage(image, 0, 0);
           return { center: [...context.getImageData(32, 32, 1, 1).data], ring: [...context.getImageData(59, 32, 1, 1).data] };
         })()`);
-        assert.deepEqual(draggedPixels.ring, [48, 48, 224, 255], 'screenshot must contain the visible blue king ring above the board');
-        assert.deepEqual(draggedPixels.ring, boardKingRing, 'the dragged king must retain the board king\'s exact color and opacity');
+        assert.deepEqual(draggedPixels.ring, boardKingRing.slice(0, 3).map(channel => Math.round(channel * 0.8 + 255 * 0.2)).concat(255),
+          'the dragged king and its movement fields must receive the configured white mix');
         assert.notDeepEqual(draggedPixels.center, draggedPixels.ring, 'the center must remain open, not become a solid blue circle');
         await mouse('mouseReleased', 336, 272, 'right', 0);
         await evaluate('LichessMovePreview.restore()');
@@ -349,7 +351,8 @@ test("right-click move preview stays visual and restores the live board", {
           const context = canvas.getContext('2d'); context.drawImage(image, 0, 0);
           return [...context.getImageData(59, 32, 1, 1).data];
         })()`);
-        assert.deepEqual(draggedWhiteRing, boardWhiteRing, "the white king keeps its exact board color and opacity while right-dragging");
+        assert.deepEqual(draggedWhiteRing, boardWhiteRing.slice(0, 3).map(channel => Math.round(channel * 0.8 + 255 * 0.2)).concat(255),
+          "the white king receives the configured board mix while right-dragging");
         await mouse('mouseReleased', 336, 464, 'right', 0);
         await evaluate('LichessMovePreview.restore()');
       });
@@ -432,10 +435,26 @@ test("right-click move preview stays visual and restores the live board", {
       assert.equal(await evaluate("document.getElementById('lfs-move-preview')"), null);
       assert.equal(await evaluate("document.getElementById('lfs-move-preview-drag')"), null);
 
+      await mouse("mousePressed", 288, 416, "left", 1, 1);
+      await mouse("mouseMoved", 288, 288, "left", 1, 1);
+      await settle();
+      assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag > piece')?.style.left"), "56.25%");
+      await mouse("mouseReleased", 288, 288, "left", 0, 1);
+      await settle();
+      assert.equal(await evaluate("document.querySelector('#lfs-move-preview > piece.white.pawn[data-key=e4]')?.dataset.key"), "e4");
+      assert.equal(await evaluate("document.querySelector('.main-board cg-board > piece.white.pawn') !== null"), true);
+      await evaluate("LichessMovePreview.restore()");
+      await settle();
+
       await mouse("mousePressed", 288, 416, "right", 2);
       await mouse("mouseMoved", 288, 288, "right", 2);
       await settle();
       assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag > piece')?.style.left"), "56.25%");
+      assert.equal(await evaluate("document.querySelectorAll('#lfs-move-preview-drag > square.move-dest').length"), 2);
+      assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag > svg[data-lfs-board-overlay] path[fill=none]') !== null"), true);
+      assert.deepEqual(await evaluate(`(() => { const mix = document.querySelector('#lfs-move-preview-mix'); const style = getComputedStyle(mix); return { color: style.backgroundColor, opacity: style.opacity }; })()`), {
+        color: "oklch(1 0 0)", opacity: "0.2"
+      });
       assert.match(await evaluate("document.querySelector('#lfs-move-preview-drag > svg.lfs-move-preview-drag-paths path')?.getAttribute('d')"), /L 56\.25 56\.25$/);
       assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag > svg.lfs-move-preview-drag-paths path').getAttribute('stroke-linecap')"), "butt");
       assert.equal(await evaluate("document.querySelector('#lfs-move-preview-drag > square.valid-drop-target')"), null);

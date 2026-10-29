@@ -1476,11 +1476,12 @@
   const transientOverlayIds = new Set([
     "lfs-move-preview",
     "lfs-move-preview-drag",
+    "lfs-move-preview-mix",
     "lfs-move-promotion-choice",
     "lfs-pv-preview"
   ]);
   const isTransientOverlayNode = node => node.nodeType === Node.ELEMENT_NODE && transientOverlayIds.has(node.id);
-  const isInsideTransientOverlay = element => Boolean(element?.closest?.("#lfs-move-preview, #lfs-move-preview-drag, #lfs-move-promotion-choice, #lfs-pv-preview"));
+  const isInsideTransientOverlay = element => Boolean(element?.closest?.("#lfs-move-preview, #lfs-move-preview-drag, #lfs-move-preview-mix, #lfs-move-promotion-choice, #lfs-pv-preview"));
 
   new MutationObserver(records => {
     const targetElement = record => record.target.nodeType === Node.ELEMENT_NODE ? record.target : record.target.parentElement;

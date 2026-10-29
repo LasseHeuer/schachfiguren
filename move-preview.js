@@ -314,10 +314,17 @@
     layer.id = "lfs-move-preview-drag";
     layer.setAttribute("aria-hidden", "true");
     const pieceCode = drag.state.board[drag.source.row][drag.source.col];
+    const blackOrientation = getWrapper(drag.board)?.classList.contains("orientation-black") ?? false;
+    layer.dataset.lfsSelectedPieceColor = settings.moveDotsPlayerColor ? pieceCode[0] : "";
+    addSquare(layer, drag.source, "selected", blackOrientation);
+    for (const key of drag.legalTargets) {
+      const target = boardLogic.parseSquare(key);
+      const occupied = target && drag.state.board[target.row][target.col];
+      addSquare(layer, target, `move-dest${occupied ? " oc" : ""}`, blackOrientation);
+    }
     const piece = document.createElement("piece");
     piece.className = `${pieceCode[0] === "w" ? "white" : "black"} ${typeNames[pieceCode[1]]} lfs-move-preview-drag-piece`;
     const sourceBoard = active?.board === drag.board ? active.overlay : drag.board;
-    const blackOrientation = getWrapper(drag.board)?.classList.contains("orientation-black") ?? false;
     const boardRect = sourceBoard?.getBoundingClientRect() ?? drag.board.getBoundingClientRect();
     drag.sourceElement = [...(sourceBoard?.querySelectorAll(":scope > piece") ?? [])]
       .find(element => {
@@ -346,11 +353,22 @@
     drag.piece = piece;
     drag.path = path;
     drag.blackOrientation = blackOrientation;
+    drag.outlineEntry = {};
+    renderDragMoveOutline(drag);
     updateArrowPath(path, [drag.source, drag.source], blackOrientation);
     if (pieceCode[1] === "K") {
       globalThis.LichessKingMovementFields?.renderDragPreview(
         piece, drag.state.board, drag.source, blackOrientation);
     }
+  }
+
+  function renderDragMoveOutline(drag) {
+    if (!drag?.layer) return;
+    const piece = drag.piece;
+    piece?.classList.add("ghost");
+    globalThis.LichessSelectedPieceWedge?.renderMoveOutline(
+      drag.layer, drag.outlineEntry, settings.moveDotsPlayerColor ? drag.state.board[drag.source.row][drag.source.col][0] : null);
+    piece?.classList.remove("ghost");
   }
 
   function dispatchPreviewPointerMove(drag, x, y) {
@@ -581,7 +599,19 @@
     const baseKey = `${boardLogic.getPlacement(state)} ${state.turn}`;
     overlay.dataset.position = baseKey;
     session.board.dataset.lfsMovePreviewActive = "";
+    ensurePreviewMix(session);
     document.dispatchEvent(new CustomEvent("lfs-hover-preview-change", { detail: overlay }));
+  }
+
+  function ensurePreviewMix(session) {
+    if (!session.mixOverlay) {
+      session.mixOverlay = document.createElement("div");
+      session.mixOverlay.id = "lfs-move-preview-mix";
+      session.mixOverlay.setAttribute("aria-hidden", "true");
+    }
+    session.mixOverlay.style.backgroundColor = settings.movePreviewMixColor;
+    session.mixOverlay.style.opacity = String(settings.movePreviewMixPercent / 100);
+    session.wrapper.append(session.mixOverlay);
   }
 
   function stopObservers() {
@@ -602,6 +632,7 @@
     if (!session) return;
     stopObservers();
     session.overlay?.remove();
+    session.mixOverlay?.remove();
     session.board.removeAttribute("data-lfs-move-preview-active");
     document.dispatchEvent(new CustomEvent("lfs-hover-preview-change", { detail: session.board }));
   }
@@ -844,13 +875,13 @@
       }
       if (event.button === 2) cancelPromotion();
     }
-    if (event.button === 0 && active && getBoardFromEvent(event) === active.board) {
+    if (event.button === 0 && !event.altKey && active && getBoardFromEvent(event) === active.board) {
       stopEvent(event);
       restore();
       return;
     }
     if (event.button === 0 && active && getBoardFromEvent(event) !== active.board) restore();
-    if (event.button !== 2 || !isPreviewEnabled()) return;
+    if ((event.button !== 2 && !(event.button === 0 && event.altKey)) || !isPreviewEnabled()) return;
     const board = getBoardFromEvent(event);
     if (!board || board.id === "lfs-pv-preview" || board.id === previewBoardId) return;
     requestMainFen();
@@ -863,7 +894,7 @@
       return;
     }
     const legalTargets = new Set(boardLogic.getLegalMoves(state, source).map(move => boardLogic.squareKey(move)));
-    pending = { board, source, state, legalTargets, pointerId: event.pointerId };
+    pending = { board, source, state, legalTargets, pointerId: event.pointerId, button: event.button };
     if (!active && legalTargets.size) {
       const session = startSession(board, state);
       if (session) session.provisional = true;
@@ -880,7 +911,7 @@
   }, true);
 
   document.addEventListener("pointerup", event => {
-    if (event.button !== 2 || !pending || event.pointerId !== pending.pointerId) return;
+    if (!pending || event.button !== pending.button || event.pointerId !== pending.pointerId) return;
     stopEvent(event);
     const drag = pending;
     if (drag.frame) cancelAnimationFrame(drag.frame);
@@ -973,6 +1004,7 @@
       restore();
       return;
     }
+    if (pending) renderDragMoveOutline(pending);
     if (active) render(active);
   }
 

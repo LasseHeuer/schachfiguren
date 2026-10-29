@@ -4382,6 +4382,7 @@
   globalThis.LichessSelectedPieceWedge = {
     createLastMovePreview,
     renderLastMoveOutline,
+    renderMoveOutline,
     update(nextSettings) {
       advanceHatchScroll();
       settings = nextSettings;

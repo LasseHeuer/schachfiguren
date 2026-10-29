@@ -1007,6 +1007,60 @@ html:not([data-lfs-disabled]) #lfs-move-preview-drag {
   pointer-events: none !important;
 }
 
+html:not([data-lfs-disabled]) #lfs-move-preview-mix {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 2147483647 !important;
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none !important;
+  clip-path: var(--lfs-board-outer-clip, none) !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-move-preview-drag > square {
+  position: absolute !important;
+  z-index: 0 !important;
+  display: block !important;
+  width: 12.5% !important;
+  height: 12.5% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  pointer-events: none !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-move-preview-drag > svg[data-lfs-board-overlay] {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: visible !important;
+  pointer-events: none !important;
+}
+
+html:not([data-lfs-disabled]):not([data-lfs-move-outline-mode]) #lfs-move-preview-drag > square.move-dest:not(.oc) {
+  background: radial-gradient(
+    in srgb, var(--lfs-active-move-dot-color, var(--lfs-selected-square-color)) 0 var(--lfs-move-dot-size),
+    oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) calc(var(--lfs-move-dot-size) + 1%)
+  ) !important;
+}
+
+html:not([data-lfs-disabled]):not([data-lfs-move-outline-mode])[data-lfs-square-move-dots] #lfs-move-preview-drag > square.move-dest:not(.oc) {
+  background: linear-gradient(in srgb, var(--lfs-active-move-dot-color, var(--lfs-selected-square-color)), var(--lfs-active-move-dot-color, var(--lfs-selected-square-color))) center /
+    var(--lfs-square-move-dot-size) var(--lfs-square-move-dot-size) no-repeat !important;
+}
+
+html:not([data-lfs-disabled])[data-lfs-move-outline-mode] #lfs-move-preview-drag > square.move-dest {
+  background: none !important;
+}
+
+html:not([data-lfs-disabled]) .is2d .cg-wrap #lfs-move-preview-drag[data-lfs-selected-piece-color="w"] {
+  --lfs-active-move-dot-color: var(--lfs-white-piece-color);
+}
+
+html:not([data-lfs-disabled]) .is2d .cg-wrap #lfs-move-preview-drag[data-lfs-selected-piece-color="b"] {
+  --lfs-active-move-dot-color: var(--lfs-black-piece-color);
+}
+
 html:not([data-lfs-disabled]) #lfs-move-preview-drag > piece.lfs-move-preview-drag-piece {
   position: absolute !important;
   z-index: 2 !important;

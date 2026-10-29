@@ -1044,6 +1044,21 @@ test("user arrow settings use stable defaults and supported limits", () => {
   assert.equal(settings.normalize({ userArrowDashed: 1 }).userArrowDashed, true);
 });
 
+test("move preview board mix defaults to white at 20 percent and exposes both controls", () => {
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  assert.equal(settings.normalize().movePreviewMixPercent, 20);
+  assert.equal(settings.normalize().movePreviewMixColor, "oklch(1 0 0)");
+  for (const [saved, expected] of [[0, 0], [20, 20], [100, 100], [-1, 0], [120, 100], ["invalid", 20]]) {
+    assert.equal(settings.normalize({ movePreviewMixPercent: saved }).movePreviewMixPercent, expected);
+  }
+  for (const file of ["options.html", "popup.html"]) {
+    const html = readFileSync(join(__dirname, file), "utf8");
+    assert.match(html, /<input[^>]*type="range"[^>]*data-setting="movePreviewMixPercent"/);
+    assert.match(html, /<input[^>]*type="color"[^>]*data-setting="movePreviewMixColor"/);
+  }
+});
+
 test("empty move-field radius has a stable default and supported limits", () => {
   assert.equal(settings.normalize().threatMoveFieldRadius, 0.35);
   for (const [saved, expected] of [[0.1, 0.1], [0.48, 0.48], [0.7, 0.7], [-1, 0.1], [1, 0.7], ["invalid", 0.35]]) {
