@@ -756,7 +756,6 @@ test("right-click move preview stays visual and restores the live board", {
 
     await t.test("right-click and Alt drags match left-click move-field indicators", async () => {
       const fen = "7k/8/3p4/8/4Q3/8/8/4R2K w - - 0 1";
-      const source = { x: 288, y: 288 };
       const capture = async boardExpression => evaluate(`(() => {
         const board = ${boardExpression};
         const interaction = LichessThreatCoding.getInteractionPreview(board);
@@ -764,50 +763,58 @@ test("right-click move preview stays visual and restores the live board", {
           .map(path => path.getAttribute('stroke') + ':' + path.getAttribute('d')).sort();
         return { legalTargets: interaction?.legalTargets?.map(({ row, col }) => ({ row, col })) ?? null, paths };
       })()`);
-      let legalTargets;
-      const previewPaths = [];
+      for (const blackOrientation of [false, true]) {
+        const screenSource = blackOrientation ? { x: 224, y: 224 } : { x: 288, y: 288 };
+        let legalTargets;
+        const previewPaths = [];
 
-      for (const { button, buttons, modifiers, label } of [
-        { button: "right", buttons: 2, modifiers: 0, label: "right-click" },
-        { button: "left", buttons: 1, modifiers: 1, label: "Alt" }
-      ]) {
-        await evaluate(`setBoardFen(${JSON.stringify(fen)})`);
+        for (const { button, buttons, modifiers, label } of [
+          { button: "right", buttons: 2, modifiers: 0, label: "right-click" },
+          { button: "left", buttons: 1, modifiers: 1, label: "Alt" }
+        ]) {
+          await evaluate(`setBoardFen(${JSON.stringify(fen)}); document.querySelector('.cg-wrap').classList.toggle('orientation-black', ${blackOrientation})`);
+          await settle();
+          await mouse("mousePressed", screenSource.x, screenSource.y, button, buttons, modifiers);
+          await settle();
+          const preview = await capture("document.querySelector('#lfs-move-preview')");
+          assert.ok(preview.legalTargets?.some(target => target.row === 3 && target.col === 4),
+            `${label}/${blackOrientation ? "black" : "white"}: the e5 move field is included`);
+          assert.ok(preview.paths.length >= 2, `${label}/${blackOrientation ? "black" : "white"}: attack and defense lines are rendered`);
+          legalTargets ??= preview.legalTargets;
+          previewPaths.push({ label, paths: preview.paths });
+          await mouse("mouseReleased", screenSource.x, screenSource.y, button, 0, modifiers);
+          await evaluate("LichessMovePreview.restore()");
+          await settle();
+        }
+
+        await evaluate(`(() => {
+          setBoardFen(${JSON.stringify(fen)});
+          const blackOrientation = ${blackOrientation};
+          document.querySelector('.cg-wrap').classList.toggle('orientation-black', blackOrientation);
+          const board = document.querySelector('.cg-wrap > cg-board');
+          for (const { row, col } of ${JSON.stringify(legalTargets)}) {
+            const screenRow = blackOrientation ? 7 - row : row;
+            const screenCol = blackOrientation ? 7 - col : col;
+            const square = document.createElement('square');
+            square.className = 'move-dest';
+            square.style.left = (screenCol * 12.5) + '%';
+            square.style.top = (screenRow * 12.5) + '%';
+            board.append(square);
+          }
+        })()`);
         await settle();
-        await mouse("mousePressed", source.x, source.y, button, buttons, modifiers);
+        await mouse("mousePressed", screenSource.x, screenSource.y, "left", 1);
+        await mouse("mouseMoved", screenSource.x, screenSource.y, "left", 1);
         await settle();
-        const preview = await capture("document.querySelector('#lfs-move-preview')");
-        assert.ok(preview.legalTargets?.some(target => target.row === 3 && target.col === 4),
-          `${label}: the e5 move field is included`);
-        assert.ok(preview.paths.length >= 2, `${label}: attack and defense lines are rendered`);
-        legalTargets ??= preview.legalTargets;
-        previewPaths.push({ label, paths: preview.paths });
-        await mouse("mouseReleased", source.x, source.y, button, 0, modifiers);
+        const leftClick = await capture("document.querySelector('.cg-wrap > cg-board')");
+        for (const preview of previewPaths) {
+          assert.deepEqual(preview.paths, leftClick.paths,
+            `${preview.label}/${blackOrientation ? "black" : "white"} should match left-click move-field indicators`);
+        }
+        await mouse("mouseReleased", screenSource.x, screenSource.y, "left", 0);
         await evaluate("LichessMovePreview.restore()");
         await settle();
       }
-
-      await evaluate(`(() => {
-        setBoardFen(${JSON.stringify(fen)});
-        const board = document.querySelector('.cg-wrap > cg-board');
-        for (const { row, col } of ${JSON.stringify(legalTargets)}) {
-          const square = document.createElement('square');
-          square.className = 'move-dest';
-          square.style.left = (col * 12.5) + '%';
-          square.style.top = (row * 12.5) + '%';
-          board.append(square);
-        }
-      })()`);
-      await settle();
-      await mouse("mousePressed", source.x, source.y, "left", 1);
-      await mouse("mouseMoved", source.x, source.y, "left", 1);
-      await settle();
-      const leftClick = await capture("document.querySelector('.cg-wrap > cg-board')");
-      for (const preview of previewPaths) {
-        assert.deepEqual(preview.paths, leftClick.paths, `${preview.label} should match left-click move-field indicators`);
-      }
-      await mouse("mouseReleased", source.x, source.y, "left", 0);
-      await evaluate("LichessMovePreview.restore()");
-      await settle();
     });
 
     await t.test("page FEN supplies the black turn when the board has no turn class", async () => {

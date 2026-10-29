@@ -303,6 +303,13 @@
     return { position, selected, blackOrientation: preview.blackOrientation };
   }
 
+  function getScreenLegalTargets(legalTargets, blackOrientation) {
+    return legalTargets?.map(({ row, col, ...target }) => ({
+      ...target,
+      ...logicalToScreen({ row, col }, blackOrientation)
+    })) ?? null;
+  }
+
   function getAttackedPieces(position, source, blackOrientation) {
     const piece = position[source.row]?.[source.col];
     if (!piece) return [];
@@ -4063,9 +4070,10 @@
     const idleParsed = dragPreview && !dragPreview.isHoverPreview
       ? wedgeParsed
       : dragPreview?.isHoverPreview ? readPosition(board) : parsed;
+    const screenLegalTargets = getScreenLegalTargets(dragPreview?.legalTargets, idleParsed?.blackOrientation);
       const rawMoveDestinationLines = idleParsed?.selected
       && (settings.threatenedPieceOutlineEnabled || settings.defenseCirclesEnabled)
-      ? getMoveDestinationLines(board, idleParsed.position, idleParsed.selected, idleParsed.blackOrientation, dragPreview?.legalTargets)
+      ? getMoveDestinationLines(board, idleParsed.position, idleParsed.selected, idleParsed.blackOrientation, screenLegalTargets)
       : { targetKeys: new Set(), threats: [], defenseSegments: [] };
     // An empty field under the hovered figure uses figure-based radii; the change is animated in both directions.
     const hoverFieldKey = idleParsed
@@ -4107,7 +4115,7 @@
       wedgeParsed.selected,
       wedgeSelectedPiece,
       wedgeParsed.blackOrientation,
-      dragPreview?.legalTargets
+      screenLegalTargets
     );
     const hoveredTarget = movePreview?.isHoverPreview && logicalToScreen(movePreview.target, parsed.blackOrientation);
     const otherMoveOutlinePreviews = moveOutlinePreviews.filter(({ target }) =>
