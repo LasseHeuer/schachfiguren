@@ -807,12 +807,7 @@ test("move outlines keep rounded joins and share formatting with last-move previ
   const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
   vm.runInContext(source.replace("  documentObserver = new MutationObserver", `
     getScreenSquare = square => square;
-    readPosition = () => ({
-      position: Array.from({ length: 8 }, (_, row) => Array.from({ length: 8 }, (_, col) =>
-        row === 4 && col === 4 ? { color: "w", type: "pawn" } : null)),
-      blackOrientation: false
-    });
-    globalThis.testing = { renderMoveOutline, renderLastMoveOutline, createLastMovePreview, getLastMoveOutlineCells, configure(value) { settings = value; } };
+    globalThis.testing = { renderMoveOutline, renderLastMoveOutline, createLastMovePreview, getLastMoveSquares, getLastMoveOutlineCells, configure(value) { settings = value; } };
     return;
     documentObserver = new MutationObserver`), context);
   const render = (cells, selected = [], pieces = [], premoves = [], sourceSquare = null) => {
@@ -931,14 +926,30 @@ test("move outlines keep rounded joins and share formatting with last-move previ
   assert.deepEqual(cells({ row: 6, col: 1 }, { row: 1, col: 6 }), [[6, 1], [5, 2], [4, 3], [3, 4], [2, 5], [1, 6]]);
   assert.deepEqual(cells({ row: 7, col: 1 }, { row: 5, col: 2 }), [[7, 1], [5, 2]]);
   const board = {
-    closest: () => true,
-    querySelectorAll: () => [{ row: 6, col: 4 }, { row: 4, col: 4 }]
+    closest: selector => selector === ".is2d" ? true : { classList: { contains: () => false } },
+    classList: { contains: name => name === "turn-white" },
+    querySelectorAll: selector => selector.includes("piece") ? [movedPiece] : [{ row: 6, col: 4 }, { row: 4, col: 4 }]
+  };
+  let movedPieceColor = "white";
+  const movedPiece = {
+    classList: { contains: name => name === movedPieceColor || name === "pawn" },
+    dataset: { key: "e4" },
+    getAttribute: () => null
   };
   const entry = {};
   context.testing.renderLastMoveOutline(board, entry);
   assert.ok(entry.lastMoveOutlineSvg.innerHTML.includes(`stroke="${outlineSettings.whitePieceColor}" stroke-width="3"`));
   assert.ok(entry.lastMoveOutlineSvg.innerHTML.includes("M4 4L5 4"));
   assert.ok(!entry.lastMoveOutlineSvg.innerHTML.includes("M4 6L5 6"));
+  movedPieceColor = "black";
+  context.testing.renderLastMoveOutline(board, entry);
+  assert.ok(entry.lastMoveOutlineSvg.innerHTML.includes(`stroke="${outlineSettings.blackPieceColor}" stroke-width="3"`));
+
+  const extensionCss = readFileSync(join(__dirname, "extension.css"), "utf8");
+  assert.match(extensionCss, /\.cg-wrap > cg-container\s*\{\s*overflow:\s*visible\s*!important;/);
+  assert.doesNotMatch(extensionCss, /\.cg-wrap > cg-container,\s*html[^\n]*\.cg-wrap > cg-board\s*\{\s*clip-path:/);
+  assert.match(extensionCss, /\.cg-wrap > cg-container > cg-board\s*\{\s*clip-path:/);
+  assert.match(extensionCss, /\.cg-wrap > cg-container > \.cg-custom-svgs\s*\{\s*z-index:\s*2147483647\s*!important;/);
 });
 
 const previousColors = {
@@ -1615,6 +1626,7 @@ test("highlight cascades only follow recaptures on the root square and reveal va
       getDefenseHighlightMix,
       getHighlightLineState,
       getPreviewMoveKey,
+      getLastMoveSquares,
       getLastMove,
       readDragPreview,
       shouldPlayLastMoveCascade,
@@ -1687,6 +1699,8 @@ test("highlight cascades only follow recaptures on the root square and reveal va
     querySelector: () => null,
     querySelectorAll: () => [makeSquare(6, 7), makeSquare(4, 7)]
   };
+  const squares = context.testing.getLastMoveSquares(board);
+  assert.deepEqual(Array.from(squares, square => [square.row, square.col]), [[6, 7], [4, 7]]);
   const movePosition = Array.from({ length: 8 }, () => Array(8).fill(null));
   movePosition[4][7] = { color: "w", type: "pawn" };
   const lastMove = context.testing.getLastMove(board, movePosition, true);
@@ -1834,6 +1848,37 @@ test("highlight cascades only follow recaptures on the root square and reveal va
   const rotatedExchange = exchange.map(row => [...row].reverse()).reverse();
   assert.deepEqual(coordinates(context.testing.getAttackCascadeLayers(rotatedExchange, { row: 3, col: 3 }, true, 6)),
     exchangeExpected.map(layer => layer.map(([row, col]) => [7 - row, 7 - col])));
+});
+
+test("pins use existing piece values and require one opposing blocker", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const context = vm.createContext({ document: { addEventListener() {} } });
+  vm.runInContext(readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8")
+    .replace("  documentObserver = new MutationObserver", `
+      globalThis.testing = { getPinnedPieces };
+      return;
+      documentObserver = new MutationObserver`), context);
+  const position = Array.from({ length: 8 }, () => Array(8).fill(null));
+  position[0][0] = { color: "b", type: "bishop" };
+  position[2][2] = { color: "w", type: "pawn" };
+  position[4][4] = { color: "w", type: "rook" };
+  assert.equal(context.testing.getPinnedPieces(position).get("2,2"), "b");
+
+  position[4][4] = { color: "w", type: "bishop" };
+  assert.equal(context.testing.getPinnedPieces(position).has("2,2"), false, "equal-value target is not marked");
+  position[4][4] = { color: "b", type: "rook" };
+  assert.equal(context.testing.getPinnedPieces(position).has("2,2"), false, "target must be on the blocker side");
+  position[4][4] = { color: "w", type: "rook" };
+  position[3][3] = { color: "w", type: "knight" };
+  assert.equal(context.testing.getPinnedPieces(position).has("2,2"), false, "a second blocker interrupts the pin");
+});
+
+test("pinned outline blur starts sharp and clamps to its slider range", () => {
+  assert.equal(settings.defaults.pinnedPieceOutlineBlurPx, 0);
+  assert.equal(settings.normalize({ pinnedPieceOutlineBlurPx: -1 }).pinnedPieceOutlineBlurPx, 0);
+  assert.equal(settings.normalize({ pinnedPieceOutlineBlurPx: 20 }).pinnedPieceOutlineBlurPx, 12);
 });
 
 test("defense cascades exclude kings while attack cascades keep safe final recaptures", () => {

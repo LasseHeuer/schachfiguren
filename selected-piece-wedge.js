@@ -22,6 +22,7 @@
   const positionAnalysisCache = new Map();
   const maxPositionAnalysisCacheSize = 128;
   let settings = null;
+  let pinnedPieceOutlineFilters = null;
   let pointerOverBoard = null;
   let lastPointerPosition = null;
   let documentObserver = null;
@@ -400,6 +401,40 @@
     return threatened;
   }
 
+  function getPinnedPieces(position) {
+    const pinned = new Map();
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const attacker = position[row][col];
+        const directions = attacker && slidingDirections[attacker.type];
+        if (!directions) continue;
+        for (const [dr, dc] of directions) {
+          let targetRow = row + dr;
+          let targetCol = col + dc;
+          let blocker = null;
+          while (targetRow >= 0 && targetRow < 8 && targetCol >= 0 && targetCol < 8) {
+            const target = position[targetRow][targetCol];
+            if (target) {
+              if (!blocker) {
+                if (target.color === attacker.color) break;
+                blocker = { row: targetRow, col: targetCol, piece: target };
+              } else {
+                if (blocker.piece.type !== "king" && target.color === blocker.piece.color
+                  && pieceValues[target.type] > pieceValues[attacker.type]) {
+                  pinned.set(`${blocker.row},${blocker.col}`, attacker.color);
+                }
+                break;
+              }
+            }
+            targetRow += dr;
+            targetCol += dc;
+          }
+        }
+      }
+    }
+    return pinned;
+  }
+
   function canReach(position, source, target, blackOrientation) {
     return getAttackedPieces(position, source, blackOrientation).some(square => square.row === target.row && square.col === target.col);
   }
@@ -467,13 +502,16 @@
     if (analysis) {
       positionAnalysisCache.delete(key);
     } else {
-      analysis = { threatenedSquares: null, defenseConnections: null };
+      analysis = { threatenedSquares: null, defenseConnections: null, pinnedPieces: null };
     }
     if (settings.threatenedPieceOutlineEnabled && !analysis.threatenedSquares) {
       analysis.threatenedSquares = getThreatenedSquares(position, blackOrientation);
     }
     if (settings.defenseCirclesEnabled && !analysis.defenseConnections) {
       analysis.defenseConnections = getDefenseConnections(position, blackOrientation);
+    }
+    if (settings.pinnedPieceOutlineEnabled && !analysis.pinnedPieces) {
+      analysis.pinnedPieces = getPinnedPieces(position);
     }
     positionAnalysisCache.set(key, analysis);
     if (positionAnalysisCache.size > maxPositionAnalysisCacheSize) {
@@ -595,10 +633,15 @@
     if (preview?.legal) entry.defensePlayedMoveKeys.add(getPreviewMoveKey(preview));
   }
 
-  function getLastMove(board, position, blackOrientation) {
+  function getLastMoveSquares(board) {
     const squares = [...board.querySelectorAll(":scope > square.last-move")]
       .map(element => getScreenSquare(element, board));
-    if (squares.length !== 2 || squares.some(square => !square)) return null;
+    return squares.length === 2 && squares.every(Boolean) ? squares : null;
+  }
+
+  function getLastMove(board, position, blackOrientation) {
+    const squares = getLastMoveSquares(board);
+    if (!squares) return null;
     const occupied = squares.filter(square => position[square.row]?.[square.col]);
     const destination = occupied.length === 1
       ? occupied[0]
@@ -613,6 +656,26 @@
       target: destination,
       key: getMoveKey(screenToLogical(source, blackOrientation), screenToLogical(destination, blackOrientation))
     };
+  }
+
+  function getLastMoveColor(board, squares) {
+    const blackOrientation = board.closest(".cg-wrap")?.classList?.contains("orientation-black") ?? false;
+    for (const element of board.querySelectorAll(":scope > piece")) {
+      if (element.classList.contains("fading") || element.classList.contains("ghost")) continue;
+      const key = (globalThis.LichessMoveAnimation?.getDestinationKey(element)
+        ?? (element.classList.contains("anim") ? element.getAttribute("data-lfs-move-key") : null)
+        ?? element.dataset?.key
+        ?? element.cgKey)?.toLowerCase();
+      const match = /^([a-h])([1-8])$/.exec(key ?? "");
+      const square = match
+        ? logicalToScreen({ row: 8 - Number(match[2]), col: match[1].charCodeAt(0) - 97 }, blackOrientation)
+        : getPieceScreenSquare(element, board, blackOrientation, undefined, null);
+      if (square && squares.some(candidate => candidate.row === square.row && candidate.col === square.col)) {
+        return getPiece(element)?.color ?? null;
+      }
+    }
+    const turnColor = board.classList.contains("turn-white") ? "w" : board.classList.contains("turn-black") ? "b" : null;
+    return turnColor ? turnColor === "w" ? "b" : "w" : null;
   }
 
   function applyExchangeCapture(position, source, target, blackOrientation) {
@@ -810,6 +873,114 @@
 
   function clearThreatenedPieceOutline(element) {
     element.removeAttribute("data-lfs-threatened-piece");
+  }
+
+  function clearPinnedPieceOutline(element) {
+    element.removeAttribute("data-lfs-pinned-piece");
+  }
+
+  function updatePinnedPieceOutlineFilters() {
+    if (!pinnedPieceOutlineFilters?.svg.isConnected) {
+      const svg = document.createElementNS(svgNamespace, "svg");
+      svg.id = "lfs-pinned-piece-outline-filters";
+      svg.setAttribute("aria-hidden", "true");
+      svg.setAttribute("focusable", "false");
+      Object.assign(svg.style, { position: "fixed", width: "0", height: "0", overflow: "hidden", pointerEvents: "none" });
+      const defs = document.createElementNS(svgNamespace, "defs");
+      pinnedPieceOutlineFilters = { svg, byColor: {} };
+      for (const color of ["w", "b", "custom"]) {
+        const filter = document.createElementNS(svgNamespace, "filter");
+        filter.id = `lfs-pinned-piece-outline-${color}`;
+        filter.setAttribute("x", "-50%");
+        filter.setAttribute("y", "-50%");
+        filter.setAttribute("width", "200%");
+        filter.setAttribute("height", "200%");
+        filter.setAttribute("filterUnits", "objectBoundingBox");
+        filter.setAttribute("primitiveUnits", "userSpaceOnUse");
+        const morphology = document.createElementNS(svgNamespace, "feMorphology");
+        morphology.setAttribute("in", "SourceAlpha");
+        morphology.setAttribute("operator", "dilate");
+        morphology.setAttribute("result", "expanded");
+        const outlineAlpha = document.createElementNS(svgNamespace, "feComposite");
+        outlineAlpha.setAttribute("in", "expanded");
+        outlineAlpha.setAttribute("in2", "SourceAlpha");
+        outlineAlpha.setAttribute("operator", "out");
+        outlineAlpha.setAttribute("result", "outlineAlpha");
+        const flood = document.createElementNS(svgNamespace, "feFlood");
+        flood.setAttribute("result", "outlineColor");
+        const outline = document.createElementNS(svgNamespace, "feComposite");
+        outline.setAttribute("in", "outlineColor");
+        outline.setAttribute("in2", "outlineAlpha");
+        outline.setAttribute("operator", "in");
+        outline.setAttribute("result", "outline");
+        const blur = document.createElementNS(svgNamespace, "feGaussianBlur");
+        blur.setAttribute("in", "outline");
+        blur.setAttribute("result", "blurredOutline");
+        const merge = document.createElementNS(svgNamespace, "feMerge");
+        for (const input of ["blurredOutline", "outline", "SourceGraphic"]) {
+          const node = document.createElementNS(svgNamespace, "feMergeNode");
+          node.setAttribute("in", input);
+          merge.append(node);
+        }
+        filter.append(morphology, outlineAlpha, flood, outline, blur, merge);
+        defs.append(filter);
+        pinnedPieceOutlineFilters.byColor[color] = { morphology, flood, blur };
+      }
+      svg.append(defs);
+      document.documentElement.append(svg);
+    }
+
+    const colors = {
+      w: settings.whitePieceColor,
+      b: settings.blackPieceColor,
+      custom: settings.pinnedPieceOutlineColor
+    };
+    for (const [color, filter] of Object.entries(pinnedPieceOutlineFilters.byColor)) {
+      filter.morphology.setAttribute("radius", String(settings.pinnedPieceOutlineWidthPx / 2));
+      filter.flood.setAttribute("flood-color", colors[color]);
+      filter.flood.setAttribute("flood-opacity", String(settings.pinnedPieceOutlineOpacity / 100));
+      filter.blur.setAttribute("stdDeviation", String(settings.pinnedPieceOutlineBlurPx));
+    }
+  }
+
+  function updatePinnedPieceOutlines(board, position, dragPreview, pinnedPieces, enabled, blackOrientation) {
+    for (const element of board.querySelectorAll(":scope > piece")) {
+      if (!enabled || element.classList.contains("fading")) {
+        clearPinnedPieceOutline(element);
+        continue;
+      }
+
+      let square;
+      if (dragPreview && element.classList.contains("ghost")) {
+        if (dragPreview.legal) {
+          clearPinnedPieceOutline(element);
+          continue;
+        }
+        square = logicalToScreen(dragPreview.source, dragPreview.blackOrientation);
+      } else if (dragPreview && element.classList.contains("dragging")) {
+        if (!dragPreview.legal) {
+          clearPinnedPieceOutline(element);
+          continue;
+        }
+        square = logicalToScreen(dragPreview.target, dragPreview.blackOrientation);
+      } else {
+        if (element.classList.contains("ghost")) {
+          clearPinnedPieceOutline(element);
+          continue;
+        }
+        square = getPieceScreenSquare(element, board, blackOrientation);
+      }
+
+      const piece = getPiece(element);
+      const occupant = square && position[square.row]?.[square.col];
+      const attackerColor = piece && occupant?.color === piece.color && occupant.type === piece.type
+        ? pinnedPieces.get(`${square.row},${square.col}`)
+        : undefined;
+      if (attackerColor) {
+        const colorMode = settings.pinnedPieceOutlineUsePlayerColor ? attackerColor : "custom";
+        element.setAttribute("data-lfs-pinned-piece", colorMode);
+      } else clearPinnedPieceOutline(element);
+    }
   }
 
   function updateThreatenedPieces(board, position, dragPreview, threatened, enabled, blackOrientation) {
@@ -3430,13 +3601,11 @@
   }
 
   function renderLastMoveOutline(board, entry) {
-    const parsed = settings?.enabled && settings.markLastMove && board.closest(".is2d")
-      ? readPosition(board)
+    const squares = settings?.enabled && settings.markLastMove && board.closest(".is2d")
+      ? getLastMoveSquares(board)
       : null;
-    const lastMove = parsed && getLastMove(board, parsed.position, parsed.blackOrientation);
-    const cells = lastMove ? getLastMoveOutlineCells(lastMove.source, lastMove.target) : [];
-    const piece = lastMove && parsed.position[lastMove.target.row]?.[lastMove.target.col];
-    const selectedColor = settings?.moveDotsPlayerColor ? piece?.color : null;
+    const cells = squares ? getLastMoveOutlineCells(squares[0], squares[1]) : [];
+    const selectedColor = settings?.moveDotsPlayerColor && squares ? getLastMoveColor(board, squares) : null;
     entry.lastMoveOutlineSvg = drawMoveOutline(board, entry.lastMoveOutlineSvg, cells, selectedColor, "last-move");
     if (entry.lastMoveOutlineSvg) globalThis.LichessBoardOverlay.place(board, entry.lastMoveOutlineSvg, "between-pieces");
   }
@@ -3794,6 +3963,7 @@
     if (!settings?.enabled || !board.closest(".is2d") || !parsed) {
       clearMovePreviewPiece(board, entry);
       updateThreatenedPieces(board, null, dragPreview, { w: new Map(), b: new Map() }, false, false);
+      updatePinnedPieceOutlines(board, null, dragPreview, new Map(), false, false);
       renderThreatArcs(board, entry, []);
       entry.svg?.remove();
       entry.svg = null;
@@ -3801,7 +3971,8 @@
     }
 
     const threatsEnabled = settings.threatenedPieceOutlineEnabled;
-    const positionAnalysis = threatsEnabled || settings.defenseCirclesEnabled
+    const pinnedPiecesEnabled = settings.pinnedPieceOutlineEnabled;
+    const positionAnalysis = threatsEnabled || settings.defenseCirclesEnabled || pinnedPiecesEnabled
       ? getPositionAnalysis(parsed.position, parsed.blackOrientation)
       : null;
     const threatenedSquares = threatsEnabled
@@ -3813,6 +3984,14 @@
       dragPreview,
       threatenedSquares,
       threatsEnabled,
+      parsed.blackOrientation
+    );
+    updatePinnedPieceOutlines(
+      board,
+      parsed.position,
+      dragPreview,
+      pinnedPiecesEnabled ? positionAnalysis.pinnedPieces : new Map(),
+      pinnedPiecesEnabled,
       parsed.blackOrientation
     );
 
@@ -4376,7 +4555,10 @@
       entry.resizeObserver?.disconnect();
       if (entry.frame) cancelAnimationFrame(entry.frame);
 
-      for (const piece of board.querySelectorAll(":scope > piece")) clearThreatenedPieceOutline(piece);
+      for (const piece of board.querySelectorAll(":scope > piece")) {
+        clearThreatenedPieceOutline(piece);
+        clearPinnedPieceOutline(piece);
+      }
       clearDefenseHighlights(entry);
       entry.svg?.remove();
       entry.arcSvg?.remove();
@@ -4405,6 +4587,7 @@
     update(nextSettings) {
       advanceHatchScroll();
       settings = nextSettings;
+      updatePinnedPieceOutlineFilters();
       scanBoards();
       for (const [board, entry] of observedBoards) syncHighlightLineMasks(entry, board);
       for (const board of observedBoards.keys()) scheduleRender(board);

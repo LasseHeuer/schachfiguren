@@ -19,6 +19,7 @@
         <button class="tab" id="tab-zuege" type="button" role="tab" aria-selected="false" aria-controls="panel-zuege" data-tab="zuege" tabindex="-1">Zuege</button>
         <button class="tab" id="tab-pfeile" type="button" role="tab" aria-selected="false" aria-controls="panel-pfeile" data-tab="pfeile" tabindex="-1">Pfeile</button>
         <button class="tab" id="tab-bedrohungen" type="button" role="tab" aria-selected="false" aria-controls="panel-bedrohungen" data-tab="bedrohungen" tabindex="-1">Analyse</button>
+        <button class="tab" id="tab-fesselung" type="button" role="tab" aria-selected="false" aria-controls="panel-fesselung" data-tab="fesselung" tabindex="-1">Fesselung</button>
         <button class="tab" id="tab-hover" type="button" role="tab" aria-selected="false" aria-controls="panel-hover" data-tab="hover" tabindex="-1">Hover</button>
         <button class="tab" id="tab-effekte" type="button" role="tab" aria-selected="false" aria-controls="panel-effekte" data-tab="effekte" tabindex="-1">Effekte</button>
         <button class="tab" id="tab-mehr" type="button" role="tab" aria-selected="false" aria-controls="panel-mehr" data-tab="mehr" tabindex="-1">Mehr</button>
@@ -302,6 +303,17 @@
           </div>
           <label class="select-setting" data-depends-on="threatenedPieceOutlineEnabled"><span>Bedrohte Bewegungsfelder</span><select data-setting="threatMoveFieldDisplayMode"><option value="both">Linien und Schraffur</option><option value="lines">Nur Linien</option><option value="hatch">Nur Schraffur</option><option value="none">Aus</option></select></label>
         </details>
+      </section>
+
+      <section class="panel" id="panel-fesselung" role="tabpanel" aria-labelledby="tab-fesselung" data-panel="fesselung" hidden>
+        <label class="switch-setting"><span><strong>Fesselungsanzeige aktivieren</strong><small>Markiert Figuren, die eine wertvollere eigene Figur vor einem Angreifer abschirmen.</small></span><input type="checkbox" data-setting="pinnedPieceOutlineEnabled" role="switch"></label>
+        <label class="switch-setting"><span><strong>Spielerfarbe verwenden</strong><small>Wenn ausgeschaltet, wird die eingestellte Pin-Farbe verwendet.</small></span><input type="checkbox" data-setting="pinnedPieceOutlineUsePlayerColor" role="switch"></label>
+        <label class="color-row"><span>Pin-Outline-Farbe</span><input type="color" data-setting="pinnedPieceOutlineColor"></label>
+        <div class="range-grid">
+          <label class="range-setting"><span>Konturdicke</span><output data-value-for="pinnedPieceOutlineWidthPx"></output><input type="range" min="0" max="8" step="0.5" data-setting="pinnedPieceOutlineWidthPx"></label>
+          <label class="range-setting"><span>Unschärfe</span><output data-value-for="pinnedPieceOutlineBlurPx"></output><input type="range" min="0" max="12" step="0.5" data-setting="pinnedPieceOutlineBlurPx"></label>
+          <label class="range-setting"><span>Deckkraft</span><output data-value-for="pinnedPieceOutlineOpacity"></output><input type="range" min="0" max="100" step="1" data-setting="pinnedPieceOutlineOpacity"></label>
+        </div>
       </section>
 
       <section class="panel" id="panel-hover" role="tabpanel" aria-labelledby="tab-hover" data-panel="hover" hidden>

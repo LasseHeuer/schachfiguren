@@ -30,6 +30,18 @@ html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > piece[d
   filter: drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active)) !important;
 }
 
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > piece[data-lfs-pinned-piece="w"] {
+  filter: url("#lfs-pinned-piece-outline-w") !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > piece[data-lfs-pinned-piece="b"] {
+  filter: url("#lfs-pinned-piece-outline-b") !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > piece[data-lfs-pinned-piece="custom"] {
+  filter: url("#lfs-pinned-piece-outline-custom") !important;
+}
+
 html.light {
   --lfs-online-indicator-active: var(--lfs-online-indicator-light);
   --lfs-button-background-active: var(--lfs-button-background-light);
@@ -1299,9 +1311,22 @@ html:not([data-lfs-disabled])[data-lfs-board-bevel] body[data-board] .is2d .cg-w
   background: var(--lfs-board-gap-active) !important;
 }
 
-html:not([data-lfs-disabled])[data-lfs-board-bevel] body[data-board] .is2d .cg-wrap > cg-container,
-html:not([data-lfs-disabled])[data-lfs-board-bevel] body[data-board] .is2d .cg-wrap > cg-board {
+html:not([data-lfs-disabled])[data-lfs-board-bevel] body[data-board] .is2d .cg-wrap > cg-board,
+html:not([data-lfs-disabled])[data-lfs-board-bevel] body[data-board] .is2d .cg-wrap > cg-container > cg-board {
   clip-path: var(--lfs-board-outer-clip) !important;
+}
+
+html:not([data-lfs-disabled])[data-lfs-board-bevel] body[data-board] .is2d .cg-wrap > cg-container {
+  overflow: visible !important;
+}
+
+html:not([data-lfs-disabled]) .cg-wrap > cg-container > .cg-custom-svgs {
+  z-index: 2147483647 !important;
+  overflow: visible !important;
+}
+
+html:not([data-lfs-disabled]) .cg-wrap > cg-container > .cg-custom-svgs svg {
+  overflow: visible !important;
 }
 
 html:not([data-lfs-disabled])[data-lfs-board-bevel] body[data-board] .is2d .cg-wrap cg-board[data-lfs-threat-board] {

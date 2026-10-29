@@ -72,6 +72,7 @@
     ["highlightCascadeLinesHoldEnabled", "Linie halten", "highlightCascadeLinesEnabled"],
     ["highlightCascadeReverseEnabled", "Umgekehrte Richtung", "highlightCascadesEnabled"],
     ["threatenedPieceOutlineEnabled", "Angriffe"],
+    ["pinnedPieceOutlineEnabled", "Fesselung"],
     ["kingMovementFieldsEnabled", "Königbewegungsfelder"],
     ["defenseCirclesEnabled", "Verteidigungen"],
     ["threatCenterOutlineEnabled", "Figurenkontur"],
@@ -815,7 +816,8 @@
   function hasPvAnimationAnalysis() {
     return settings.enabled && settings.analysisEnabled && (
       settings.kingMovementFieldsEnabled || settings.threatColoringEnabled || settings.selectedPieceWedgeEnabled
-      || settings.threatenedPieceOutlineEnabled || settings.defenseCirclesEnabled || settings.threatCenterOutlineEnabled
+      || settings.threatenedPieceOutlineEnabled || settings.pinnedPieceOutlineEnabled
+      || settings.defenseCirclesEnabled || settings.threatCenterOutlineEnabled
       || settings.attackHighlightEnabled || settings.defenseHighlightEnabled || settings.highlightCascadesEnabled
       || settings.highlightCascadeLinesEnabled
     );
@@ -1234,6 +1236,7 @@
       threatColoringEnabled: false,
       selectedPieceWedgeEnabled: false,
       threatenedPieceOutlineEnabled: false,
+      pinnedPieceOutlineEnabled: false,
       kingMovementFieldsEnabled: false,
       defenseCirclesEnabled: false,
       highlightCascadesEnabled: false,
