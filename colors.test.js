@@ -3162,6 +3162,131 @@ ${clockMarker}`));
       })()`);
       assert.deepEqual(visibility, { pending: "hidden", ready: "visible" });
     });
+    await t.test("zen mode centers the board and its material elements together", async () => {
+      const contentSource = readFileSync(join(root, "content.js"), "utf8");
+      const marker = "  chrome.runtime.onMessage.addListener";
+      assert.ok(contentSource.includes(marker));
+      await evaluate(contentSource.replace(marker, `
+        globalThis.zenTesting = {
+          centerZenBoard, setBoard(value) { zenBoard = value; }, clearZenOffset, setZenMode,
+          syncBoardSizeCap, observeZenBoardSize, handleViewportChange
+        };
+        return;
+${marker}`));
+      await send("Emulation.setDeviceMetricsOverride", { width: 800, height: 600, deviceScaleFactor: 1, mobile: false });
+      const result = await evaluate(`(async () => {
+        const root = document.documentElement;
+        const host = document.createElement('div');
+        host.className = 'analyse__board';
+        host.style.cssText = 'position:absolute;left:40px;top:80px;width:240px;height:240px';
+        host.innerHTML = '<div class="cg-wrap" style="width:240px;height:240px"><cg-board style="width:240px;height:240px"></cg-board></div><div class="material material-top" style="width:24px;height:20px">+1</div>';
+        document.body.append(host);
+        root.setAttribute('data-lfs-zen-mode', '');
+        host.setAttribute('data-lfs-zen-board', '');
+        zenTesting.setBoard(host);
+        zenTesting.centerZenBoard();
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const board = host.querySelector('cg-board').getBoundingClientRect();
+        const material = host.querySelector('.material').getBoundingClientRect();
+        const groupCenter = (Math.min(board.left, material.left) + Math.max(board.right, material.right)) / 2;
+        zenTesting.clearZenOffset(host);
+        host.remove();
+        root.removeAttribute('data-lfs-zen-mode');
+        return { groupCenter, viewportCenter: window.innerWidth / 2, boardWidth: board.width };
+      })()`);
+      assert.ok(Math.abs(result.groupCenter - result.viewportCenter) < 0.5);
+      assert.equal(result.boardWidth, 240);
+      await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
+    });
+    await t.test("F11 and Zen keep the board size and alignment in every toggle order", async () => {
+      await send("Emulation.setDeviceMetricsOverride", {
+        width: 800, height: 600, screenWidth: 800, screenHeight: 800, deviceScaleFactor: 1, mobile: false
+      });
+      const availableHeight = await evaluate("screen.availHeight");
+      const normalHeight = Math.max(100, availableHeight - 100);
+      const metrics = height => ({
+        width: 800, height, screenWidth: 800, screenHeight: availableHeight, deviceScaleFactor: 1, mobile: false
+      });
+      await send("Emulation.setDeviceMetricsOverride", metrics(normalHeight));
+      await evaluate(`(() => {
+        const root = document.documentElement;
+        const host = document.createElement('div');
+        host.className = 'analyse__board lfs-sequence-host';
+        host.style.cssText = 'position:absolute;left:40px;top:80px;width:600px;height:500px';
+        host.innerHTML = '<div class="main-board lfs-sequence-parent" style="position:relative;width:600px;height:500px"><div class="cg-wrap lfs-sequence-wrap" style="position:absolute;left:0;top:0;width:240px;height:240px"><cg-board style="width:100%;height:100%"></cg-board></div></div><div class="material material-top" style="width:24px;height:20px">+1</div>';
+        const responsiveStyle = document.createElement('style');
+        responsiveStyle.id = 'lfs-sequence-style';
+        responsiveStyle.textContent = '@media (min-height: ${availableHeight}px) { .lfs-sequence-wrap { width:320px!important; height:320px!important; } }';
+        document.head.append(responsiveStyle);
+        document.body.append(host);
+        host.setAttribute('data-lfs-zen-board', '');
+        zenTesting.setBoard(host);
+        zenTesting.observeZenBoardSize(host, host.querySelector('cg-board'));
+        zenTesting.syncBoardSizeCap(host.querySelector('cg-board'));
+        return { host, responsiveStyle };
+      })()`);
+      assert.equal(await evaluate("document.querySelector('.lfs-sequence-wrap').hasAttribute('data-lfs-board-size-cap')"), true);
+
+      const sequences = [
+        ["zenOn", "zenOff", "fullOn", "fullOff"],
+        ["zenOn", "fullOn", "zenOff", "fullOff"],
+        ["zenOn", "fullOn", "fullOff", "zenOff"],
+        ["fullOn", "fullOff", "zenOn", "zenOff"],
+        ["fullOn", "zenOn", "zenOff", "fullOff"],
+        ["fullOn", "zenOn", "fullOff", "zenOff"],
+        ["zenOn", "fullOn", "fullOff", "fullOn", "fullOff", "zenOff"],
+        ["fullOn", "zenOn", "zenOff", "zenOn", "fullOff", "zenOff"]
+      ];
+      for (const sequence of sequences) {
+        await send("Emulation.setDeviceMetricsOverride", metrics(normalHeight));
+        await evaluate("zenTesting.setZenMode(false); zenTesting.syncBoardSizeCap();");
+        let zenActive = false;
+        let fullscreenActive = false;
+        for (const step of sequence) {
+          if (step === "fullOn" || step === "fullOff") {
+            fullscreenActive = step === "fullOn";
+            await send("Emulation.setDeviceMetricsOverride", metrics(fullscreenActive ? availableHeight : normalHeight));
+            await evaluate("zenTesting.handleViewportChange()");
+          } else {
+            zenActive = step === "zenOn";
+            await evaluate(`zenTesting.setZenMode(${zenActive})`);
+          }
+          await evaluate("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))))");
+
+          const state = await evaluate(`(() => {
+            const board = document.querySelector('.lfs-sequence-wrap');
+            const boardRect = board.getBoundingClientRect();
+            const material = board.closest('.lfs-sequence-host').querySelector('.material').getBoundingClientRect();
+            return {
+              zen: document.documentElement.hasAttribute('data-lfs-zen-mode'),
+              fullscreen: window.innerHeight >= ${availableHeight},
+              locked: board.hasAttribute('data-lfs-board-size-cap'),
+              width: boardRect.width,
+              height: boardRect.height,
+              groupCenter: (Math.min(boardRect.left, material.left) + Math.max(boardRect.right, material.right)) / 2,
+              viewportCenter: window.innerWidth / 2
+            };
+          })()`);
+          assert.equal(state.zen, zenActive, `${sequence.join(" -> ")}: Zen state after ${step}`);
+          assert.equal(state.fullscreen, fullscreenActive, `${sequence.join(" -> ")}: fullscreen state after ${step}`);
+          assert.equal(state.locked, true, `${sequence.join(" -> ")}: size cap after ${step}`);
+          assert.equal(state.width, 240, `${sequence.join(" -> ")}: board width after ${step}`);
+          assert.equal(state.height, 240, `${sequence.join(" -> ")}: board height after ${step}`);
+          if (state.zen) assert.ok(Math.abs(state.groupCenter - state.viewportCenter) < 0.5,
+            `${sequence.join(" -> ")}: board group remains centered after ${step}`);
+        }
+      }
+
+      await send("Emulation.setDeviceMetricsOverride", metrics(normalHeight));
+      await evaluate(`(() => {
+        zenTesting.setZenMode(false);
+        zenTesting.observeZenBoardSize(null, null);
+        zenTesting.syncBoardSizeCap(null);
+        document.querySelector('.lfs-sequence-host').remove();
+        document.getElementById('lfs-sequence-style')?.remove();
+      })()`);
+      await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
+    });
     await t.test("rook outlines include occupied a6 destinations from a2 for moves and premoves", async () => {
       for (const destinationClass of ["move-dest", "premove-dest"]) {
         const result = await evaluate(`(() => {

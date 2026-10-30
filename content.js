@@ -59,6 +59,7 @@
   });
 
   const { defaults, normalize } = globalThis.LichessSettings;
+  const mainBoardSelector = ".puzzle__board cg-board, .analyse__board cg-board, .main-board cg-board, .bot-game cg-board, .study__board cg-board, main cg-board";
   const pieceNames = ["wk", "wq", "wr", "wb", "wn", "wp", "bk", "bq", "br", "bb", "bn", "bp"];
   const analysisFeatures = [
     ["threatColoringEnabled", "Bedrohungsfarben"],
@@ -87,6 +88,9 @@
   let zenBoard;
   let zenOrientationObserver;
   let zenOrientationBoard;
+  let zenResizeObserver;
+  let zenResizeTarget;
+  let zenResizeBoard;
   let zenCenterFrame;
   let zenClockFrame;
   let zenClockProgressFrame;
@@ -103,6 +107,9 @@
   let normalRoundTable;
   let normalRoundBoardHeight = 0;
   let normalRoundFrame;
+  let boardSizeCapBoard;
+  let boardSizeCap;
+  let boardSizeCapWrapper;
   let pvPreviewFrame;
   let pvAnimationPositionFrame;
   let pvAnimationPositionSnapshot = null;
@@ -136,6 +143,54 @@
       if (document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenSideUpdate();
     });
     zenOrientationObserver.observe(zenOrientationBoard, { attributes: true, attributeFilter: ["class"] });
+  }
+
+  function clearBoardSizeCap() {
+    if (!boardSizeCapWrapper) return;
+    boardSizeCapWrapper.removeAttribute("data-lfs-board-size-cap");
+    boardSizeCapWrapper.style.removeProperty("--lfs-board-size-cap-width");
+    boardSizeCapWrapper.style.removeProperty("--lfs-board-size-cap-height");
+    boardSizeCapWrapper = null;
+  }
+
+  function syncBoardSizeCap(board = document.querySelector(mainBoardSelector)) {
+    const wrapper = board?.closest(".cg-wrap") ?? null;
+    if (board !== boardSizeCapBoard) {
+      clearBoardSizeCap();
+      boardSizeCapBoard = board;
+      boardSizeCap = null;
+    }
+    if (wrapper !== boardSizeCapWrapper) clearBoardSizeCap();
+    if (!board || !wrapper) {
+      boardSizeCapBoard = null;
+      boardSizeCap = null;
+      return;
+    }
+
+    if (!boardSizeCap) {
+      const rect = wrapper.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      boardSizeCap = { width: rect.width, height: rect.height };
+    }
+    boardSizeCapWrapper = wrapper;
+    wrapper.style.setProperty("--lfs-board-size-cap-width", `${boardSizeCap.width}px`);
+    wrapper.style.setProperty("--lfs-board-size-cap-height", `${boardSizeCap.height}px`);
+    wrapper.setAttribute("data-lfs-board-size-cap", "");
+  }
+
+  function observeZenBoardSize(container, board) {
+    if (container === zenResizeTarget && board === zenResizeBoard) return;
+    zenResizeObserver?.disconnect();
+    zenResizeTarget = container;
+    zenResizeBoard = board;
+    if (typeof ResizeObserver !== "function" || !container) return;
+
+    zenResizeObserver = new ResizeObserver(() => {
+      syncBoardSizeCap();
+      if (document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenCenter();
+    });
+    zenResizeObserver.observe(container);
+    if (board && board !== container) zenResizeObserver.observe(board);
   }
 
   function syncAnalysisToolbar() {
@@ -189,21 +244,7 @@
       zenToggle.setAttribute("aria-pressed", "false");
       zenToggle.addEventListener("click", event => {
         if (!zenBoard) return;
-        const enabled = !document.documentElement.hasAttribute("data-lfs-zen-mode");
-        document.documentElement.toggleAttribute("data-lfs-zen-mode", enabled);
-        zenToggle.setAttribute("aria-pressed", String(enabled));
-        zenToggle.setAttribute("aria-label", `Zenmodus ${enabled ? "deaktivieren" : "aktivieren"}`);
-        if (enabled) scheduleZenCenter();
-        else {
-          restorePlaylistZenMode = false;
-          zenRestoreLayoutSnapshot = undefined;
-          zenRestoreStableFrames = 0;
-          document.documentElement.removeAttribute("data-lfs-zen-restore-pending");
-          clearZenOffset(zenBoard);
-          syncZenPromotionChoice();
-          syncNormalRoundLayout();
-          scheduleZenClockUpdate();
-        }
+        setZenMode(!document.documentElement.hasAttribute("data-lfs-zen-mode"));
         if (event.detail) zenToggle.blur();
       });
 
@@ -242,7 +283,7 @@
   }
 
   function syncBoardLayout() {
-    const board = document.querySelector(".puzzle__board cg-board, .analyse__board cg-board, .main-board cg-board, .bot-game cg-board, .study__board cg-board, main cg-board");
+    const board = document.querySelector(mainBoardSelector);
     const layout = board?.closest(".puzzle, .analyse, .round__app, .bot-game, .study__main, main") ?? null;
     const nextZenBoard = [
       board?.closest(".round__app__board"),
@@ -265,6 +306,8 @@
     boardLayout = layout;
     zenBoard = nextZenBoard;
     observeZenBoardOrientation(zenBoard);
+    observeZenBoardSize(zenBoard, board);
+    syncBoardSizeCap(board);
     boardLayout?.toggleAttribute("data-lfs-board-layout", settings.boardTopGapPercent > 0);
     zenBoard?.toggleAttribute("data-lfs-zen-board", true);
     if (restorePlaylistZenMode && zenBoard) {
@@ -285,6 +328,28 @@
       zenToggle?.setAttribute("aria-label", "Zenmodus deaktivieren");
     }
     if (zenBoard && document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenCenter();
+  }
+
+  function setZenMode(enabled) {
+    if (!zenBoard) return;
+    const root = document.documentElement;
+    root.toggleAttribute("data-lfs-zen-mode", enabled);
+    zenToggle?.setAttribute("aria-pressed", String(enabled));
+    zenToggle?.setAttribute("aria-label", `Zenmodus ${enabled ? "deaktivieren" : "aktivieren"}`);
+    if (enabled) {
+      syncBoardSizeCap();
+      scheduleZenCenter();
+      return;
+    }
+
+    restorePlaylistZenMode = false;
+    zenRestoreLayoutSnapshot = undefined;
+    zenRestoreStableFrames = 0;
+    root.removeAttribute("data-lfs-zen-restore-pending");
+    clearZenOffset(zenBoard);
+    syncZenPromotionChoice();
+    syncNormalRoundLayout();
+    scheduleZenClockUpdate();
   }
 
   function clearNormalRoundLayout() {
@@ -379,18 +444,18 @@
   function centerZenBoard() {
     if (!zenBoard || !document.documentElement.hasAttribute("data-lfs-zen-mode")) return;
     if (restorePlaylistZenMode && !zenRestorePageLoaded) return;
+    syncZenSideElements();
     const board = zenBoard.querySelector("cg-board");
     if (!board) return;
-    let boardRect = board.getBoundingClientRect();
+    const boardRect = board.getBoundingClientRect();
     if (!boardRect.width || !boardRect.height) return;
-    if (restorePlaylistZenMode) {
-      syncZenPromotionChoice();
-      syncZenSideElements();
-      boardRect = board.getBoundingClientRect();
-    }
     const offsetX = parseFloat(zenBoard.style.getPropertyValue("--lfs-zen-offset-x")) || 0;
     const offsetY = parseFloat(zenBoard.style.getPropertyValue("--lfs-zen-offset-y")) || 0;
-    const deltaX = window.innerWidth / 2 - boardRect.left - boardRect.width / 2;
+    const sideRects = zenSideElements.map(element => element.getBoundingClientRect())
+      .filter(rect => rect.width > 0 && rect.height > 0);
+    const groupLeft = Math.min(boardRect.left, ...sideRects.map(rect => rect.left));
+    const groupRight = Math.max(boardRect.right, ...sideRects.map(rect => rect.right));
+    const deltaX = window.innerWidth / 2 - (groupLeft + groupRight) / 2;
     const deltaY = window.innerHeight * (0.5 - settings.zenBoardUpPercent / 100) - boardRect.top - boardRect.height / 2;
     if (Math.abs(deltaX) >= 0.01 || Math.abs(deltaY) >= 0.01) {
       zenBoard.style.setProperty("--lfs-zen-offset-x", `${offsetX + deltaX}px`);
@@ -1457,7 +1522,8 @@
     document.documentElement?.removeAttribute("data-lfs-board-hover");
   });
 
-  window.addEventListener("resize", () => {
+  function handleViewportChange() {
+    syncBoardSizeCap();
     if (document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenCenter();
     else {
       clearNormalRoundLayout();
@@ -1465,7 +1531,10 @@
     }
     schedulePvPreviewSync();
     scheduleZenClockUpdate();
-  });
+  }
+
+  window.addEventListener("resize", handleViewportChange);
+  document.addEventListener("fullscreenchange", handleViewportChange);
 
   const refreshZenClock = () => {
     if (document.hidden) {

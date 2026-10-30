@@ -746,46 +746,46 @@ html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-button:focus-
   padding-block-start: var(--lfs-board-top-gap) !important;
 }
 
-html:not([data-lfs-zen-mode]) .round__app[data-lfs-normal-fit] {
+.round__app[data-lfs-normal-fit] {
   box-sizing: border-box !important;
   height: var(--lfs-normal-app-height) !important;
   min-height: 0 !important;
   grid-template-rows: 0 0 auto auto auto auto minmax(0, 1fr) auto auto auto auto auto 0 auto !important;
 }
 
-html:not([data-lfs-zen-mode]) .round__app__table[data-lfs-normal-fit] {
+.round__app__table[data-lfs-normal-fit] {
   min-height: 0 !important;
   align-self: stretch !important;
 }
 
-html:not([data-lfs-zen-mode]) .round__app[data-lfs-normal-fit] > .rcontrols,
-html:not([data-lfs-zen-mode]) .round__app[data-lfs-normal-fit] > [data-lfs-normal-moves] {
+.round__app[data-lfs-normal-fit] > .rcontrols,
+.round__app[data-lfs-normal-fit] > [data-lfs-normal-moves] {
   min-height: 0 !important;
   max-height: 100% !important;
   overflow: visible !important;
 }
 
-html:not([data-lfs-zen-mode]) .round__app[data-lfs-normal-fit] > [data-lfs-normal-moves] > .message {
+.round__app[data-lfs-normal-fit] > [data-lfs-normal-moves] > .message {
   flex: 1 1 auto !important;
   min-height: 0 !important;
   margin: 6px !important;
 }
 
-html:not([data-lfs-zen-mode]) .round__app[data-lfs-normal-fit] > [data-lfs-normal-moves] > :has(> .fbt) {
+.round__app[data-lfs-normal-fit] > [data-lfs-normal-moves] > :has(> .fbt) {
   flex: 0 0 28px !important;
 }
 
-html:not([data-lfs-zen-mode]) .round__app[data-lfs-normal-fit] > [data-lfs-normal-moves] > :has(> .fbt) > :is(.fbt, .noop) {
+.round__app[data-lfs-normal-fit] > [data-lfs-normal-moves] > :has(> .fbt) > :is(.fbt, .noop) {
   height: 28px !important;
   line-height: 28px !important;
 }
 
-html:not([data-lfs-zen-mode]) .round__app[data-lfs-normal-fit] .rcontrols .follow-up {
+.round__app[data-lfs-normal-fit] .rcontrols .follow-up {
   gap: 2px !important;
   padding: 0 8px 4px !important;
 }
 
-html:not([data-lfs-zen-mode]) .round__app[data-lfs-normal-fit] .rcontrols .follow-up .fbt {
+.round__app[data-lfs-normal-fit] .rcontrols .follow-up .fbt {
   height: auto !important;
   min-height: 0 !important;
   padding: 6px 0 !important;
@@ -793,8 +793,21 @@ html:not([data-lfs-zen-mode]) .round__app[data-lfs-normal-fit] .rcontrols .follo
   line-height: 1.25 !important;
 }
 
-html:not([data-lfs-zen-mode]) .round__side[data-lfs-normal-fit] {
+.round__side[data-lfs-normal-fit] {
   translate: 0 var(--lfs-normal-side-offset) !important;
+}
+
+html:not([data-lfs-disabled]) body .cg-wrap[data-lfs-board-size-cap] {
+  box-sizing: border-box !important;
+  max-width: var(--lfs-board-size-cap-width) !important;
+  max-height: var(--lfs-board-size-cap-height) !important;
+  margin: auto !important;
+}
+
+html:not([data-lfs-disabled]) body .main-board .cg-wrap[data-lfs-board-size-cap] {
+  left: 50% !important;
+  right: auto !important;
+  translate: -50% 0 !important;
 }
 
 #lfs-zen-background {
