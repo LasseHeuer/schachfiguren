@@ -444,6 +444,7 @@
 
     const viewKey = JSON.stringify([id, savedItem, playlist.activeQueue, playlist.activeIndex, isComplete, ratedThisVisit, zenMode, ratingMaxPosition]);
     if (puzzleToolbar.dataset.viewKey === viewKey) return;
+    puzzleToolbar.removeAttribute("data-lfs-zen-toolbar-positioned");
     puzzleToolbar.dataset.viewKey = viewKey;
     puzzleToolbar.dataset.puzzleId = id;
     puzzleToolbar.dataset.solved = String(isComplete);
@@ -589,11 +590,15 @@
       for (const property of ["--lfs-zen-toolbar-left", "--lfs-zen-toolbar-top", "--lfs-zen-toolbar-width"]) {
         puzzleToolbar.style.removeProperty(property);
       }
+      puzzleToolbar.removeAttribute("data-lfs-zen-toolbar-positioned");
       return;
     }
     const board = document.querySelector(".puzzle__board cg-board");
     const rect = board?.getBoundingClientRect?.();
-    if (!rect?.width || !rect?.height) return;
+    if (!rect?.width || !rect?.height) {
+      puzzleToolbar.removeAttribute("data-lfs-zen-toolbar-positioned");
+      return;
+    }
     const scale = Number.parseFloat(document.documentElement.style.getPropertyValue("--lfs-board-ui-scale")) || 1;
     const gap = 6 * scale;
     const height = puzzleToolbar.getBoundingClientRect().height;
@@ -601,6 +606,7 @@
     puzzleToolbar.style.setProperty("--lfs-zen-toolbar-left", `${rect.left}px`);
     puzzleToolbar.style.setProperty("--lfs-zen-toolbar-top", `${top}px`);
     puzzleToolbar.style.setProperty("--lfs-zen-toolbar-width", `${rect.width}px`);
+    puzzleToolbar.setAttribute("data-lfs-zen-toolbar-positioned", "");
   }
 
   function scheduleZenToolbarPosition() {

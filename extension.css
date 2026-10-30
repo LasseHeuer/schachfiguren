@@ -847,6 +847,20 @@ html[data-lfs-zen-mode][data-lfs-zen-restore-pending] body * {
   visibility: hidden !important;
 }
 
+html[data-lfs-zen-mode][data-lfs-zen-restore-pending] [data-lfs-zen-board] .cg-wrap,
+html[data-lfs-zen-mode][data-lfs-zen-restore-pending] [data-lfs-zen-board] .cg-wrap *,
+html[data-lfs-zen-mode][data-lfs-zen-restore-pending] [data-lfs-zen-board].cg-wrap,
+html[data-lfs-zen-mode][data-lfs-zen-restore-pending] [data-lfs-zen-board].cg-wrap *,
+html[data-lfs-zen-mode][data-lfs-zen-restore-pending] #lfs-puzzle-playlist-toolbar,
+html[data-lfs-zen-mode][data-lfs-zen-restore-pending] #lfs-puzzle-playlist-toolbar * {
+  visibility: hidden !important;
+}
+
+html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar:not([data-lfs-zen-toolbar-positioned]),
+html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar:not([data-lfs-zen-toolbar-positioned]) * {
+  visibility: hidden !important;
+}
+
 html[data-lfs-zen-mode] [data-lfs-zen-board] {
   translate: var(--lfs-zen-offset-x, 0px) var(--lfs-zen-offset-y, 0px) !important;
   opacity: 1;

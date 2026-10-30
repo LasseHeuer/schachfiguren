@@ -3146,21 +3146,39 @@ ${clockMarker}`));
       }
       await evaluate("document.documentElement.removeAttribute('data-lfs-zen-mode'); document.querySelectorAll('[data-test-zen-control]').forEach(element => element.remove())");
     });
-    await t.test("zen restore keeps the board hidden until centering is ready", async () => {
+    await t.test("zen restore keeps the board and playlist slider hidden until centering is ready", async () => {
       const visibility = await evaluate(`(() => {
         const board = document.createElement('div');
         board.setAttribute('data-lfs-zen-board', '');
+        const wrap = document.createElement('div');
+        wrap.className = 'cg-wrap';
+        const cgBoard = document.createElement('cg-board');
+        wrap.append(cgBoard);
+        board.append(wrap);
         document.body.append(board);
+        const toolbar = document.createElement('div');
+        toolbar.id = 'lfs-puzzle-playlist-toolbar';
+        const slider = document.createElement('input');
+        slider.className = 'lfs-review-slider';
+        toolbar.append(slider);
+        document.body.append(toolbar);
         document.documentElement.setAttribute('data-lfs-zen-mode', '');
         document.documentElement.setAttribute('data-lfs-zen-restore-pending', '');
-        const pending = getComputedStyle(board).visibility;
+        const pending = [board, wrap, cgBoard, toolbar, slider].map(element => getComputedStyle(element).visibility);
         document.documentElement.removeAttribute('data-lfs-zen-restore-pending');
-        const ready = getComputedStyle(board).visibility;
+        const unpositioned = [board, wrap, cgBoard, toolbar, slider].map(element => getComputedStyle(element).visibility);
+        toolbar.setAttribute('data-lfs-zen-toolbar-positioned', '');
+        const ready = [board, wrap, cgBoard, toolbar, slider].map(element => getComputedStyle(element).visibility);
         document.documentElement.removeAttribute('data-lfs-zen-mode');
         board.remove();
-        return { pending, ready };
+        toolbar.remove();
+        return { pending, unpositioned, ready };
       })()`);
-      assert.deepEqual(visibility, { pending: "hidden", ready: "visible" });
+      assert.deepEqual(visibility, {
+        pending: ["hidden", "hidden", "hidden", "hidden", "hidden"],
+        unpositioned: ["visible", "visible", "visible", "hidden", "hidden"],
+        ready: ["visible", "visible", "visible", "visible", "visible"],
+      });
     });
     await t.test("zen mode centers the board and its material elements together", async () => {
       const contentSource = readFileSync(join(root, "content.js"), "utf8");
@@ -3169,7 +3187,15 @@ ${clockMarker}`));
       await evaluate(contentSource.replace(marker, `
         globalThis.zenTesting = {
           centerZenBoard, setBoard(value) { zenBoard = value; }, clearZenOffset, setZenMode,
-          syncBoardSizeCap, observeZenBoardSize, handleViewportChange, syncBoardAnchoredElements, syncPvLineSliders
+          syncBoardSizeCap, observeZenBoardSize, handleViewportChange, syncBoardAnchoredElements, syncPvLineSliders,
+          beginPlaylistRestore() {
+            restorePlaylistZenMode = true;
+            zenRestorePageLoaded = true;
+            zenRestoreLayoutSnapshot = undefined;
+            zenRestoreStableFrames = 0;
+            document.documentElement.setAttribute('data-lfs-zen-mode', '');
+            document.documentElement.setAttribute('data-lfs-zen-restore-pending', '');
+          }
         };
         return;
 ${marker}`));
@@ -3189,13 +3215,37 @@ ${marker}`));
         const board = host.querySelector('cg-board').getBoundingClientRect();
         const material = host.querySelector('.material').getBoundingClientRect();
         const groupCenter = (Math.min(board.left, material.left) + Math.max(board.right, material.right)) / 2;
-        zenTesting.clearZenOffset(host);
-        host.remove();
-        root.removeAttribute('data-lfs-zen-mode');
         return { groupCenter, viewportCenter: window.innerWidth / 2, boardWidth: board.width };
       })()`);
       assert.ok(Math.abs(result.groupCenter - result.viewportCenter) < 0.5);
       assert.equal(result.boardWidth, 240);
+
+      const restored = await evaluate(`(async () => {
+        const root = document.documentElement;
+        const host = document.querySelector('.analyse__board');
+        zenTesting.beginPlaylistRestore();
+        zenTesting.centerZenBoard();
+        for (let index = 0; index < 5; index++) await new Promise(resolve => requestAnimationFrame(resolve));
+        const material = host.querySelector('.material');
+        material.style.width = '60px';
+        material.firstChild.textContent = '+123';
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        const stayedHidden = root.hasAttribute('data-lfs-zen-restore-pending')
+          && getComputedStyle(host).visibility === 'hidden';
+        for (let index = 0; index < 12; index++) await new Promise(resolve => requestAnimationFrame(resolve));
+        const board = host.querySelector('cg-board').getBoundingClientRect();
+        const materialRect = material.getBoundingClientRect();
+        const groupCenter = (Math.min(board.left, materialRect.left) + Math.max(board.right, materialRect.right)) / 2;
+        const pending = root.hasAttribute('data-lfs-zen-restore-pending');
+        zenTesting.clearZenOffset(host);
+        host.remove();
+        root.removeAttribute('data-lfs-zen-mode');
+        root.removeAttribute('data-lfs-zen-restore-pending');
+        return { stayedHidden, pending, groupCenter, viewportCenter: window.innerWidth / 2 };
+      })()`);
+      assert.equal(restored.stayedHidden, true);
+      assert.equal(restored.pending, false);
+      assert.ok(Math.abs(restored.groupCenter - restored.viewportCenter) < 0.5);
       await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
     });
     await t.test("F11 and Zen keep the board size and alignment in every toggle order", async () => {

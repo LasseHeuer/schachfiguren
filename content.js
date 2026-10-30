@@ -488,8 +488,10 @@
     }
     syncBoardAnchoredElements();
     if (restorePlaylistZenMode) {
-      const snapshot = [boardRect.left - offsetX, boardRect.top - offsetY, boardRect.width, boardRect.height];
-      const stable = zenRestoreLayoutSnapshot?.every((value, index) => Math.abs(value - snapshot[index]) < 0.5);
+      const snapshot = [boardRect.left - offsetX, boardRect.top - offsetY, boardRect.width, boardRect.height,
+        ...sideRects.flatMap(rect => [rect.left - offsetX, rect.top - offsetY, rect.width, rect.height])];
+      const stable = zenRestoreLayoutSnapshot?.length === snapshot.length
+        && zenRestoreLayoutSnapshot.every((value, index) => Math.abs(value - snapshot[index]) < 0.5);
       zenRestoreStableFrames = stable ? zenRestoreStableFrames + 1 : 0;
       zenRestoreLayoutSnapshot = snapshot;
       if (zenRestoreStableFrames < 6) {
@@ -1760,7 +1762,10 @@
     }
     if (records.some(isZenClockMutation)) scheduleZenClockUpdate();
     if (zenMode) {
-      if (records.some(isZenMaterialMutation)) scheduleZenSideUpdate();
+      if (records.some(isZenMaterialMutation)) {
+        if (restorePlaylistZenMode) scheduleZenCenter();
+        else scheduleZenSideUpdate();
+      }
     }
     const hasPlayTimeMutation = records.some(record => {
       const target = targetElement(record);

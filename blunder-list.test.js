@@ -597,6 +597,7 @@ function listDocument() {
     },
     replaceChildren(...children) { this.children = []; this.append(...children); },
     setAttribute(name, value) { this.attributes[name] = value; },
+    removeAttribute(name) { delete this.attributes[name]; },
     getAttribute(name) { return this.attributes[name] ?? null; },
     addEventListener(name, handler) { this.listeners[name] = handler; },
     querySelector(selector) {
@@ -725,6 +726,7 @@ test("zen playlist toolbar follows the scaled board viewport", () => {
   assert.equal(toolbar.style["--lfs-zen-toolbar-left"], "100px");
   assert.equal(toolbar.style["--lfs-zen-toolbar-top"], "304.5px");
   assert.equal(toolbar.style["--lfs-zen-toolbar-width"], "200px");
+  assert.equal(toolbar.attributes["data-lfs-zen-toolbar-positioned"], "");
 });
 
 test("blunder overview shows total and individual scores in keyboard-scrollable rows", () => {
