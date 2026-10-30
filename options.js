@@ -46,6 +46,10 @@
       output.value = `${Math.round(Number(control.value) * 100)}%`;
       return;
     }
+    if (control.dataset.setting === "puzzleRatingMaxPosition") {
+      output.value = `${Math.round(Number(control.value) * 100)}%`;
+      return;
+    }
     if (control.dataset.setting === "moveAnimationDuration") {
       output.value = `${control.value} ms`;
       return;

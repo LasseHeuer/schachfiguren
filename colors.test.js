@@ -1078,6 +1078,15 @@ test("hover preview anticipation uses the configured default and clamps saved va
   }
 });
 
+test("puzzle rating maximum has a stable default and supported limits", () => {
+  assert.equal(settings.normalize().puzzleRatingMaxPosition, 1);
+  for (const [saved, expected] of [[0.2, 0.2], [0.65, 0.65], [1, 1], [0, 0.2], [1.5, 1], ["invalid", 1]]) {
+    const normalized = settings.normalize({ puzzleRatingMaxPosition: saved });
+    assert.equal(normalized.puzzleRatingMaxPosition, expected);
+    assert.equal(settings.normalize(normalized).puzzleRatingMaxPosition, expected);
+  }
+});
+
 test("user arrow settings use stable defaults and supported limits", () => {
   const defaults = settings.normalize();
   assert.equal(defaults.userArrowMode, "rightClickPreview");

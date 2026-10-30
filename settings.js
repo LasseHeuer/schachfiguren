@@ -104,6 +104,7 @@
     threatGradientPercent: 0,
     threatColoringMode: "opacity",
     primaryButtonColor: "oklch(0.3186928234 0 315)",
+    puzzleRatingMaxPosition: 1,
     onlineIndicatorLight: "oklch(0.6554420197 0.1136350274 128.3610368503)",
     onlineIndicatorDark: "oklch(0.4817419714 0.0748867945 128.3610368503)",
     buttonBackgroundDark: "oklch(0.2860830892 0 106.4974103352)",
@@ -340,7 +341,8 @@
     movePreviewOriginOpacity: [0, 1],
     movePreviewCorridorWidthPercent: [0, 200],
     movePreviewAnticipationPercent: [0, 100],
-    moveAnimationDistanceFactor: [0, 1]
+    moveAnimationDistanceFactor: [0, 1],
+    puzzleRatingMaxPosition: [0.2, 1]
   };
 
   function normalize(values = {}) {
@@ -454,6 +456,7 @@
     result.pieceBounceWiggleAngle = Math.round(result.pieceBounceWiggleAngle);
     result.threatCenterHatchAngleDeg = Math.round(result.threatCenterHatchAngleDeg);
     result.threatCenterHatchSpeed = Number(result.threatCenterHatchSpeed.toFixed(2));
+    result.puzzleRatingMaxPosition = Number(result.puzzleRatingMaxPosition.toFixed(2));
     result.defenseHighlightDepth = Math.round(result.defenseHighlightDepth);
     result.defenseHighlightWaveDecayPercent = Math.round(result.defenseHighlightWaveDecayPercent);
     result.highlightLineOpacityPercent = Math.round(result.highlightLineOpacityPercent);

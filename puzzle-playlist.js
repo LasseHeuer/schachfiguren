@@ -8,8 +8,12 @@
   }
   const homePanelId = "lfs-puzzle-playlist-home";
   const puzzleToolbarId = "lfs-puzzle-playlist-toolbar";
+  const ratingMaxPositionSetting = "puzzleRatingMaxPosition";
+  const settings = globalThis.LichessSettings;
+  const ratingThumbImage = `url("${chrome.runtime.getURL(settings.getPieceAsset({ pieceSet: "system_rund" }, "b", "q"))}")`;
   const scheduler = globalThis.LichessPuzzleScheduler;
   const pageLoadedAt = Date.now();
+  let ratingMaxPosition = settings.defaults[ratingMaxPositionSetting];
   let playlist = { items: [], activeQueue: [], activeIndex: null };
   let homePanel;
   let homeSide;
@@ -46,7 +50,7 @@
         attempts: Number.isInteger(entry?.attempts) && entry.attempts >= reps ? entry.attempts : reps,
         lapses: Number.isInteger(entry?.lapses) && entry.lapses >= 0 ? entry.lapses : 0,
         lastReviewedAt: Number.isFinite(entry?.lastReviewedAt) ? entry.lastReviewedAt : null,
-        lastRating: Number.isInteger(entry?.lastRating) && entry.lastRating >= 1 && entry.lastRating <= 4 ? entry.lastRating : null,
+        lastRating: scheduler.normalizeRating(entry?.lastRating, value?.ratingScaleVersion),
       });
     }
     const itemIds = new Set(items.map(item => item.id));
@@ -57,7 +61,7 @@
       ? [...new Set(value.activeQueue.filter(id => typeof id === "string" && (itemIds.has(id) || (id === activeId && /^[a-zA-Z0-9_-]{4,}$/.test(id)))))]
       : legacyActiveIndex !== null ? items.map(item => item.id) : [];
     const activeIndex = legacyActiveIndex !== null && activeQueue.includes(activeId) ? activeQueue.indexOf(activeId) : null;
-    return { items, activeQueue, activeIndex };
+    return { items, activeQueue, activeIndex, ratingScaleVersion: scheduler.ratingScaleVersion };
   }
 
   function savePlaylist(next, onSaved) {
@@ -247,10 +251,18 @@
   }
 
   function renderHomePanel() {
-    if (!homePanel || homePanel.dataset.rendered) return;
+    if (!homePanel) return;
+    const now = Date.now();
+    scheduleDueRefresh(now);
+    const label = `Rätsel-Playlist (${dueItems(now).length})`;
+    if (homePanel.dataset.rendered) {
+      const openButton = homePanel.querySelector('[data-action="open"]');
+      if (openButton) openButton.textContent = label;
+      return;
+    }
     homePanel.dataset.rendered = "true";
     homePanel.replaceChildren(
-      makeButton("Rätsel-Playlist", "open", "lfs-playlist-primary"),
+      makeButton(label, "open", "lfs-playlist-primary"),
       makeButton("Blunder-Liste", "blunders"),
     );
   }
@@ -343,7 +355,7 @@
     dueRefreshTimer = target === null ? null : setTimeout(() => {
       dueRefreshAt = null;
       dueRefreshTimer = null;
-      renderPlaylistPage();
+      render();
     }, Math.min(target - now, 2147483647));
   }
 
@@ -415,13 +427,12 @@
     const savedIndex = playlist.items.findIndex(item => item.id === id);
     const savedItem = savedIndex >= 0 ? playlist.items[savedIndex] : null;
     const zenMode = Boolean(document.documentElement?.hasAttribute?.("data-lfs-zen-mode"));
-    const saveDescription = savedIndex < 0 ? "In Playlist speichern" : "Aus Playlist entfernen";
+    const saveDescription = "Zu Playlist hinzufügen";
 
     if (!puzzleMenuSaveButton) {
       puzzleMenuSaveButton = makeButton(saveDescription, "menu-save");
       puzzleMenuSaveButton.addEventListener("click", toggleSavedPuzzle);
     }
-    const isActivePuzzle = playlist.activeIndex !== null && playlist.activeQueue[playlist.activeIndex] === id;
     const isComplete = !!document.querySelector(".puzzle__feedback.after");
     const ratedThisVisit = Number.isFinite(savedItem?.lastReviewedAt) && savedItem.lastReviewedAt >= pageLoadedAt;
     if (!puzzleToolbar) {
@@ -431,71 +442,67 @@
     }
     if (puzzleToolbar.parentElement !== toolbarParent) toolbarParent.append(puzzleToolbar);
 
-    const viewKey = JSON.stringify([id, savedItem, playlist.activeQueue, playlist.activeIndex, isComplete, ratedThisVisit, zenMode]);
-    if (puzzleToolbar.dataset.viewKey === viewKey && puzzleMenuSaveButton.parentElement === puzzleToolbar) return;
+    const viewKey = JSON.stringify([id, savedItem, playlist.activeQueue, playlist.activeIndex, isComplete, ratedThisVisit, zenMode, ratingMaxPosition]);
+    if (puzzleToolbar.dataset.viewKey === viewKey) return;
     puzzleToolbar.dataset.viewKey = viewKey;
     puzzleToolbar.dataset.puzzleId = id;
     puzzleToolbar.dataset.solved = String(isComplete);
     puzzleMenuSaveButton.dataset.puzzleId = id;
     puzzleMenuSaveButton.textContent = saveDescription;
-    puzzleMenuSaveButton.className = `lfs-playlist-button ${savedIndex < 0 ? "lfs-playlist-primary" : "lfs-playlist-quiet lfs-playlist-toolbar-remove"}`;
-    puzzleMenuSaveButton.setAttribute("aria-pressed", String(savedIndex >= 0));
+    puzzleMenuSaveButton.className = "lfs-playlist-button lfs-playlist-primary";
     puzzleToolbar.replaceChildren();
 
-    if (isComplete && savedItem) {
-      if (ratedThisVisit) {
-        if (isActivePuzzle) {
-          const nextIndex = playlist.activeIndex + 1;
-          const isLast = nextIndex >= playlist.activeQueue.length;
-          puzzleToolbar.append(makeButton(isLast ? "Sitzung abschließen" : `Nächstes Rätsel (${nextIndex + 1}/${playlist.activeQueue.length})`, isLast ? "finish" : "next", "lfs-playlist-primary"));
-        }
-      } else {
-        const ratings = document.createElement("div");
-        ratings.className = "lfs-review-ratings";
-        const now = Date.now();
-        for (const [label, grade] of [["Einfach", 4], ["Gut", 3], ["Schwer", 2], ["Nochmal", 1]]) {
-          const result = scheduler.schedule(savedItem, grade, now);
-          const button = makeButton(label, "rate", "lfs-review-button");
-          button.dataset.grade = String(grade);
-          button.title = `Wiederholung in ${formatInterval(result.dueAt - now)}`;
-          ratings.append(button);
-        }
-        puzzleToolbar.append(ratings);
-      }
+    if (isComplete && savedItem && !ratedThisVisit) {
+      const ratings = document.createElement("div");
+      ratings.className = "lfs-review-ratings";
+      const easy = document.createElement("span");
+      easy.className = "lfs-review-label lfs-review-label-easy";
+      easy.textContent = "Einfach";
+      const slider = document.createElement("input");
+      slider.className = "lfs-review-slider";
+      slider.type = "range";
+      slider.min = "0";
+      slider.max = "1";
+      slider.step = "any";
+      slider.value = String((savedItem.lastRating ?? 0.5) * ratingMaxPosition);
+      slider.style.setProperty("--lfs-review-max-position", `${ratingMaxPosition * 100}%`);
+      slider.style.setProperty("--lfs-review-thumb-image", ratingThumbImage);
+      slider.dataset.action = "rate";
+      slider.setAttribute("aria-label", "Bewertung von einfach bis nochmal");
+      const hard = document.createElement("span");
+      hard.className = "lfs-review-label lfs-review-label-hard";
+      hard.textContent = "Schwer";
+      const updateSliderPosition = () => {
+        slider.style.setProperty("--lfs-review-value", `${Number(slider.value) * 100}%`);
+      };
+      slider.addEventListener("input", updateSliderPosition);
+      updateSliderPosition();
+      ratings.append(easy, slider, hard);
+      puzzleToolbar.append(ratings);
     }
-    puzzleToolbar.append(puzzleMenuSaveButton);
-    if (zenMode && isComplete && !isActivePuzzle) {
-      puzzleToolbar.append(makeButton("Nächstes Rätsel", "native-next"));
-    }
+    if (!savedItem) puzzleToolbar.append(puzzleMenuSaveButton);
 
     if (puzzleToolbar.dataset.handlerBound) return;
     puzzleToolbar.dataset.handlerBound = "true";
-    puzzleToolbar.addEventListener("click", event => {
-      const control = event.target.closest("[data-action]");
+    puzzleToolbar.addEventListener("change", event => {
+      const control = event.target.closest('[data-action="rate"]');
       if (!control) return;
       if (puzzleToolbar.dataset.puzzleId !== puzzleId()) {
         render();
         return;
       }
-      if (control.dataset.action === "rate") {
-        const currentId = puzzleId();
-        const index = playlist.items.findIndex(item => item.id === currentId);
-        const grade = Number(control.dataset.grade);
-        if (index < 0 || grade < 1 || grade > 4) return;
-        const items = [...playlist.items];
-        items[index] = scheduler.schedule(items[index], grade, Date.now());
-        const next = { ...playlist, items };
-        playlist = normalizePlaylist(next);
-        const isActive = playlist.activeIndex !== null && playlist.activeQueue[playlist.activeIndex] === currentId;
-        if (isActive && continuePlaylist(currentId)) return;
-        savePlaylist(next, advanceNativePuzzle);
-      } else if (control.dataset.action === "native-next") {
-        advanceNativePuzzle();
-      } else if (control.dataset.action === "finish") {
-        finishPlaylistSession();
-      } else if (control.dataset.action === "next" && playlist.activeIndex !== null) {
-        continuePlaylist(puzzleId());
-      }
+      const rating = Number(control.value);
+      if (!Number.isFinite(rating) || rating < 0 || rating > 1) return;
+      const currentId = puzzleId();
+      const index = playlist.items.findIndex(item => item.id === currentId);
+      if (index < 0) return;
+      const items = [...playlist.items];
+      items[index] = scheduler.scheduleEase(items[index], rating, Date.now(), ratingMaxPosition);
+      const next = { ...playlist, items };
+      playlist = normalizePlaylist(next);
+      const isActive = playlist.activeIndex !== null && playlist.activeQueue[playlist.activeIndex] === currentId;
+      if (isActive && continuePlaylist(currentId)) return;
+      savePlaylist(next, advanceNativePuzzle);
     });
   }
 
@@ -614,13 +621,28 @@
     });
   }
 
-  chrome.storage.local.get(storageKey, stored => {
-    playlist = normalizePlaylist(stored[storageKey]);
+  chrome.storage.local.get([storageKey, ratingMaxPositionSetting], stored => {
+    ratingMaxPosition = settings.normalize({ [ratingMaxPositionSetting]: stored[ratingMaxPositionSetting] })[ratingMaxPositionSetting];
+    const storedPlaylist = stored[storageKey];
+    playlist = normalizePlaylist(storedPlaylist);
+    if (storedPlaylist && storedPlaylist.ratingScaleVersion !== scheduler.ratingScaleVersion) {
+      chrome.storage.local.set({ [storageKey]: playlist }, render);
+      return;
+    }
     render();
   });
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== "local" || !Object.hasOwn(changes, storageKey)) return;
-    playlist = normalizePlaylist(changes[storageKey].newValue);
+    if (area !== "local") return;
+    let changed = false;
+    if (Object.hasOwn(changes, storageKey)) {
+      playlist = normalizePlaylist(changes[storageKey].newValue);
+      changed = true;
+    }
+    if (Object.hasOwn(changes, ratingMaxPositionSetting)) {
+      ratingMaxPosition = settings.normalize({ [ratingMaxPositionSetting]: changes[ratingMaxPositionSetting].newValue })[ratingMaxPositionSetting];
+      changed = true;
+    }
+    if (!changed) return;
     render();
   });
 

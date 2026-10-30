@@ -2,6 +2,7 @@
   const weights = [0.212, 1.2931, 2.3065, 8.2956, 6.4133, 0.8334, 3.0194, 0.001, 1.8722, 0.1666, 0.796, 1.4835, 0.0614, 0.2629, 1.6483, 0.6014, 1.8729, 0.5425, 0.0912, 0.0658, 0.1542];
   const day = 24 * 60 * 60 * 1000;
   const minute = 60 * 1000;
+  const ratingScaleVersion = 2;
 
   function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
@@ -21,8 +22,20 @@
     return stability / factor * (Math.pow(retention, -1 / weights[20]) - 1);
   }
 
-  function schedule(card, rating, now = Date.now()) {
-    const grade = clamp(Math.round(rating), 1, 4);
+  function normalizeRating(rating, version) {
+    if (version >= ratingScaleVersion) return Number.isFinite(rating) && rating >= 0 && rating <= 1 ? rating : null;
+    if (!Number.isInteger(rating) || rating < 1 || rating > 4) return null;
+    return clamp((4 - rating) / 3, 0, 1);
+  }
+
+  function interpolateInitialStability(grade) {
+    const lower = Math.floor(grade);
+    const upper = Math.ceil(grade);
+    const fraction = grade - lower;
+    return weights[lower - 1] + (weights[upper - 1] - weights[lower - 1]) * fraction;
+  }
+
+  function scheduleAtGrade(card, grade, lastRating, now) {
     const previousStability = Number(card.stability);
     const previousDifficulty = Number(card.difficulty);
     const hasMemory = Number.isFinite(previousStability) && previousStability > 0
@@ -34,7 +47,7 @@
     let stability;
     let difficulty;
     if (!hasMemory) {
-      stability = weights[grade - 1];
+      stability = interpolateInitialStability(grade);
       difficulty = initialDifficulty(grade);
     } else {
       const recall = retrievability(elapsedDays, previousStability);
@@ -53,7 +66,9 @@
         const difficultyFactor = 11 - difficulty;
         const stabilityFactor = Math.pow(previousStability, -weights[9]);
         const recallFactor = Math.exp(weights[10] * (1 - recall)) - 1;
-        const ratingFactor = grade === 2 ? weights[15] : grade === 4 ? weights[16] : 1;
+        const ratingFactor = grade <= 3
+          ? 1 + (weights[15] - 1) * (3 - grade)
+          : 1 + (weights[16] - 1) * (grade - 3);
         stability = previousStability * (1 + Math.exp(weights[8]) * difficultyFactor * stabilityFactor * recallFactor * ratingFactor);
       }
     }
@@ -69,11 +84,25 @@
       difficulty,
       dueAt: now + delay,
       lastReviewedAt: now,
-      lastRating: grade,
+      lastRating,
       reps: (Number.isInteger(card.reps) ? card.reps : 0) + 1,
       lapses: (Number.isInteger(card.lapses) ? card.lapses : 0) + (grade === 1 && !isLearning ? 1 : 0),
     };
   }
 
-  globalThis.LichessPuzzleScheduler = { day, intervalDays, schedule };
+  function schedule(card, rating, now = Date.now()) {
+    const grade = clamp(Math.round(rating), 1, 4);
+    return scheduleAtGrade(card, grade, normalizeRating(grade, 1), now);
+  }
+
+  function scheduleEase(card, sliderPosition, now = Date.now(), maxPosition = 1) {
+    const parsedPosition = Number(sliderPosition);
+    const parsedMaxPosition = Number(maxPosition);
+    const limit = clamp(Number.isFinite(parsedMaxPosition) ? parsedMaxPosition : 1, 0.2, 1);
+    const position = Number.isFinite(parsedPosition) ? parsedPosition : limit / 2;
+    const rating = clamp(position / limit, 0, 1);
+    return scheduleAtGrade(card, 4 - 3 * rating, rating, now);
+  }
+
+  globalThis.LichessPuzzleScheduler = { day, intervalDays, normalizeRating, schedule, scheduleEase, ratingScaleVersion };
 })();

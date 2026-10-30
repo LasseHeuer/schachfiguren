@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const { readFileSync } = require("node:fs");
 const { join } = require("node:path");
 const vm = require("node:vm");
+require("./settings.js");
 
 function loadList(file, exports, extra = {}) {
   const assigned = [];
@@ -14,6 +15,7 @@ function loadList(file, exports, extra = {}) {
   const locks = new Map();
   const context = vm.createContext({
     URLSearchParams, TextDecoder, Date, setTimeout, clearTimeout,
+    LichessSettings: globalThis.LichessSettings,
     fetch: async () => ({ ok: true, text: async () => "" }),
     document: {
       documentElement: {
@@ -38,15 +40,18 @@ function loadList(file, exports, extra = {}) {
       locks.set(key, lock);
       return lock;
     } } },
-    chrome: { storage: { local: {
-      get: (key, callback) => { callback?.(persisted); return Promise.resolve(persisted); },
-      set: (value, callback) => { Object.assign(persisted, value); writes.push(value); callback?.(); return Promise.resolve(); },
-    } } },
+    chrome: {
+      runtime: { getURL: path => path },
+      storage: { local: {
+        get: (key, callback) => { callback?.(persisted); return Promise.resolve(persisted); },
+        set: (value, callback) => { Object.assign(persisted, value); writes.push(value); callback?.(); return Promise.resolve(); },
+      } },
+    },
     ...extra,
   });
   vm.runInContext(readFileSync(join(__dirname, "puzzle-scheduler.js"), "utf8"), context);
   const source = readFileSync(join(__dirname, file), "utf8");
-  vm.runInContext(source.replace("  chrome.storage.local.get(storageKey, stored => {", `
+  vm.runInContext(source.replace(/  chrome\.storage\.local\.get\([^)]*, stored => \{/, `
     globalThis.testing = { ${exports} };
     return;
     chrome.storage.local.get(storageKey, stored => {`), context);
@@ -101,7 +106,7 @@ test("excludes blunders played after the player's position was already lost", ()
 
 test("normalizes saved cards and removes invalid queue entries", () => {
   const { api } = loadList("blunder-list.js", "normalize, extractBlunders");
-  const item = api.extractBlunders(game, "player")[0];
+  const item = { ...api.extractBlunders(game, "player")[0], lastRating: 4, stability: 12, reps: 3 };
   const normalized = api.normalize({
     items: [item, item, { ...item, gameId: "invalid" }],
     activeQueue: [item.id, item.id, "missing"], activeIndex: 0,
@@ -109,7 +114,25 @@ test("normalizes saved cards and removes invalid queue entries", () => {
   assert.equal(normalized.items.length, 1);
   assert.equal(normalized.activeQueue.length, 1);
   assert.equal(normalized.activeIndex, 0);
+  assert.equal(normalized.items[0].lastRating, 0);
+  assert.equal(normalized.items[0].stability, 12);
+  assert.equal(normalized.ratingScaleVersion, 2);
   assert.equal(api.normalize({ ...normalized, activeIndex: -1 }).activeIndex, null);
+});
+
+test("maps old ratings to the easy-to-again slider scale and preserves progress", () => {
+  const { api } = loadList("puzzle-playlist.js", "normalizePlaylist");
+  const normalized = api.normalizePlaylist({ items: [
+    { id: "Abc12", lastRating: 4, reps: 3, stability: 12, dueAt: 123456 },
+    { id: "Def34", lastRating: 3 },
+    { id: "Ghi56", lastRating: 2 },
+    { id: "Jkl78", lastRating: 1 },
+  ] });
+  assert.deepEqual(Array.from(normalized.items, item => item.lastRating), [0, 1 / 3, 2 / 3, 1]);
+  assert.equal(normalized.items[0].reps, 3);
+  assert.equal(normalized.items[0].stability, 12);
+  assert.equal(normalized.items[0].dueAt, 123456);
+  assert.equal(normalized.ratingScaleVersion, 2);
 });
 
 test("keeps no more than the 500 most recent blunders", () => {
@@ -297,14 +320,15 @@ test("ratings are saved only once and sessions advance and finish", async () => 
       render = () => {}; renderPage = () => {}; exerciseState = "solved";
     },
     visit: item => { location.pathname = '/' + item.gameId + '/' + item.color; location.search = '?lfs-blunder=' + item.ply; },
-    click: (action, grade) => toolbarClick({ target: { closest: () => ({ dataset: { action, grade } }) } })
+    click: action => toolbarClick({ target: { closest: () => ({ dataset: { action } }) } }),
+    change: value => toolbarChange({ target: { closest: () => ({ dataset: { action: "rate" }, value }) } })
   `);
   const first = api.extractBlunders(game, "player")[0];
   const second = { ...first, id: "ijklmnop:1", gameId: "ijklmnop" };
   api.setup({ items: [first, second], activeQueue: [first.id, second.id], activeIndex: 0 });
   api.visit(first);
-  api.click("rate", "3");
-  api.click("rate", "3");
+  api.change("0.5");
+  api.change("0.5");
   await settle();
   assert.equal(persisted.lfsBlunderList.items[0].reps, 1);
   api.click("next");
@@ -312,7 +336,7 @@ test("ratings are saved only once and sessions advance and finish", async () => 
   assert.equal(assigned.at(-1), "/ijklmnop/white?lfs-blunder=1#0");
   assert.equal(persisted.lfsBlunderList.items[1].attempts, 1);
   api.visit(second);
-  api.click("rate", "1");
+  api.change("1");
   await settle();
   api.click("next");
   await settle();
@@ -394,6 +418,76 @@ test("playlist button starts a puzzle directly, prioritizing due cards", () => {
   assert.equal(api.getPlaylist().items.find(item => item.id === "Def34").attempts, 1);
   context.click({ target: { closest: () => ({ dataset: { action: "blunders" } }) } });
   assert.equal(dispatched.at(-1).type, "lfs-blunder-open");
+});
+
+test("slider ratings produce distinct intervals across the easy-to-again range", () => {
+  const { context } = loadList("puzzle-playlist.js", "");
+  const card = { id: "Abc12", state: "new" };
+  const scheduler = context.LichessPuzzleScheduler;
+  const easy = scheduler.scheduleEase(card, 0, 1000);
+  const middle = scheduler.scheduleEase(card, 0.5, 1000);
+  const hard = scheduler.scheduleEase(card, 1, 1000);
+  const capped = scheduler.scheduleEase(card, 0.5, 1000, 0.5);
+  const oldEasy = scheduler.schedule(card, 4, 1000);
+  const oldAgain = scheduler.schedule(card, 1, 1000);
+  const matureEasy = scheduler.scheduleEase({
+    state: "review", stability: 30, difficulty: 5, reps: 5, lastReviewedAt: 1000 - 30 * scheduler.day,
+  }, 0, 1000);
+  assert.ok(easy.stability > middle.stability && middle.stability > hard.stability);
+  assert.ok(easy.dueAt > middle.dueAt && middle.dueAt > hard.dueAt);
+  assert.equal(easy.dueAt, oldEasy.dueAt);
+  assert.equal(hard.dueAt, oldAgain.dueAt);
+  assert.equal(hard.state, "learning");
+  assert.ok(matureEasy.dueAt - 1000 > 30 * scheduler.day);
+  assert.equal(middle.lastRating, 0.5);
+  assert.equal(capped.lastRating, 1);
+  assert.equal(capped.state, "learning");
+  assert.equal(scheduler.normalizeRating(4, 1), 0);
+  assert.equal(scheduler.normalizeRating(3, 1), 1 / 3);
+  assert.equal(scheduler.normalizeRating(2, 1), 2 / 3);
+  assert.equal(scheduler.normalizeRating(0.25, 2), 0.25);
+});
+
+test("releasing the playlist rating slider saves the rating and continues the queue", () => {
+  const document = listDocument();
+  const parent = document.createElement("section");
+  document.querySelector = selector => selector === ".puzzle__session" ? parent
+    : selector === ".puzzle__feedback.after" ? {} : {};
+  const { api, assigned, persisted } = loadList("puzzle-playlist.js", `
+    renderPuzzleToolbar,
+    setup: value => {
+      playlist = normalizePlaylist(value);
+      render = () => {};
+      puzzleId = () => "Abc12";
+    },
+    getToolbar: () => puzzleToolbar
+  `, { document });
+  api.setup({ items: [{ id: "Abc12" }, { id: "Def34" }], activeQueue: ["Abc12", "Def34"], activeIndex: 0 });
+  api.renderPuzzleToolbar();
+  api.getToolbar().listeners.change({ target: { closest: () => ({ dataset: { action: "rate" }, value: "0.37" }) } });
+  assert.equal(assigned.at(-1), "/training/Def34");
+  assert.equal(persisted.lfsPuzzlePlaylist.items[0].lastRating, 0.37);
+  assert.equal(persisted.lfsPuzzlePlaylist.activeIndex, 1);
+});
+
+test("home playlist button shows the number of new and due puzzles", () => {
+  const document = listDocument();
+  const { api } = loadList("puzzle-playlist.js", `
+    renderHomePanel,
+    setup: value => {
+      playlist = normalizePlaylist(value);
+      homePanel ??= document.createElement("section");
+    },
+    getPanel: () => homePanel
+  `, { document });
+  api.setup({ items: [{ id: "Abc12", state: "new" }] });
+  api.renderHomePanel();
+  const panel = api.getPanel();
+  assert.equal(panel.children[0].textContent, "Rätsel-Playlist (1)");
+
+  api.setup({ items: [{ id: "Abc12", state: "new" }, { id: "Def34", state: "review", dueAt: 1 }] });
+  api.renderHomePanel();
+  assert.equal(panel.children[0].textContent, "Rätsel-Playlist (2)");
 });
 
 test("playlist click still starts directly when all saved cards are scheduled for later", () => {
@@ -486,11 +580,15 @@ test("removing the last active puzzle finishes the playlist session", () => {
 
 function listDocument() {
   const createElement = tag => ({
-    tagName: tag, children: [], dataset: {}, attributes: {}, className: "", textContent: "",
+    tagName: tag, children: [], dataset: {}, attributes: {}, listeners: {}, style: { setProperty(name, value) { this[name] = value; } }, className: "", textContent: "",
     classList: { add() {} },
     get lastElementChild() { return this.children.at(-1); },
     append(...children) {
       this.children.push(...children);
+      children.forEach(child => { child.parentElement = this; });
+    },
+    prepend(...children) {
+      this.children.unshift(...children);
       children.forEach(child => { child.parentElement = this; });
     },
     insertBefore(child, sibling) {
@@ -499,7 +597,8 @@ function listDocument() {
     },
     replaceChildren(...children) { this.children = []; this.append(...children); },
     setAttribute(name, value) { this.attributes[name] = value; },
-    addEventListener() {},
+    getAttribute(name) { return this.attributes[name] ?? null; },
+    addEventListener(name, handler) { this.listeners[name] = handler; },
     querySelector(selector) {
       const action = selector.match(/data-action="([^"]+)"/)?.[1];
       return this.children.find(child => child.dataset.action === action) ?? null;
@@ -534,25 +633,69 @@ test("playlist renders compact rows with individual scores and actions above the
   assert.equal(list.children[0].children[3].attributes["aria-label"], "Rätsel 1 aus Playlist entfernen");
 });
 
-test("solved playlist exercises show only rating buttons first and remove last", () => {
+test("adding a solved puzzle to the playlist replaces the add button with only the rating slider", () => {
   const document = listDocument();
   const parent = document.createElement("section");
   document.querySelector = selector => selector === ".puzzle__session" ? parent : {};
   const { api } = loadList("puzzle-playlist.js", `
-    renderPuzzleToolbar,
+    renderPuzzleToolbar, toggleSavedPuzzle,
     setup: () => {
       puzzleId = () => "Abc12";
-      playlist = normalizePlaylist({ items: [{ id: "Abc12" }] });
+      playlist = normalizePlaylist({ items: [] });
+      render = () => {};
     },
     getToolbar: () => puzzleToolbar
   `, { document });
   api.setup();
   api.renderPuzzleToolbar();
   const toolbar = api.getToolbar();
-  assert.equal(toolbar.children.length, 2);
-  assert.deepEqual(Array.from(toolbar.children[0].children, button => button.textContent), ["Einfach", "Gut", "Schwer", "Nochmal"]);
-  assert.ok(toolbar.children[0].children.every(button => button.children.length === 0));
-  assert.equal(toolbar.children.at(-1).dataset.action, "menu-save");
+  assert.equal(toolbar.children.length, 1);
+  const addButton = toolbar.children[0];
+  assert.equal(addButton.textContent, "Zu Playlist hinzufügen");
+
+  api.toggleSavedPuzzle({ currentTarget: addButton });
+  api.renderPuzzleToolbar();
+  assert.equal(toolbar.children.length, 1);
+  const ratings = toolbar.children[0];
+  assert.equal(ratings.children.length, 3);
+  assert.deepEqual(Array.from(ratings.children.slice(0, 3), control => control.textContent), ["Einfach", "", "Schwer"]);
+  assert.equal(ratings.children[1].type, "range");
+  assert.equal(ratings.children[1].min, "0");
+  assert.equal(ratings.children[1].max, "1");
+  assert.equal(ratings.children[1].step, "any");
+  assert.equal(ratings.children[1].style["--lfs-review-max-position"], "100%");
+  assert.equal(ratings.children[1].style["--lfs-review-value"], "50%");
+  assert.equal(ratings.children[1].style["--lfs-review-thumb-image"], 'url("system_rund/bq.svg")');
+  assert.equal(ratings.querySelector('[data-action="menu-save"]'), null);
+});
+
+test("solved blunder exercises show the same easy-to-again rating slider", () => {
+  const document = listDocument();
+  const parent = document.createElement("section");
+  document.documentElement = { setAttribute() {}, removeAttribute() {} };
+  document.querySelector = selector => selector === "#user_tag" ? { textContent: "Player", getAttribute: () => null }
+    : selector === ".analyse__tools" ? parent : null;
+  const { api } = loadList("blunder-list.js", `
+    renderToolbar, extractBlunders,
+    setup: item => {
+      data = normalize({ items: [item], activeQueue: [item.id], activeIndex: 0 });
+      exerciseState = "solved";
+      location.pathname = "/" + item.gameId + "/" + item.color;
+      location.search = "?lfs-blunder=" + item.ply;
+    },
+    getToolbar: () => toolbar
+  `, { document });
+  const item = { ...api.extractBlunders(game, "player")[0], owner: "player" };
+  api.setup(item);
+  api.renderToolbar();
+  const ratings = api.getToolbar().children[0];
+  assert.equal(ratings.children.length, 3);
+  assert.deepEqual(Array.from(ratings.children.slice(0, 3), control => control.textContent), ["Einfach", "", "Schwer"]);
+  assert.equal(ratings.children[1].type, "range");
+  assert.equal(ratings.children[1].min, "0");
+  assert.equal(ratings.children[1].max, "1");
+  assert.equal(ratings.children[1].step, "any");
+  assert.equal(ratings.children[1].style["--lfs-review-thumb-image"], 'url("system_rund/bq.svg")');
 });
 
 test("blunder overview shows total and individual scores in keyboard-scrollable rows", () => {

@@ -1,7 +1,11 @@
 (() => {
   const storageKey = "lfsBlunderList";
+  const ratingMaxPositionSetting = "puzzleRatingMaxPosition";
+  const settings = globalThis.LichessSettings;
+  const ratingThumbImage = `url("${chrome.runtime.getURL(settings.getPieceAsset({ pieceSet: "system_rund" }, "b", "q"))}")`;
   const autoSyncStorageKey = "lfsBlunderAutoSync";
   const scheduler = globalThis.LichessPuzzleScheduler;
+  let ratingMaxPosition = settings.defaults[ratingMaxPositionSetting];
   const maxBlunders = 500;
   const recentGameCount = 10;
   const visitedAt = Date.now();
@@ -38,6 +42,7 @@
         reps,
         attempts: Number.isInteger(item.attempts) && item.attempts >= reps ? item.attempts : reps,
         lastReviewedAt: Number.isFinite(item.lastReviewedAt) ? item.lastReviewedAt : null,
+        lastRating: scheduler.normalizeRating(item.lastRating, value?.ratingScaleVersion),
       };
     }).sort((a, b) => b.playedAt - a.playedAt).slice(0, maxBlunders);
     seen.clear();
@@ -45,7 +50,7 @@
     const activeQueue = [...new Set((Array.isArray(value?.activeQueue) ? value.activeQueue : []).filter(id => seen.has(id)))];
     const activeIndex = Number.isInteger(value?.activeIndex) && value.activeIndex >= 0 && value.activeIndex < activeQueue.length
       ? value.activeIndex : null;
-    return { items, activeQueue, activeIndex };
+    return { items, activeQueue, activeIndex, ratingScaleVersion: scheduler.ratingScaleVersion };
   }
 
   function save(update, done) {
@@ -409,10 +414,11 @@
       toolbar = document.createElement("section");
       toolbar.className = "lfs-playlist-toolbar lfs-blunder-toolbar";
       toolbar.addEventListener("click", toolbarClick);
+      toolbar.addEventListener("change", toolbarChange);
       parent.prepend(toolbar);
     }
     if (toolbar.parentElement !== parent) parent.prepend(toolbar);
-    const key = JSON.stringify([item, exerciseState, data.activeIndex]);
+    const key = JSON.stringify([item, exerciseState, data.activeIndex, ratingMaxPosition]);
     if (toolbar.dataset.viewKey === key) return;
     toolbar.dataset.viewKey = key;
     const title = document.createElement("h3");
@@ -430,13 +436,29 @@
       toolbar.replaceChildren();
       const ratings = document.createElement("div");
       ratings.className = "lfs-review-ratings";
-      for (const [label, grade] of [["Einfach", 4], ["Gut", 3], ["Schwer", 2], ["Nochmal", 1]]) {
-        const rating = button(label, "rate");
-        rating.classList.add("lfs-review-button");
-        rating.dataset.grade = String(grade);
-        rating.title = `Wiederholung in ${intervalLabel(scheduler.schedule(item, grade).dueAt - Date.now())}`;
-        ratings.append(rating);
-      }
+      const easy = document.createElement("span");
+      easy.className = "lfs-review-label lfs-review-label-easy";
+      easy.textContent = "Einfach";
+      const slider = document.createElement("input");
+      slider.className = "lfs-review-slider";
+      slider.type = "range";
+      slider.min = "0";
+      slider.max = "1";
+      slider.step = "any";
+      slider.value = String((item.lastRating ?? 0.5) * ratingMaxPosition);
+      slider.style.setProperty("--lfs-review-max-position", `${ratingMaxPosition * 100}%`);
+      slider.style.setProperty("--lfs-review-thumb-image", ratingThumbImage);
+      slider.dataset.action = "rate";
+      slider.setAttribute("aria-label", "Bewertung von einfach bis nochmal");
+      const hard = document.createElement("span");
+      hard.className = "lfs-review-label lfs-review-label-hard";
+      hard.textContent = "Schwer";
+      const updateSliderPosition = () => {
+        slider.style.setProperty("--lfs-review-value", `${Number(slider.value) * 100}%`);
+      };
+      slider.addEventListener("input", updateSliderPosition);
+      updateSliderPosition();
+      ratings.append(easy, slider, hard);
       toolbar.append(ratings);
     } else if (["ready", "wrong"].includes(exerciseState)) {
       toolbar.append(button("Lösung zeigen", "reveal"));
@@ -450,12 +472,7 @@
     const control = event.target.closest("[data-action]");
     const item = activeItem();
     if (!control || !item) return;
-    if (control.dataset.action === "rate" && exerciseState === "solved" && !(item.lastReviewedAt >= visitedAt)) {
-      const grade = Number(control.dataset.grade);
-      if (![1, 2, 3, 4].includes(grade)) return;
-      save(current => ({ ...current, items: current.items.map(entry => entry.id === item.id && !(entry.lastReviewedAt >= visitedAt)
-        ? scheduler.schedule(entry, grade) : entry) }));
-    } else if (control.dataset.action === "next" && item.lastReviewedAt >= visitedAt) {
+    if (control.dataset.action === "next" && item.lastReviewedAt >= visitedAt) {
       save(current => {
         if (current.activeQueue[current.activeIndex] !== item.id) return current;
         const nextIndex = current.activeIndex + 1;
@@ -476,6 +493,16 @@
     } else if (control.dataset.action === "list") {
       location.assign("/#blunder-list");
     }
+  }
+
+  function toolbarChange(event) {
+    const control = event.target.closest('[data-action="rate"]');
+    const item = activeItem();
+    if (!control || !item || exerciseState !== "solved" || item.lastReviewedAt >= visitedAt) return;
+    const rating = Number(control.value);
+    if (!Number.isFinite(rating) || rating < 0 || rating > 1) return;
+    save(current => ({ ...current, items: current.items.map(entry => entry.id === item.id && !(entry.lastReviewedAt >= visitedAt)
+      ? scheduler.scheduleEase(entry, rating, Date.now(), ratingMaxPosition) : entry) }));
   }
 
   function render() {
@@ -527,17 +554,32 @@
     renderToolbar();
   });
   document.addEventListener("lfs-blunder-open", openBlunders);
-  chrome.storage.local.get(storageKey, stored => {
-    data = normalize(stored[storageKey]);
-    render();
-    const item = activeItem();
-    if (item) document.dispatchEvent(new CustomEvent("lfs-blunder-command", { detail: JSON.stringify({ action: "prepare", ...item }) }));
+  chrome.storage.local.get([storageKey, ratingMaxPositionSetting], stored => {
+    ratingMaxPosition = settings.normalize({ [ratingMaxPositionSetting]: stored[ratingMaxPositionSetting] })[ratingMaxPositionSetting];
+    const storedData = stored[storageKey];
+    data = normalize(storedData);
+    const finishLoading = () => {
+      render();
+      const item = activeItem();
+      if (item) document.dispatchEvent(new CustomEvent("lfs-blunder-command", { detail: JSON.stringify({ action: "prepare", ...item }) }));
+    };
+    if (storedData && storedData.ratingScaleVersion !== scheduler.ratingScaleVersion) {
+      chrome.storage.local.set({ [storageKey]: data }, finishLoading);
+      return;
+    }
+    finishLoading();
   });
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== "local" || !Object.hasOwn(changes, storageKey)) return;
-    data = normalize(changes[storageKey].newValue);
+    if (area !== "local") return;
+    const dataChanged = Object.hasOwn(changes, storageKey);
+    const ratingSettingChanged = Object.hasOwn(changes, ratingMaxPositionSetting);
+    if (!dataChanged && !ratingSettingChanged) return;
+    if (dataChanged) data = normalize(changes[storageKey].newValue);
+    if (ratingSettingChanged) {
+      ratingMaxPosition = settings.normalize({ [ratingMaxPositionSetting]: changes[ratingMaxPositionSetting].newValue })[ratingMaxPositionSetting];
+    }
     render();
-    renderPage();
+    if (dataChanged) renderPage();
   });
   new MutationObserver(scheduleRender).observe(document, { childList: true, subtree: true });
   window.addEventListener("hashchange", scheduleRender);

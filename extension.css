@@ -481,31 +481,116 @@ main.lobby:has(> .lfs-playlist-page) {
 
 .lfs-review-ratings {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.35rem;
+  width: 100%;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 0.1rem 0;
+  padding: 0.35rem 0;
+  border: 0;
+  background: transparent;
 }
 
-.lfs-review-button {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 0.2rem;
-  min-height: 2.5rem;
-  border-color: oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0);
-  font-size: 0.85rem;
-}
-
-.lfs-review-button[data-grade="4"] {
-  background: color-mix(in srgb, var(--c-primary, oklch(0.621819458576841 0.155684874547398 131.916927625873)) 12%, var(--c-bg-box, oklch(0.999999993473546 0.000000037273996 89.875563095902)));
-  color: var(--c-primary, oklch(0.621819458576841 0.155684874547398 131.916927625873));
-}
-
-.lfs-review-button[data-grade="1"] {
+.lfs-review-label {
+  grid-column: 1;
+  grid-row: 1;
+  z-index: 1;
+  font-size: 0.8rem;
   color: var(--c-font-dim, oklch(0.569262399668685 0.000000021218684 89.875563251835));
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-.lfs-review-button small {
-  opacity: 0.75;
+.lfs-review-label-easy {
+  justify-self: start;
+}
+
+.lfs-review-label-hard {
+  justify-self: end;
+}
+
+.lfs-review-slider {
+  grid-column: 1;
+  grid-row: 2;
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+  background: transparent;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+
+.lfs-review-slider::-webkit-slider-runnable-track {
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background:
+    linear-gradient(90deg,
+      color-mix(in srgb, var(--lfs-engine-arrow-color) 34%, transparent) 0 var(--lfs-review-value, 50%),
+      transparent var(--lfs-review-value, 50%) 100%),
+    linear-gradient(90deg,
+      transparent 0 calc(var(--lfs-review-max-position, 100%) - 1px),
+      var(--lfs-check-square-color) calc(var(--lfs-review-max-position, 100%) - 1px) calc(var(--lfs-review-max-position, 100%) + 1px),
+      transparent calc(var(--lfs-review-max-position, 100%) + 1px) 100%),
+    repeating-linear-gradient(90deg,
+      var(--lfs-board-light-active) 0 calc(12.5% - 2px),
+      var(--lfs-board-gap-active) calc(12.5% - 2px) 12.5%,
+      var(--lfs-board-dark-active) 12.5% calc(25% - 2px),
+      var(--lfs-board-gap-active) calc(25% - 2px) 25%);
+}
+
+.lfs-review-slider::-moz-range-track {
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background:
+    linear-gradient(90deg,
+      color-mix(in srgb, var(--lfs-engine-arrow-color) 34%, transparent) 0 var(--lfs-review-value, 50%),
+      transparent var(--lfs-review-value, 50%) 100%),
+    linear-gradient(90deg,
+      transparent 0 calc(var(--lfs-review-max-position, 100%) - 1px),
+      var(--lfs-check-square-color) calc(var(--lfs-review-max-position, 100%) - 1px) calc(var(--lfs-review-max-position, 100%) + 1px),
+      transparent calc(var(--lfs-review-max-position, 100%) + 1px) 100%),
+    repeating-linear-gradient(90deg,
+      var(--lfs-board-light-active) 0 calc(12.5% - 2px),
+      var(--lfs-board-gap-active) calc(12.5% - 2px) 12.5%,
+      var(--lfs-board-dark-active) 12.5% calc(25% - 2px),
+      var(--lfs-board-gap-active) calc(25% - 2px) 25%);
+}
+
+.lfs-review-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 30px;
+  height: 30px;
+  margin-top: -5px;
+  border: 0;
+  background: var(--lfs-review-thumb-image) center / contain no-repeat;
+  filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--c-font) 55%, transparent));
+}
+
+.lfs-review-slider::-moz-range-thumb {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  background: var(--lfs-review-thumb-image) center / contain no-repeat;
+  filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--c-font) 55%, transparent));
+}
+
+.lfs-review-slider:focus-visible {
+  outline: none !important;
+}
+
+.lfs-review-slider:focus-visible::-webkit-slider-thumb,
+.lfs-review-slider:focus-visible::-moz-range-thumb {
+  filter: drop-shadow(0 0 3px var(--lfs-engine-arrow-color));
 }
 
 .lfs-review-saved {
@@ -596,7 +681,9 @@ html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-toolbar-remov
 }
 
 html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-review-ratings {
-  display: contents !important;
+  display: grid !important;
+  flex: 1 1 100% !important;
+  min-width: 0 !important;
 }
 
 html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-button:focus,
@@ -654,11 +741,6 @@ html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-button:focus-
   }
 }
 
-@media (min-width: 40rem) {
-  .lfs-review-ratings {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
 
 [data-lfs-board-layout] {
   padding-block-start: var(--lfs-board-top-gap) !important;
