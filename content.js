@@ -1,5 +1,7 @@
 (() => {
   const playlistZenModeStorageKey = "lfsPuzzlePlaylistZenMode";
+  const boardSizeCapStorageKey = "lfsPuzzleBoardSizeCap";
+  const playlistZenWasPending = globalThis.sessionStorage?.getItem(playlistZenModeStorageKey) === "true";
   let restorePlaylistZenMode = false;
   let zenRestorePageLoaded = document.readyState === "complete";
   let zenRestoreLoadListener = false;
@@ -27,7 +29,20 @@
     }
   }
 
+  function loadSavedBoardSizeCap() {
+    const saved = globalThis.sessionStorage?.getItem(boardSizeCapStorageKey);
+    if (!saved) return null;
+    const [width, height] = saved.split(",").map(Number);
+    if (Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0) return { width, height };
+    globalThis.sessionStorage?.removeItem(boardSizeCapStorageKey);
+    return null;
+  }
+
   preparePlaylistZenRestore(document.documentElement);
+  const restoredBoardSizeCap = loadSavedBoardSizeCap();
+  let discardRestoredBoardSizeCap = !playlistZenWasPending
+    && !document.documentElement?.hasAttribute("data-lfs-zen-mode")
+    && !document.documentElement?.hasAttribute("data-lfs-zen-restore-pending");
 
   function isAllowedSoundUrl(value) {
     if (typeof value !== "string") return false;
@@ -91,6 +106,8 @@
   let zenResizeObserver;
   let zenResizeTarget;
   let zenResizeBoard;
+  let boardAnchoredElementsFrame;
+  let boardAnchoredElementsRect;
   let zenCenterFrame;
   let zenClockFrame;
   let zenClockProgressFrame;
@@ -108,7 +125,7 @@
   let normalRoundBoardHeight = 0;
   let normalRoundFrame;
   let boardSizeCapBoard;
-  let boardSizeCap;
+  let boardSizeCap = restoredBoardSizeCap;
   let boardSizeCapWrapper;
   let pvPreviewFrame;
   let pvAnimationPositionFrame;
@@ -154,18 +171,18 @@
   }
 
   function syncBoardSizeCap(board = document.querySelector(mainBoardSelector)) {
+    if (discardRestoredBoardSizeCap) {
+      boardSizeCap = null;
+      globalThis.sessionStorage?.removeItem(boardSizeCapStorageKey);
+      discardRestoredBoardSizeCap = false;
+    }
     const wrapper = board?.closest(".cg-wrap") ?? null;
     if (board !== boardSizeCapBoard) {
       clearBoardSizeCap();
       boardSizeCapBoard = board;
-      boardSizeCap = null;
     }
     if (wrapper !== boardSizeCapWrapper) clearBoardSizeCap();
-    if (!board || !wrapper) {
-      boardSizeCapBoard = null;
-      boardSizeCap = null;
-      return;
-    }
+    if (!board || !wrapper) return;
 
     if (!boardSizeCap) {
       const rect = wrapper.getBoundingClientRect();
@@ -176,6 +193,9 @@
     wrapper.style.setProperty("--lfs-board-size-cap-width", `${boardSizeCap.width}px`);
     wrapper.style.setProperty("--lfs-board-size-cap-height", `${boardSizeCap.height}px`);
     wrapper.setAttribute("data-lfs-board-size-cap", "");
+    if (document.documentElement.hasAttribute("data-lfs-zen-mode")) {
+      globalThis.sessionStorage?.setItem(boardSizeCapStorageKey, `${boardSizeCap.width},${boardSizeCap.height}`);
+    }
   }
 
   function observeZenBoardSize(container, board) {
@@ -187,6 +207,7 @@
 
     zenResizeObserver = new ResizeObserver(() => {
       syncBoardSizeCap();
+      scheduleBoardAnchoredElements();
       if (document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenCenter();
     });
     zenResizeObserver.observe(container);
@@ -328,6 +349,7 @@
       zenToggle?.setAttribute("aria-label", "Zenmodus deaktivieren");
     }
     if (zenBoard && document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenCenter();
+    scheduleBoardAnchoredElements();
   }
 
   function setZenMode(enabled) {
@@ -346,8 +368,9 @@
     zenRestoreLayoutSnapshot = undefined;
     zenRestoreStableFrames = 0;
     root.removeAttribute("data-lfs-zen-restore-pending");
+    globalThis.sessionStorage?.removeItem(boardSizeCapStorageKey);
     clearZenOffset(zenBoard);
-    syncZenPromotionChoice();
+    syncBoardAnchoredElements();
     syncNormalRoundLayout();
     scheduleZenClockUpdate();
   }
@@ -463,6 +486,7 @@
       // Chessground clears its cached pointer bounds on scroll, not on CSS translation.
       document.dispatchEvent(new Event("scroll"));
     }
+    syncBoardAnchoredElements();
     if (restorePlaylistZenMode) {
       const snapshot = [boardRect.left - offsetX, boardRect.top - offsetY, boardRect.width, boardRect.height];
       const stable = zenRestoreLayoutSnapshot?.every((value, index) => Math.abs(value - snapshot[index]) < 0.5);
@@ -478,33 +502,80 @@
       zenRestoreStableFrames = 0;
     }
     requestAnimationFrame(() => {
-      syncZenPromotionChoice();
       syncZenSideElements();
       schedulePvPreviewSync();
     });
   }
 
-  function syncZenPromotionChoice() {
+  function clearBoardAnchoredPromotion(choice) {
+    let changed = choice?.hasAttribute("data-lfs-board-promotion-anchor") ?? false;
+    if (changed) choice.removeAttribute("data-lfs-board-promotion-anchor");
+    for (const property of ["--lfs-board-anchor-top", "--lfs-board-anchor-left", "--lfs-board-anchor-width", "--lfs-board-anchor-height"]) {
+      if (choice?.style.getPropertyValue(property)) {
+        choice.style.removeProperty(property);
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  function syncBoardAnchoredElements() {
+    const root = document.documentElement;
+    const board = zenBoard?.querySelector("cg-board");
     const choice = document.querySelector("#promotion-choice");
-    if (!choice) return;
-    if (!zenBoard || !document.documentElement.hasAttribute("data-lfs-zen-mode") || zenBoard.contains(choice)) {
-      choice.removeAttribute("data-lfs-zen-promotion-outside-board");
-      choice.style.removeProperty("--lfs-zen-promotion-top");
-      choice.style.removeProperty("--lfs-zen-promotion-left");
-      choice.style.removeProperty("--lfs-zen-promotion-width");
-      choice.style.removeProperty("--lfs-zen-promotion-height");
+    const rect = board?.getBoundingClientRect();
+    if (!rect?.width || !rect.height) {
+      const scaleChanged = root.style.getPropertyValue("--lfs-board-ui-scale") !== "";
+      root.style.removeProperty("--lfs-board-ui-scale");
+      const promotionChanged = clearBoardAnchoredPromotion(choice);
+      const boardChanged = Boolean(boardAnchoredElementsRect);
+      boardAnchoredElementsRect = null;
+      if (scaleChanged && root.hasAttribute("data-lfs-zen-mode")) scheduleZenSideUpdate();
+      if (scaleChanged || promotionChanged || boardChanged) document.dispatchEvent(new Event("lfs-board-layout"));
       return;
     }
 
-    const board = zenBoard.querySelector("cg-board");
-    const rect = board?.getBoundingClientRect();
-    if (!rect?.width || !rect.height) return;
+    const nextRect = [rect.left, rect.top, rect.width, rect.height];
+    const boardChanged = !boardAnchoredElementsRect
+      || nextRect.some((value, index) => Math.abs(value - boardAnchoredElementsRect[index]) >= 0.1);
+    boardAnchoredElementsRect = nextRect;
+    const scale = boardSizeCap ? Math.min(1, rect.width / boardSizeCap.width, rect.height / boardSizeCap.height) : 1;
+    const scaleValue = String(scale);
+    const scaleChanged = root.style.getPropertyValue("--lfs-board-ui-scale") !== scaleValue;
+    if (scaleChanged) {
+      root.style.setProperty("--lfs-board-ui-scale", scaleValue);
+      if (root.hasAttribute("data-lfs-zen-mode")) scheduleZenSideUpdate();
+    }
+    if (!choice || zenBoard.contains(choice)) {
+      const promotionChanged = clearBoardAnchoredPromotion(choice);
+      if (boardChanged || scaleChanged || promotionChanged) document.dispatchEvent(new Event("lfs-board-layout"));
+      return;
+    }
 
-    choice.setAttribute("data-lfs-zen-promotion-outside-board", "");
-    choice.style.setProperty("--lfs-zen-promotion-top", `${rect.top}px`);
-    choice.style.setProperty("--lfs-zen-promotion-left", `${rect.left}px`);
-    choice.style.setProperty("--lfs-zen-promotion-width", `${rect.width}px`);
-    choice.style.setProperty("--lfs-zen-promotion-height", `${rect.height}px`);
+    let promotionChanged = false;
+    if (!choice.hasAttribute("data-lfs-board-promotion-anchor")) {
+      choice.setAttribute("data-lfs-board-promotion-anchor", "");
+      promotionChanged = true;
+    }
+    for (const [property, value] of [
+      ["--lfs-board-anchor-top", `${rect.top}px`],
+      ["--lfs-board-anchor-left", `${rect.left}px`],
+      ["--lfs-board-anchor-width", `${rect.width}px`],
+      ["--lfs-board-anchor-height", `${rect.height}px`]
+    ]) {
+      if (choice.style.getPropertyValue(property) === value) continue;
+      choice.style.setProperty(property, value);
+      promotionChanged = true;
+    }
+    if (boardChanged || scaleChanged || promotionChanged) document.dispatchEvent(new Event("lfs-board-layout"));
+  }
+
+  function scheduleBoardAnchoredElements() {
+    cancelAnimationFrame(boardAnchoredElementsFrame);
+    boardAnchoredElementsFrame = requestAnimationFrame(() => {
+      boardAnchoredElementsFrame = 0;
+      syncBoardAnchoredElements();
+    });
   }
 
   function ensureZenClockOverlay() {
@@ -646,7 +717,8 @@
     if (row.hidden) return;
     row.style.left = `${boardRect.left}px`;
     row.style.width = `${boardRect.width}px`;
-    const margin = settings.zenClockMarginPx;
+    const scale = Number.parseFloat(document.documentElement.style.getPropertyValue("--lfs-board-ui-scale")) || 1;
+    const margin = settings.zenClockMarginPx * scale;
     const thickness = Number.parseFloat(zenClockOverlay.style.getPropertyValue("--lfs-zen-clock-line-thickness"));
     const pixelRatio = window.devicePixelRatio || 1;
     const overlap = 0.5 / pixelRatio;
@@ -687,8 +759,8 @@
     gradient.children[1].setAttribute("offset", `${100 - settings.zenClockActiveEndBlendPercent}%`);
     updateZenClockStroke(clockRow);
     const top = side === "top"
-      ? boardRect.top - padding - settings.zenClockLineGapPx - row.getBoundingClientRect().height
-      : boardRect.bottom + padding + settings.zenClockLineGapPx;
+      ? boardRect.top - padding - settings.zenClockLineGapPx * scale - row.getBoundingClientRect().height
+      : boardRect.bottom + padding + settings.zenClockLineGapPx * scale;
     row.style.top = `${top}px`;
   }
 
@@ -725,11 +797,12 @@
 
     ensureZenClockOverlay();
     zenClockOverlay.setAttribute("data-active", "");
-    zenClockOverlay.style.setProperty("--lfs-zen-clock-font-size", `${settings.zenClockFontSizePx}px`);
+    const scale = Number.parseFloat(document.documentElement.style.getPropertyValue("--lfs-board-ui-scale")) || 1;
+    zenClockOverlay.style.setProperty("--lfs-zen-clock-font-size", `${settings.zenClockFontSizePx * scale}px`);
     const devicePixelRatio = window.devicePixelRatio || 1;
-    const lineThickness = Math.max(1, Math.round(settings.zenClockLineThicknessPx * devicePixelRatio)) / devicePixelRatio;
+    const lineThickness = Math.max(1, Math.round(settings.zenClockLineThicknessPx * scale * devicePixelRatio)) / devicePixelRatio;
     zenClockOverlay.style.setProperty("--lfs-zen-clock-line-thickness", `${lineThickness}px`);
-    zenClockOverlay.style.setProperty("--lfs-zen-clock-line-gap", `${settings.zenClockLineGapPx}px`);
+    zenClockOverlay.style.setProperty("--lfs-zen-clock-line-gap", `${settings.zenClockLineGapPx * scale}px`);
 
     if (!analysis) {
       clocks.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
@@ -821,7 +894,7 @@
     }
     const topMaterialRect = topMaterial?.getBoundingClientRect();
     const bottomMaterialRect = bottomMaterial?.getBoundingClientRect();
-    const padding = 6;
+    const padding = 6 * (Number.parseFloat(document.documentElement.style.getPropertyValue("--lfs-board-ui-scale")) || 1);
     const materialLeft = boardRect.right + padding;
     const zenBoardRect = zenBoard.getBoundingClientRect();
 
@@ -955,6 +1028,7 @@
 
   function syncPvLineSliders() {
     const slidersToPosition = [];
+    const scale = Number.parseFloat(document.documentElement.style.getPropertyValue("--lfs-board-ui-scale")) || 1;
     for (const box of document.querySelectorAll(".pv_box")) {
       const rows = [...box.querySelectorAll(":scope > .pv")];
       let container = box.querySelector(":scope > [data-lfs-pv-slider-container]");
@@ -1017,13 +1091,13 @@
       }
       const rowRect = row.getBoundingClientRect();
       const scoreRight = score?.getBoundingClientRect().right;
-      const start = score ? scoreRight - boxRect.left + 6 : rowRect.left - boxRect.left + 8;
-      const end = rowRect.right - boxRect.left - 8;
+      const start = score ? scoreRight - boxRect.left + 6 * scale : rowRect.left - boxRect.left + 8 * scale;
+      const end = rowRect.right - boxRect.left - 8 * scale;
       return {
         slider,
         left: `${start}px`,
-        top: `${rowRect.top - boxRect.top + rowRect.height / 2 - 11}px`,
-        width: `${Math.max(24, end - start)}px`
+        top: `${rowRect.top - boxRect.top + rowRect.height / 2 - 11 * scale}px`,
+        width: `${Math.max(24 * scale, end - start)}px`
       };
     });
     for (const { slider, left, top, width } of positions) {
@@ -1524,6 +1598,7 @@
 
   function handleViewportChange() {
     syncBoardSizeCap();
+    scheduleBoardAnchoredElements();
     if (document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenCenter();
     else {
       clearNormalRoundLayout();
@@ -1534,6 +1609,7 @@
   }
 
   window.addEventListener("resize", handleViewportChange);
+  window.visualViewport?.addEventListener("resize", handleViewportChange);
   document.addEventListener("fullscreenchange", handleViewportChange);
 
   const refreshZenClock = () => {
@@ -1549,9 +1625,11 @@
   window.addEventListener("pageshow", refreshZenClock);
 
   document.addEventListener("scroll", () => {
+    scheduleBoardAnchoredElements();
     schedulePvPreviewSync();
     scheduleZenClockUpdate();
   }, true);
+  window.visualViewport?.addEventListener("scroll", scheduleBoardAnchoredElements);
 
   const syncedCustomSoundFiles = new Set();
   function syncSoundSettings() {
@@ -1695,6 +1773,7 @@
         if (node.nodeType !== Node.ELEMENT_NODE) continue;
         if (node.id === "promotion-choice" || node.querySelector("#promotion-choice")) {
           applyPromotionSquareTheme();
+          scheduleBoardAnchoredElements();
           return;
         }
       }

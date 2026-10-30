@@ -704,6 +704,29 @@ test("solved blunder exercises show the same easy-to-again rating slider", () =>
   assert.equal(ratings.children[1].style["--lfs-review-thumb-image"], 'url("system_rund/bq.svg")');
 });
 
+test("zen playlist toolbar follows the scaled board viewport", () => {
+  const document = listDocument();
+  const values = new Map([["--lfs-board-ui-scale", "0.75"]]);
+  document.documentElement = {
+    hasAttribute: name => name === "data-lfs-zen-mode",
+    style: { getPropertyValue: name => values.get(name) ?? "" },
+  };
+  const board = { getBoundingClientRect: () => ({ left: 100, top: 100, right: 300, bottom: 300, width: 200, height: 200 }) };
+  document.querySelector = selector => selector === ".puzzle__board cg-board" ? board : null;
+  const toolbar = document.createElement("div");
+  toolbar.dataset.solved = "true";
+  toolbar.getBoundingClientRect = () => ({ height: 40 });
+  const { api } = loadList("puzzle-playlist.js", `
+    positionZenToolbar,
+    setToolbar: value => { puzzleToolbar = value; }
+  `, { document, window: { innerHeight: 500 } });
+  api.setToolbar(toolbar);
+  api.positionZenToolbar();
+  assert.equal(toolbar.style["--lfs-zen-toolbar-left"], "100px");
+  assert.equal(toolbar.style["--lfs-zen-toolbar-top"], "304.5px");
+  assert.equal(toolbar.style["--lfs-zen-toolbar-width"], "200px");
+});
+
 test("blunder overview shows total and individual scores in keyboard-scrollable rows", () => {
   const document = listDocument();
   const { api } = loadList("blunder-list.js", `

@@ -3169,7 +3169,7 @@ ${clockMarker}`));
       await evaluate(contentSource.replace(marker, `
         globalThis.zenTesting = {
           centerZenBoard, setBoard(value) { zenBoard = value; }, clearZenOffset, setZenMode,
-          syncBoardSizeCap, observeZenBoardSize, handleViewportChange
+          syncBoardSizeCap, observeZenBoardSize, handleViewportChange, syncBoardAnchoredElements, syncPvLineSliders
         };
         return;
 ${marker}`));
@@ -3214,6 +3214,21 @@ ${marker}`));
         host.className = 'analyse__board lfs-sequence-host';
         host.style.cssText = 'position:absolute;left:40px;top:80px;width:600px;height:500px';
         host.innerHTML = '<div class="main-board lfs-sequence-parent" style="position:relative;width:600px;height:500px"><div class="cg-wrap lfs-sequence-wrap" style="position:absolute;left:0;top:0;width:240px;height:240px"><cg-board style="width:100%;height:100%"></cg-board></div></div><div class="material material-top" style="width:24px;height:20px">+1</div>';
+        const promotion = document.createElement('div');
+        promotion.id = 'promotion-choice';
+        promotion.style.cssText = 'position:absolute;left:0;top:0;width:40px;height:40px';
+        document.body.append(promotion);
+        const toolbar = document.createElement('div');
+        toolbar.id = 'lfs-puzzle-playlist-toolbar';
+        toolbar.dataset.solved = 'true';
+        toolbar.innerHTML = '<div class="lfs-review-ratings"><input class="lfs-review-slider" type="range"></div>';
+        document.body.append(toolbar);
+        const pvBox = document.createElement('div');
+        pvBox.className = 'pv_box';
+        pvBox.style.cssText = 'position:absolute;left:20px;top:20px;width:200px;height:40px';
+        pvBox.innerHTML = '<div class="pv"><strong>+1</strong><span class="pv-san">e4</span></div>';
+        document.body.append(pvBox);
+        zenTesting.syncPvLineSliders();
         const responsiveStyle = document.createElement('style');
         responsiveStyle.id = 'lfs-sequence-style';
         responsiveStyle.textContent = '@media (min-height: ${availableHeight}px) { .lfs-sequence-wrap { width:320px!important; height:320px!important; } }';
@@ -3257,12 +3272,19 @@ ${marker}`));
             const board = document.querySelector('.lfs-sequence-wrap');
             const boardRect = board.getBoundingClientRect();
             const material = board.closest('.lfs-sequence-host').querySelector('.material').getBoundingClientRect();
+            const promotion = document.querySelector('#promotion-choice').getBoundingClientRect();
+            const slider = document.querySelector('.lfs-review-slider');
             return {
               zen: document.documentElement.hasAttribute('data-lfs-zen-mode'),
               fullscreen: window.innerHeight >= ${availableHeight},
               locked: board.hasAttribute('data-lfs-board-size-cap'),
               width: boardRect.width,
               height: boardRect.height,
+              uiScale: Number(document.documentElement.style.getPropertyValue('--lfs-board-ui-scale')),
+              sliderHeight: slider.getBoundingClientRect().height,
+              pvSliderHeight: document.querySelector('.pv_box input[type="range"]').getBoundingClientRect().height,
+              promotionRect: [promotion.left, promotion.top, promotion.width, promotion.height],
+              boardRect: [boardRect.left, boardRect.top, boardRect.width, boardRect.height],
               groupCenter: (Math.min(boardRect.left, material.left) + Math.max(boardRect.right, material.right)) / 2,
               viewportCenter: window.innerWidth / 2
             };
@@ -3272,17 +3294,108 @@ ${marker}`));
           assert.equal(state.locked, true, `${sequence.join(" -> ")}: size cap after ${step}`);
           assert.equal(state.width, 240, `${sequence.join(" -> ")}: board width after ${step}`);
           assert.equal(state.height, 240, `${sequence.join(" -> ")}: board height after ${step}`);
+          assert.equal(state.uiScale, 1, `${sequence.join(" -> ")}: board UI scale after ${step}`);
+          assert.equal(state.sliderHeight, 30, `${sequence.join(" -> ")}: rating slider scale after ${step}`);
+          assert.equal(state.pvSliderHeight, 22, `${sequence.join(" -> ")}: candidate slider scale after ${step}`);
+          assert.ok(state.promotionRect.every((value, index) => Math.abs(value - state.boardRect[index]) < 0.5),
+            `${sequence.join(" -> ")}: promotion selector follows the board after ${step}`);
           if (state.zen) assert.ok(Math.abs(state.groupCenter - state.viewportCenter) < 0.5,
             `${sequence.join(" -> ")}: board group remains centered after ${step}`);
         }
       }
 
+      await evaluate("zenTesting.setZenMode(true)");
+      await send("Emulation.setDeviceMetricsOverride", metrics(availableHeight));
+      await evaluate("zenTesting.handleViewportChange()");
+      const savedCap = await evaluate("sessionStorage.getItem('lfsPuzzleBoardSizeCap')");
+      assert.equal(savedCap, "240,240");
+
+      await evaluate(`(() => {
+        document.documentElement.removeAttribute('data-lfs-zen-mode');
+        document.documentElement.removeAttribute('data-lfs-zen-restore-pending');
+        sessionStorage.setItem('lfsPuzzlePlaylistZenMode', 'true');
+        document.querySelector('.lfs-sequence-host').remove();
+        const nextHost = document.createElement('div');
+        nextHost.className = 'analyse__board lfs-sequence-host';
+        nextHost.style.cssText = 'position:absolute;left:40px;top:80px;width:600px;height:500px';
+        nextHost.innerHTML = '<div class="main-board lfs-sequence-parent" style="position:relative;width:600px;height:500px"><div class="cg-wrap lfs-sequence-wrap" style="position:absolute;left:0;top:0;width:320px;height:320px"><cg-board style="width:100%;height:100%"></cg-board></div></div><div class="material material-top" style="width:24px;height:20px">+1</div>';
+        document.body.append(nextHost);
+      })()`);
+      const contentSource = readFileSync(join(root, "content.js"), "utf8");
+      const marker = "  chrome.runtime.onMessage.addListener";
+      assert.ok(contentSource.includes(marker));
+      await evaluate(contentSource.replace(marker, `
+        globalThis.zenReloadTesting = {
+          syncBoardLayout, setZenMode, observeZenBoardSize
+        };
+        return;
+${marker}`));
+      await evaluate("zenReloadTesting.syncBoardLayout()");
+      await evaluate("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))))");
+      const nextPuzzle = await evaluate(`(() => {
+        const board = document.querySelector('.lfs-sequence-wrap');
+        const rect = board.getBoundingClientRect();
+        const material = board.closest('.lfs-sequence-host').querySelector('.material').getBoundingClientRect();
+        const promotion = document.querySelector('#promotion-choice').getBoundingClientRect();
+        return {
+          zen: document.documentElement.hasAttribute('data-lfs-zen-mode'),
+          width: rect.width,
+          height: rect.height,
+          uiScale: Number(document.documentElement.style.getPropertyValue('--lfs-board-ui-scale')),
+          sliderHeight: document.querySelector('.lfs-review-slider').getBoundingClientRect().height,
+          promotionRect: [promotion.left, promotion.top, promotion.width, promotion.height],
+          boardRect: [rect.left, rect.top, rect.width, rect.height],
+          capped: board.hasAttribute('data-lfs-board-size-cap'),
+          groupCenter: (Math.min(rect.left, material.left) + Math.max(rect.right, material.right)) / 2,
+          viewportCenter: window.innerWidth / 2
+        };
+      })()`);
+      assert.equal(nextPuzzle.zen, true);
+      assert.equal(nextPuzzle.capped, true);
+      assert.equal(nextPuzzle.width, 240);
+      assert.equal(nextPuzzle.height, 240);
+      assert.equal(nextPuzzle.uiScale, 1);
+      assert.equal(nextPuzzle.sliderHeight, 30);
+      assert.ok(nextPuzzle.promotionRect.every((value, index) => Math.abs(value - nextPuzzle.boardRect[index]) < 0.5));
+      assert.ok(Math.abs(nextPuzzle.groupCenter - nextPuzzle.viewportCenter) < 0.5);
+
+      await send("Emulation.setDeviceMetricsOverride", { width: 320, height: normalHeight, screenWidth: 320, screenHeight: availableHeight, deviceScaleFactor: 1, mobile: true });
+      await evaluate(`(() => {
+        const style = document.createElement('style');
+        style.textContent = '@media (max-width: 400px) { .lfs-sequence-wrap { width:180px!important; height:180px!important; } }';
+        document.head.append(style);
+        zenTesting.handleViewportChange();
+      })()`);
+      await evaluate("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))))");
+      const scaledControls = await evaluate(`(() => {
+        const board = document.querySelector('.lfs-sequence-wrap').getBoundingClientRect();
+        const promotion = document.querySelector('#promotion-choice').getBoundingClientRect();
+        return {
+          board: [board.left, board.top, board.width, board.height],
+          promotion: [promotion.left, promotion.top, promotion.width, promotion.height],
+          scale: Number(document.documentElement.style.getPropertyValue('--lfs-board-ui-scale')),
+          sliderHeight: document.querySelector('.lfs-review-slider').getBoundingClientRect().height,
+          pvSliderHeight: document.querySelector('.pv_box input[type="range"]').getBoundingClientRect().height
+        };
+      })()`);
+      assert.ok(scaledControls.promotion.every((value, index) => Math.abs(value - scaledControls.board[index]) < 0.5));
+      assert.equal(scaledControls.scale, 0.75);
+      assert.equal(scaledControls.sliderHeight, 22.5);
+      assert.equal(scaledControls.pvSliderHeight, 16.5);
+
       await send("Emulation.setDeviceMetricsOverride", metrics(normalHeight));
       await evaluate(`(() => {
-        zenTesting.setZenMode(false);
+        document.documentElement.removeAttribute('data-lfs-zen-mode');
+        document.documentElement.removeAttribute('data-lfs-zen-restore-pending');
+        sessionStorage.removeItem('lfsPuzzlePlaylistZenMode');
+        sessionStorage.removeItem('lfsPuzzleBoardSizeCap');
         zenTesting.observeZenBoardSize(null, null);
+        zenReloadTesting.observeZenBoardSize(null, null);
         zenTesting.syncBoardSizeCap(null);
         document.querySelector('.lfs-sequence-host').remove();
+        document.querySelector('#promotion-choice')?.remove();
+        document.querySelector('#lfs-puzzle-playlist-toolbar')?.remove();
+        document.querySelector('.pv_box')?.remove();
         document.getElementById('lfs-sequence-style')?.remove();
       })()`);
       await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });

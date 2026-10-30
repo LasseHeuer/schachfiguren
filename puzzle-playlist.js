@@ -594,7 +594,8 @@
     const board = document.querySelector(".puzzle__board cg-board");
     const rect = board?.getBoundingClientRect?.();
     if (!rect?.width || !rect?.height) return;
-    const gap = 6;
+    const scale = Number.parseFloat(document.documentElement.style.getPropertyValue("--lfs-board-ui-scale")) || 1;
+    const gap = 6 * scale;
     const height = puzzleToolbar.getBoundingClientRect().height;
     const top = Math.min(rect.bottom + gap, Math.max(gap, window.innerHeight - height - gap));
     puzzleToolbar.style.setProperty("--lfs-zen-toolbar-left", `${rect.left}px`);
@@ -666,5 +667,9 @@
   window.addEventListener("popstate", scheduleRender);
   window.addEventListener("hashchange", scheduleRender);
   window.addEventListener("resize", scheduleZenToolbarPosition);
+  window.visualViewport?.addEventListener("resize", scheduleZenToolbarPosition);
+  document.addEventListener("fullscreenchange", scheduleZenToolbarPosition);
+  document.addEventListener("scroll", scheduleZenToolbarPosition, true);
+  document.addEventListener("lfs-board-layout", scheduleZenToolbarPosition);
   document.addEventListener("click", handleNativePuzzleContinue, true);
 })();
