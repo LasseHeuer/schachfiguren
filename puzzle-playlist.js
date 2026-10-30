@@ -480,7 +480,20 @@
       ratings.append(easy, slider, hard);
       puzzleToolbar.append(ratings);
     }
-    if (!savedItem) puzzleToolbar.append(puzzleMenuSaveButton);
+    if (!savedItem) {
+      puzzleToolbar.append(puzzleMenuSaveButton);
+      if (isComplete) {
+        const nextButton = makeButton("Nächstes Rätsel", "native-next");
+        nextButton.addEventListener("click", () => {
+          if (puzzleToolbar.dataset.puzzleId !== puzzleId()) {
+            render();
+            return;
+          }
+          advanceNativePuzzle();
+        });
+        puzzleToolbar.append(nextButton);
+      }
+    }
 
     if (puzzleToolbar.dataset.handlerBound) return;
     puzzleToolbar.dataset.handlerBound = "true";

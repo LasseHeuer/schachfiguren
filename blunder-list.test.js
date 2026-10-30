@@ -633,10 +633,12 @@ test("playlist renders compact rows with individual scores and actions above the
   assert.equal(list.children[0].children[3].attributes["aria-label"], "Rätsel 1 aus Playlist entfernen");
 });
 
-test("adding a solved puzzle to the playlist replaces the add button with only the rating slider", () => {
+test("unsaved solved puzzles show add and next buttons, then only the slider after saving", () => {
   const document = listDocument();
   const parent = document.createElement("section");
-  document.querySelector = selector => selector === ".puzzle__session" ? parent : {};
+  let advanced = 0;
+  document.querySelector = selector => selector === ".puzzle__session" ? parent
+    : selector === ".puzzle__feedback.after .continue" ? { click: () => advanced++ } : {};
   const { api } = loadList("puzzle-playlist.js", `
     renderPuzzleToolbar, toggleSavedPuzzle,
     setup: () => {
@@ -649,9 +651,13 @@ test("adding a solved puzzle to the playlist replaces the add button with only t
   api.setup();
   api.renderPuzzleToolbar();
   const toolbar = api.getToolbar();
-  assert.equal(toolbar.children.length, 1);
+  assert.equal(toolbar.children.length, 2);
   const addButton = toolbar.children[0];
+  const nextButton = toolbar.children[1];
   assert.equal(addButton.textContent, "Zu Playlist hinzufügen");
+  assert.equal(nextButton.textContent, "Nächstes Rätsel");
+  nextButton.listeners.click();
+  assert.equal(advanced, 1);
 
   api.toggleSavedPuzzle({ currentTarget: addButton });
   api.renderPuzzleToolbar();
