@@ -3471,7 +3471,7 @@ ${marker}`));
         const toolbar = document.createElement('div');
         toolbar.id = 'lfs-puzzle-playlist-toolbar';
         toolbar.dataset.solved = 'true';
-        toolbar.innerHTML = '<div class="lfs-review-ratings"><input class="lfs-review-slider" type="range"></div>';
+        toolbar.innerHTML = '<div class="lfs-review-ratings"><span class="lfs-review-label lfs-review-label-easy">Einfach</span><input class="lfs-review-slider" type="range"><span class="lfs-review-label lfs-review-label-hard">Schwer</span></div>';
         document.body.append(toolbar);
         const pvBox = document.createElement('div');
         pvBox.className = 'pv_box';
@@ -3538,6 +3538,7 @@ ${marker}`));
               height: boardRect.height,
               uiScale: Number(document.documentElement.style.getPropertyValue('--lfs-board-ui-scale')),
               sliderHeight: slider.getBoundingClientRect().height,
+              ratingLabelFontSize: Number.parseFloat(getComputedStyle(document.querySelector('.lfs-review-label')).fontSize),
               pvSliderHeight: document.querySelector('.pv_box input[type="range"]').getBoundingClientRect().height,
               materialFontSize: Number.parseFloat(getComputedStyle(materialElement).fontSize),
               materialParentFontSize: Number.parseFloat(getComputedStyle(materialElement.parentElement).fontSize),
@@ -3555,6 +3556,7 @@ ${marker}`));
           assert.equal(state.height, 240, `${sequence.join(" -> ")}: board height after ${step}`);
           assert.equal(state.uiScale, 1, `${sequence.join(" -> ")}: board UI scale after ${step}`);
           assert.equal(state.sliderHeight, 30, `${sequence.join(" -> ")}: rating slider scale after ${step}`);
+          assert.equal(state.ratingLabelFontSize, 12.8, `${sequence.join(" -> ")}: rating labels stay readable after ${step}`);
           assert.equal(state.pvSliderHeight, 22, `${sequence.join(" -> ")}: candidate slider scale after ${step}`);
           assert.equal(state.materialFontSize, state.materialParentFontSize,
             `${sequence.join(" -> ")}: captured-material count size after ${step}`);
@@ -3647,13 +3649,18 @@ ${marker}`));
           promotion: [promotion.left, promotion.top, promotion.width, promotion.height],
           scale: Number(document.documentElement.style.getPropertyValue('--lfs-board-ui-scale')),
           sliderHeight: document.querySelector('.lfs-review-slider').getBoundingClientRect().height,
-          pvSliderHeight: document.querySelector('.pv_box input[type="range"]').getBoundingClientRect().height
+          ratingLabelFontSize: Number.parseFloat(getComputedStyle(document.querySelector('.lfs-review-label')).fontSize),
+          pvSliderHeight: document.querySelector('.pv_box input[type="range"]').getBoundingClientRect().height,
+          materialScale: Number.parseFloat(getComputedStyle(document.querySelector('.material')).fontSize)
+            / Number.parseFloat(getComputedStyle(document.querySelector('.material').parentElement).fontSize)
         };
       })()`);
       assert.ok(scaledControls.promotion.every((value, index) => Math.abs(value - scaledControls.board[index]) < 0.5));
       assert.equal(scaledControls.scale, 0.75, JSON.stringify(scaledControls));
-      assert.equal(scaledControls.sliderHeight, 22.5);
-      assert.equal(scaledControls.pvSliderHeight, 16.5);
+      assert.equal(scaledControls.sliderHeight, 30);
+      assert.equal(scaledControls.ratingLabelFontSize, 12.8);
+      assert.equal(scaledControls.pvSliderHeight, 22);
+      assert.equal(scaledControls.materialScale, 0.75);
 
       await send("Emulation.setDeviceMetricsOverride", metrics(normalHeight));
       await evaluate(`(() => {

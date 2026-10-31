@@ -496,7 +496,7 @@ main.lobby:has(> .lfs-playlist-page) {
   grid-column: 1;
   grid-row: 1;
   z-index: 1;
-  font-size: calc(0.8rem * var(--lfs-board-ui-scale, 1));
+  font-size: 0.8rem;
   color: var(--c-font-dim, oklch(0.569262399668685 0.000000021218684 89.875563251835));
   font-weight: 600;
   white-space: nowrap;
@@ -516,7 +516,7 @@ main.lobby:has(> .lfs-playlist-page) {
   appearance: none;
   width: 100%;
   min-width: 0;
-  height: calc(30px * var(--lfs-board-ui-scale, 1));
+  height: 30px;
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -529,7 +529,7 @@ main.lobby:has(> .lfs-playlist-page) {
 }
 
 .lfs-review-slider::-webkit-slider-runnable-track {
-  height: calc(20px * var(--lfs-board-ui-scale, 1));
+  height: 20px;
   border: 0;
   border-radius: 4px;
   background:
@@ -548,7 +548,7 @@ main.lobby:has(> .lfs-playlist-page) {
 }
 
 .lfs-review-slider::-moz-range-track {
-  height: calc(20px * var(--lfs-board-ui-scale, 1));
+  height: 20px;
   border: 0;
   border-radius: 4px;
   background:
@@ -568,17 +568,17 @@ main.lobby:has(> .lfs-playlist-page) {
 
 .lfs-review-slider::-webkit-slider-thumb {
   appearance: none;
-  width: calc(30px * var(--lfs-board-ui-scale, 1));
-  height: calc(30px * var(--lfs-board-ui-scale, 1));
-  margin-top: calc(-5px * var(--lfs-board-ui-scale, 1));
+  width: 30px;
+  height: 30px;
+  margin-top: -5px;
   border: 0;
   background: var(--lfs-review-thumb-image) center / contain no-repeat;
   filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--c-font) 55%, transparent));
 }
 
 .lfs-review-slider::-moz-range-thumb {
-  width: calc(30px * var(--lfs-board-ui-scale, 1));
-  height: calc(30px * var(--lfs-board-ui-scale, 1));
+  width: 30px;
+  height: 30px;
   border: 0;
   background: var(--lfs-review-thumb-image) center / contain no-repeat;
   filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--c-font) 55%, transparent));
@@ -1026,7 +1026,7 @@ html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] [data-lfs-pv-slider-c
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"] {
   position: absolute !important;
-  height: calc(22px * var(--lfs-board-ui-scale, 1)) !important;
+  height: 22px !important;
   margin: 0 !important;
   padding: 0 !important;
   border: 0 !important;
@@ -1038,15 +1038,15 @@ html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"] {
 }
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-webkit-slider-runnable-track {
-  height: calc(3px * var(--lfs-board-ui-scale, 1));
+  height: 3px;
   border-radius: 3px;
   background: linear-gradient(to right in srgb, var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760)) var(--lfs-pv-progress, 0%), var(--c-border, oklch(0.738018666131950 0.000000027508905 89.875562537916)) var(--lfs-pv-progress, 0%));
 }
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-webkit-slider-thumb {
-  width: calc(12px * var(--lfs-board-ui-scale, 1));
-  height: calc(12px * var(--lfs-board-ui-scale, 1));
-  margin-top: calc(-4.5px * var(--lfs-board-ui-scale, 1));
+  width: 12px;
+  height: 12px;
+  margin-top: -4.5px;
   appearance: none;
   border: 2px solid var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760));
   border-radius: 50%;
@@ -1054,20 +1054,20 @@ html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::
 }
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-moz-range-track {
-  height: calc(3px * var(--lfs-board-ui-scale, 1));
+  height: 3px;
   border-radius: 3px;
   background: var(--c-border, oklch(0.738018666131950 0.000000027508905 89.875562537916));
 }
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-moz-range-progress {
-  height: calc(3px * var(--lfs-board-ui-scale, 1));
+  height: 3px;
   border-radius: 3px;
   background: var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760));
 }
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-moz-range-thumb {
-  width: calc(8px * var(--lfs-board-ui-scale, 1));
-  height: calc(8px * var(--lfs-board-ui-scale, 1));
+  width: 8px;
+  height: 8px;
   border: 2px solid var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760));
   border-radius: 50%;
   background: var(--c-bg-box, oklch(0.999999993473546 0.000000037273996 89.875563095902));

@@ -1176,7 +1176,6 @@
 
   function syncPvLineSliders() {
     const slidersToPosition = [];
-    const scale = Number.parseFloat(document.documentElement.style.getPropertyValue("--lfs-board-ui-scale")) || 1;
     for (const box of document.querySelectorAll(".pv_box")) {
       const rows = [...box.querySelectorAll(":scope > .pv")];
       let container = box.querySelector(":scope > [data-lfs-pv-slider-container]");
@@ -1239,13 +1238,13 @@
       }
       const rowRect = row.getBoundingClientRect();
       const scoreRight = score?.getBoundingClientRect().right;
-      const start = score ? scoreRight - boxRect.left + 6 * scale : rowRect.left - boxRect.left + 8 * scale;
-      const end = rowRect.right - boxRect.left - 8 * scale;
+      const start = score ? scoreRight - boxRect.left + 6 : rowRect.left - boxRect.left + 8;
+      const end = rowRect.right - boxRect.left - 8;
       return {
         slider,
         left: `${start}px`,
-        top: `${rowRect.top - boxRect.top + rowRect.height / 2 - 11 * scale}px`,
-        width: `${Math.max(24 * scale, end - start)}px`
+        top: `${rowRect.top - boxRect.top + rowRect.height / 2 - 11}px`,
+        width: `${Math.max(24, end - start)}px`
       };
     });
     for (const { slider, left, top, width } of positions) {
