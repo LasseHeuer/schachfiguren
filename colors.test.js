@@ -49,6 +49,121 @@ test("game analysis publishes only known mainline clock states", () => {
   assert.deepEqual(clocks(), { white: 100, black: 100 });
 });
 
+test("fullscreen board size cap survives a content-script restart", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const source = readFileSync(join(__dirname, "content.js"), "utf8");
+  const marker = "  chrome.runtime.onMessage.addListener";
+  const createStorage = (initial, storageKey = "lfsPuzzleBoardSizeCap") => {
+    const values = new Map(initial ? [[storageKey, initial]] : []);
+    return {
+      getItem: key => values.get(key) ?? null,
+      setItem: (key, value) => values.set(key, String(value)),
+      removeItem: key => values.delete(key)
+    };
+  };
+  const createBoard = (width, height, boardWidth = width * 0.75, boardHeight = height * 0.75) => {
+    const attributes = new Set();
+    const properties = new Map();
+    const wrapper = {
+      style: {
+        setProperty: (key, value) => properties.set(key, value),
+        getPropertyValue: key => properties.get(key) ?? "",
+        removeProperty: key => properties.delete(key)
+      },
+      getBoundingClientRect: () => ({ width, height }),
+      setAttribute: name => attributes.add(name),
+      removeAttribute: name => attributes.delete(name),
+      hasAttribute: name => attributes.has(name)
+    };
+    const board = {
+      closest: selector => selector === ".cg-wrap" ? wrapper : null,
+      getBoundingClientRect: () => ({ width: boardWidth, height: boardHeight })
+    };
+    return { board, wrapper };
+  };
+  const createPage = (sessionStorage, innerHeight, board) => {
+    const rootAttributes = new Set();
+    const documentElement = {
+      hasAttribute: name => rootAttributes.has(name),
+      setAttribute: name => rootAttributes.add(name),
+      removeAttribute: name => rootAttributes.delete(name)
+    };
+    const document = {
+      documentElement,
+      readyState: "complete",
+      querySelectorAll: () => [board],
+      addEventListener() {}
+    };
+    const windowListeners = new Map();
+    const window = {
+      innerHeight,
+      addEventListener: (name, listener) => windowListeners.set(name, listener),
+      postMessage() {}
+    };
+    const context = vm.createContext({
+      window,
+      screen: { availHeight: 800 },
+      document,
+      sessionStorage,
+      LichessSettings: settings,
+      getComputedStyle: () => ({ display: "block", visibility: "visible" }),
+      chrome: { runtime: { getURL: path => path, sendMessage() {} } },
+      location: { href: "https://lichess.org/game/test", origin: "https://lichess.org" }
+    });
+    assert.ok(source.includes(marker));
+    vm.runInContext(source.replace(marker, `
+      scheduleBoardAnchoredElements = () => {};
+      clearNormalRoundLayout = () => {};
+      syncNormalRoundLayout = () => {};
+      schedulePvPreviewSync = () => {};
+      scheduleZenClockUpdate = () => {};
+      globalThis.boardCapTesting = { syncBoardSizeCap, handleViewportChange };
+      return;
+${marker}`), context);
+    return {
+      syncBoardSizeCap: context.boardCapTesting.syncBoardSizeCap,
+      handleViewportChange: context.boardCapTesting.handleViewportChange,
+      window,
+      pagehide: () => windowListeners.get("pagehide")?.()
+    };
+  };
+
+  const session = createStorage();
+  const game = createBoard(320, 320);
+  const gamePage = createPage(session, 700, game.board);
+  gamePage.syncBoardSizeCap(game.board);
+  assert.equal(session.getItem("lfsPuzzleBoardSizeCap"), null);
+
+  gamePage.window.innerHeight = 800;
+  gamePage.handleViewportChange();
+  assert.equal(game.wrapper.style.getPropertyValue("--lfs-board-size-cap-width"), "320px");
+  assert.equal(session.getItem("lfsPuzzleBoardSizeCap"), null);
+  assert.equal(session.getItem("lfsFullscreenBoardSizeCap"), "320,320,240,240");
+  gamePage.pagehide();
+  assert.equal(session.getItem("lfsFullscreenBoardSizeCap"), "320,320,240,240");
+
+  const analysis = createBoard(500, 500);
+  const analysisPage = createPage(session, 800, analysis.board);
+  analysisPage.syncBoardSizeCap(analysis.board);
+  assert.equal(analysis.wrapper.hasAttribute("data-lfs-board-size-cap"), true);
+  assert.equal(analysis.wrapper.style.getPropertyValue("--lfs-board-size-cap-width"), "320px");
+  assert.equal(analysis.wrapper.style.getPropertyValue("--lfs-board-size-cap-height"), "320px");
+
+  const legacySession = createStorage("600,600,450,450");
+  const freshBoard = createBoard(320, 320);
+  createPage(legacySession, 800, freshBoard.board).syncBoardSizeCap(freshBoard.board);
+  assert.equal(legacySession.getItem("lfsPuzzleBoardSizeCap"), null);
+  assert.equal(freshBoard.wrapper.style.getPropertyValue("--lfs-board-size-cap-width"), "320px");
+
+  const staleSession = createStorage("320,320,240,240", "lfsFullscreenBoardSizeCap");
+  const normalBoard = createBoard(500, 500);
+  createPage(staleSession, 700, normalBoard.board).syncBoardSizeCap(normalBoard.board);
+  assert.equal(staleSession.getItem("lfsFullscreenBoardSizeCap"), null);
+  assert.equal(normalBoard.wrapper.style.getPropertyValue("--lfs-board-size-cap-width"), "500px");
+});
+
 test("promotion preview cycles through promotion pieces at its configured interval", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");

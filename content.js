@@ -1,6 +1,7 @@
 (() => {
   const playlistZenModeStorageKey = "lfsPuzzlePlaylistZenMode";
   const boardSizeCapStorageKey = "lfsPuzzleBoardSizeCap";
+  const fullscreenBoardSizeCapStorageKey = "lfsFullscreenBoardSizeCap";
   const playlistZenWasPending = globalThis.sessionStorage?.getItem(playlistZenModeStorageKey) === "true";
   let restorePlaylistZenMode = false;
   let zenRestorePageLoaded = document.readyState === "complete";
@@ -29,8 +30,8 @@
     }
   }
 
-  function loadSavedBoardSizeCap() {
-    const saved = globalThis.sessionStorage?.getItem(boardSizeCapStorageKey);
+  function loadSavedBoardSizeCap(storageKey) {
+    const saved = globalThis.sessionStorage?.getItem(storageKey);
     if (!saved) return null;
     const [width, height, boardWidth, boardHeight] = saved.split(",").map(Number);
     if (Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0) {
@@ -41,15 +42,43 @@
         boardHeight: Number.isFinite(boardHeight) && boardHeight > 0 ? boardHeight : null
       };
     }
-    globalThis.sessionStorage?.removeItem(boardSizeCapStorageKey);
+    globalThis.sessionStorage?.removeItem(storageKey);
     return null;
   }
 
+  function isFullscreenWindow() {
+    const availableHeight = globalThis.screen?.availHeight;
+    return Boolean(document.fullscreenElement)
+      || Number.isFinite(availableHeight) && availableHeight > 0
+        && Number.isFinite(globalThis.window?.innerHeight) && globalThis.window.innerHeight >= availableHeight - 1;
+  }
+
+  function persistBoardSizeCap() {
+    const zenMode = document.documentElement?.hasAttribute("data-lfs-zen-mode");
+    const fullscreenWindow = isFullscreenWindow();
+    if (!boardSizeCap || (!fullscreenWindow && !zenMode)) {
+      globalThis.sessionStorage?.removeItem(fullscreenBoardSizeCapStorageKey);
+      globalThis.sessionStorage?.removeItem(boardSizeCapStorageKey);
+      return;
+    }
+    const storageKey = zenMode ? boardSizeCapStorageKey : fullscreenBoardSizeCapStorageKey;
+    const staleStorageKey = zenMode ? fullscreenBoardSizeCapStorageKey : boardSizeCapStorageKey;
+    globalThis.sessionStorage?.setItem(storageKey,
+      `${boardSizeCap.width},${boardSizeCap.height},${boardSizeCap.boardWidth ?? ""},${boardSizeCap.boardHeight ?? ""}`);
+    globalThis.sessionStorage?.removeItem(staleStorageKey);
+  }
+
   preparePlaylistZenRestore(document.documentElement);
-  const restoredBoardSizeCap = loadSavedBoardSizeCap();
-  let discardRestoredBoardSizeCap = !playlistZenWasPending
+  const restoreZenBoardSizeCap = playlistZenWasPending
+    || document.documentElement?.hasAttribute("data-lfs-zen-mode")
+    || document.documentElement?.hasAttribute("data-lfs-zen-restore-pending");
+  if (!restoreZenBoardSizeCap) globalThis.sessionStorage?.removeItem(boardSizeCapStorageKey);
+  const activeBoardSizeCapStorageKey = restoreZenBoardSizeCap ? boardSizeCapStorageKey : fullscreenBoardSizeCapStorageKey;
+  const restoredBoardSizeCap = loadSavedBoardSizeCap(activeBoardSizeCapStorageKey);
+  let discardRestoredBoardSizeCap = !isFullscreenWindow() && !restoreZenBoardSizeCap
     && !document.documentElement?.hasAttribute("data-lfs-zen-mode")
     && !document.documentElement?.hasAttribute("data-lfs-zen-restore-pending");
+  let boardSizeCapWasFullscreen = isFullscreenWindow();
 
   function isAllowedSoundUrl(value) {
     if (typeof value !== "string") return false;
@@ -208,7 +237,7 @@
   function syncBoardSizeCap(board = findMainBoard()) {
     if (discardRestoredBoardSizeCap) {
       boardSizeCap = null;
-      globalThis.sessionStorage?.removeItem(boardSizeCapStorageKey);
+      globalThis.sessionStorage?.removeItem(activeBoardSizeCapStorageKey);
       discardRestoredBoardSizeCap = false;
     }
     const wrapper = board?.closest(".cg-wrap") ?? null;
@@ -218,6 +247,7 @@
     }
     if (!board || !wrapper) return;
 
+    let capturedBoardSizeCap = false;
     if (!boardSizeCap) {
       const wrapperRect = wrapper.getBoundingClientRect();
       const boardRect = board.getBoundingClientRect();
@@ -228,6 +258,7 @@
         boardWidth: boardRect.width,
         boardHeight: boardRect.height
       };
+      capturedBoardSizeCap = true;
     }
     const wrappers = new Set([...document.querySelectorAll(primaryBoardSelector)]
       .map(candidate => candidate.closest(".cg-wrap"))
@@ -252,11 +283,12 @@
         boardSizeCap.boardHeight = boardRect.height;
       }
     }
-    if (document.documentElement.hasAttribute("data-lfs-zen-mode")) {
-      globalThis.sessionStorage?.setItem(boardSizeCapStorageKey,
-        `${boardSizeCap.width},${boardSizeCap.height},${boardSizeCap.boardWidth ?? ""},${boardSizeCap.boardHeight ?? ""}`);
+    if (capturedBoardSizeCap && (isFullscreenWindow() || document.documentElement.hasAttribute("data-lfs-zen-mode"))) {
+      persistBoardSizeCap();
     }
   }
+
+  window.addEventListener("pagehide", persistBoardSizeCap);
 
   function observeZenBoardSize(container, board) {
     if (container === zenResizeTarget && board === zenResizeBoard) return;
@@ -463,6 +495,7 @@
     zenToggle?.setAttribute("aria-label", `Zenmodus ${enabled ? "deaktivieren" : "aktivieren"}`);
     if (enabled) {
       syncBoardSizeCap();
+      persistBoardSizeCap();
       scheduleZenCenter();
       return;
     }
@@ -471,7 +504,7 @@
     zenRestoreLayoutSnapshot = undefined;
     zenRestoreStableFrames = 0;
     root.removeAttribute("data-lfs-zen-restore-pending");
-    globalThis.sessionStorage?.removeItem(boardSizeCapStorageKey);
+    persistBoardSizeCap();
     clearZenOffset(zenBoard);
     syncBoardAnchoredElements();
     syncNormalRoundLayout();
@@ -1713,7 +1746,11 @@
   });
 
   function handleViewportChange() {
+    const fullscreenWindow = isFullscreenWindow();
+    const fullscreenChanged = fullscreenWindow !== boardSizeCapWasFullscreen;
+    boardSizeCapWasFullscreen = fullscreenWindow;
     syncBoardSizeCap();
+    if (fullscreenChanged) persistBoardSizeCap();
     scheduleBoardAnchoredElements();
     if (document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenCenter();
     else {
