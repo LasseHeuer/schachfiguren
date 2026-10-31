@@ -32,8 +32,15 @@
   function loadSavedBoardSizeCap() {
     const saved = globalThis.sessionStorage?.getItem(boardSizeCapStorageKey);
     if (!saved) return null;
-    const [width, height] = saved.split(",").map(Number);
-    if (Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0) return { width, height };
+    const [width, height, boardWidth, boardHeight] = saved.split(",").map(Number);
+    if (Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0) {
+      return {
+        width,
+        height,
+        boardWidth: Number.isFinite(boardWidth) && boardWidth > 0 ? boardWidth : null,
+        boardHeight: Number.isFinite(boardHeight) && boardHeight > 0 ? boardHeight : null
+      };
+    }
     globalThis.sessionStorage?.removeItem(boardSizeCapStorageKey);
     return null;
   }
@@ -74,7 +81,32 @@
   });
 
   const { defaults, normalize } = globalThis.LichessSettings;
-  const mainBoardSelector = ".puzzle__board cg-board, .analyse__board cg-board, .main-board cg-board, .bot-game cg-board, .study__board cg-board, main cg-board";
+  const mainBoardSelectors = [
+    ".analyse__board cg-board",
+    ".round__app .main-board cg-board",
+    ".puzzle__board cg-board",
+    ".bot-game cg-board",
+    ".study__board cg-board",
+    ".main-board cg-board",
+    "main cg-board"
+  ];
+  const mainBoardSelector = mainBoardSelectors.join(", ");
+  const primaryBoardSelector = mainBoardSelectors.slice(0, -1).join(", ");
+  const findMainBoard = () => {
+    let firstMatch = null;
+    for (const selector of mainBoardSelectors) {
+      const boards = [...document.querySelectorAll(selector)];
+      firstMatch ??= boards[0] ?? null;
+      const visibleBoards = boards.map(board => {
+        const rect = board.getBoundingClientRect();
+        const style = getComputedStyle(board);
+        return { board, area: rect.width * rect.height, visible: rect.width > 0 && rect.height > 0
+          && style.display !== "none" && style.visibility !== "hidden" };
+      }).filter(candidate => candidate.visible);
+      if (visibleBoards.length) return visibleBoards.sort((left, right) => right.area - left.area)[0].board;
+    }
+    return firstMatch;
+  };
   const pieceNames = ["wk", "wq", "wr", "wb", "wn", "wp", "bk", "bq", "br", "bb", "bn", "bp"];
   const analysisFeatures = [
     ["threatColoringEnabled", "Bedrohungsfarben"],
@@ -106,6 +138,7 @@
   let zenResizeObserver;
   let zenResizeTarget;
   let zenResizeBoard;
+  let zenResizeSideElements = new Set();
   let boardAnchoredElementsFrame;
   let boardAnchoredElementsRect;
   let zenCenterFrame;
@@ -124,9 +157,10 @@
   let normalRoundTable;
   let normalRoundBoardHeight = 0;
   let normalRoundFrame;
+  let zenBoardMissingTimer;
   let boardSizeCapBoard;
   let boardSizeCap = restoredBoardSizeCap;
-  let boardSizeCapWrapper;
+  let boardSizeCapWrappers = new Set();
   let pvPreviewFrame;
   let pvAnimationPositionFrame;
   let pvAnimationPositionSnapshot = null;
@@ -163,14 +197,15 @@
   }
 
   function clearBoardSizeCap() {
-    if (!boardSizeCapWrapper) return;
-    boardSizeCapWrapper.removeAttribute("data-lfs-board-size-cap");
-    boardSizeCapWrapper.style.removeProperty("--lfs-board-size-cap-width");
-    boardSizeCapWrapper.style.removeProperty("--lfs-board-size-cap-height");
-    boardSizeCapWrapper = null;
+    for (const wrapper of boardSizeCapWrappers) {
+      wrapper.removeAttribute("data-lfs-board-size-cap");
+      wrapper.style.removeProperty("--lfs-board-size-cap-width");
+      wrapper.style.removeProperty("--lfs-board-size-cap-height");
+    }
+    boardSizeCapWrappers.clear();
   }
 
-  function syncBoardSizeCap(board = document.querySelector(mainBoardSelector)) {
+  function syncBoardSizeCap(board = findMainBoard()) {
     if (discardRestoredBoardSizeCap) {
       boardSizeCap = null;
       globalThis.sessionStorage?.removeItem(boardSizeCapStorageKey);
@@ -181,20 +216,45 @@
       clearBoardSizeCap();
       boardSizeCapBoard = board;
     }
-    if (wrapper !== boardSizeCapWrapper) clearBoardSizeCap();
     if (!board || !wrapper) return;
 
     if (!boardSizeCap) {
-      const rect = wrapper.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
-      boardSizeCap = { width: rect.width, height: rect.height };
+      const wrapperRect = wrapper.getBoundingClientRect();
+      const boardRect = board.getBoundingClientRect();
+      if (!wrapperRect.width || !wrapperRect.height || !boardRect.width || !boardRect.height) return;
+      boardSizeCap = {
+        width: wrapperRect.width,
+        height: wrapperRect.height,
+        boardWidth: boardRect.width,
+        boardHeight: boardRect.height
+      };
     }
-    boardSizeCapWrapper = wrapper;
-    wrapper.style.setProperty("--lfs-board-size-cap-width", `${boardSizeCap.width}px`);
-    wrapper.style.setProperty("--lfs-board-size-cap-height", `${boardSizeCap.height}px`);
-    wrapper.setAttribute("data-lfs-board-size-cap", "");
+    const wrappers = new Set([...document.querySelectorAll(primaryBoardSelector)]
+      .map(candidate => candidate.closest(".cg-wrap"))
+      .filter(Boolean));
+    wrappers.add(wrapper);
+    for (const previousWrapper of boardSizeCapWrappers) {
+      if (wrappers.has(previousWrapper)) continue;
+      previousWrapper.removeAttribute("data-lfs-board-size-cap");
+      previousWrapper.style.removeProperty("--lfs-board-size-cap-width");
+      previousWrapper.style.removeProperty("--lfs-board-size-cap-height");
+    }
+    for (const candidateWrapper of wrappers) {
+      candidateWrapper.style.setProperty("--lfs-board-size-cap-width", `${boardSizeCap.width}px`);
+      candidateWrapper.style.setProperty("--lfs-board-size-cap-height", `${boardSizeCap.height}px`);
+      candidateWrapper.setAttribute("data-lfs-board-size-cap", "");
+    }
+    boardSizeCapWrappers = wrappers;
+    if (!boardSizeCap.boardWidth || !boardSizeCap.boardHeight) {
+      const boardRect = board.getBoundingClientRect();
+      if (boardRect.width && boardRect.height) {
+        boardSizeCap.boardWidth = boardRect.width;
+        boardSizeCap.boardHeight = boardRect.height;
+      }
+    }
     if (document.documentElement.hasAttribute("data-lfs-zen-mode")) {
-      globalThis.sessionStorage?.setItem(boardSizeCapStorageKey, `${boardSizeCap.width},${boardSizeCap.height}`);
+      globalThis.sessionStorage?.setItem(boardSizeCapStorageKey,
+        `${boardSizeCap.width},${boardSizeCap.height},${boardSizeCap.boardWidth ?? ""},${boardSizeCap.boardHeight ?? ""}`);
     }
   }
 
@@ -205,13 +265,31 @@
     zenResizeBoard = board;
     if (typeof ResizeObserver !== "function" || !container) return;
 
+    zenResizeSideElements = new Set();
     zenResizeObserver = new ResizeObserver(() => {
       syncBoardSizeCap();
       scheduleBoardAnchoredElements();
-      if (document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenCenter();
+      if (document.documentElement.hasAttribute("data-lfs-zen-mode")) {
+        if (restorePlaylistZenMode) scheduleZenCenter();
+        else centerZenBoard();
+      }
     });
     zenResizeObserver.observe(container);
     if (board && board !== container) zenResizeObserver.observe(board);
+    observeZenSideSizes(zenSideElements);
+  }
+
+  function observeZenSideSizes(elements) {
+    const nextElements = new Set(elements);
+    for (const element of zenResizeSideElements) {
+      if (!nextElements.has(element)) zenResizeObserver?.unobserve(element);
+    }
+    if (zenResizeObserver) {
+      for (const element of nextElements) {
+        if (!zenResizeSideElements.has(element)) zenResizeObserver.observe(element);
+      }
+    }
+    zenResizeSideElements = nextElements;
   }
 
   function syncAnalysisToolbar() {
@@ -304,7 +382,7 @@
   }
 
   function syncBoardLayout() {
-    const board = document.querySelector(mainBoardSelector);
+    const board = findMainBoard();
     const layout = board?.closest(".puzzle, .analyse, .round__app, .bot-game, .study__main, main") ?? null;
     const nextZenBoard = [
       board?.closest(".round__app__board"),
@@ -318,7 +396,25 @@
       const rect = candidate?.getBoundingClientRect();
       return rect?.width > 0 && rect?.height > 0;
     }) ?? null;
+    if (!nextZenBoard && document.documentElement.hasAttribute("data-lfs-zen-mode") && !restorePlaylistZenMode) {
+      if (!zenBoardMissingTimer) {
+        zenBoardMissingTimer = setTimeout(() => {
+          zenBoardMissingTimer = null;
+          if (!findMainBoard()) {
+            if (zenBoard) setZenMode(false);
+            else document.documentElement.removeAttribute("data-lfs-zen-mode");
+          } else syncBoardLayout();
+        }, 1000);
+      }
+      return;
+    }
+    clearTimeout(zenBoardMissingTimer);
+    zenBoardMissingTimer = null;
     const zenBoardChanged = zenBoard !== nextZenBoard;
+    const previousZenOffset = zenBoardChanged && zenBoard ? [
+      zenBoard.style.getPropertyValue("--lfs-zen-offset-x"),
+      zenBoard.style.getPropertyValue("--lfs-zen-offset-y")
+    ] : null;
     if (boardLayout && boardLayout !== layout) boardLayout.removeAttribute("data-lfs-board-layout");
     if (zenBoard && zenBoardChanged) {
       zenBoard.removeAttribute("data-lfs-zen-board");
@@ -335,6 +431,10 @@
       zenToggle?.setAttribute("aria-pressed", "true");
       zenToggle?.setAttribute("aria-label", "Zenmodus deaktivieren");
     }
+    if (zenBoardChanged && zenBoard && previousZenOffset && document.documentElement.hasAttribute("data-lfs-zen-mode")) {
+      if (previousZenOffset[0]) zenBoard.style.setProperty("--lfs-zen-offset-x", previousZenOffset[0]);
+      if (previousZenOffset[1]) zenBoard.style.setProperty("--lfs-zen-offset-y", previousZenOffset[1]);
+    }
     if (zenToggle) {
       zenToggle.hidden = !zenBoard;
       zenToggle.disabled = !zenBoard;
@@ -348,7 +448,10 @@
       zenToggle?.setAttribute("aria-pressed", "true");
       zenToggle?.setAttribute("aria-label", "Zenmodus deaktivieren");
     }
-    if (zenBoard && document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenCenter();
+    if (zenBoard && document.documentElement.hasAttribute("data-lfs-zen-mode")) {
+      if (restorePlaylistZenMode) scheduleZenCenter();
+      else centerZenBoard();
+    }
     scheduleBoardAnchoredElements();
   }
 
@@ -467,6 +570,7 @@
   function centerZenBoard() {
     if (!zenBoard || !document.documentElement.hasAttribute("data-lfs-zen-mode")) return;
     if (restorePlaylistZenMode && !zenRestorePageLoaded) return;
+    syncBoardAnchoredElements();
     syncZenSideElements();
     const board = zenBoard.querySelector("cg-board");
     if (!board) return;
@@ -476,9 +580,7 @@
     const offsetY = parseFloat(zenBoard.style.getPropertyValue("--lfs-zen-offset-y")) || 0;
     const sideRects = zenSideElements.map(element => element.getBoundingClientRect())
       .filter(rect => rect.width > 0 && rect.height > 0);
-    const groupLeft = Math.min(boardRect.left, ...sideRects.map(rect => rect.left));
-    const groupRight = Math.max(boardRect.right, ...sideRects.map(rect => rect.right));
-    const deltaX = window.innerWidth / 2 - (groupLeft + groupRight) / 2;
+    const deltaX = window.innerWidth / 2 - boardRect.left - boardRect.width / 2;
     const deltaY = window.innerHeight * (0.5 - settings.zenBoardUpPercent / 100) - boardRect.top - boardRect.height / 2;
     if (Math.abs(deltaX) >= 0.01 || Math.abs(deltaY) >= 0.01) {
       zenBoard.style.setProperty("--lfs-zen-offset-x", `${offsetX + deltaX}px`);
@@ -541,7 +643,9 @@
     const boardChanged = !boardAnchoredElementsRect
       || nextRect.some((value, index) => Math.abs(value - boardAnchoredElementsRect[index]) >= 0.1);
     boardAnchoredElementsRect = nextRect;
-    const scale = boardSizeCap ? Math.min(1, rect.width / boardSizeCap.width, rect.height / boardSizeCap.height) : 1;
+    const scale = boardSizeCap?.boardWidth && boardSizeCap.boardHeight
+      ? Math.min(1, rect.width / boardSizeCap.boardWidth, rect.height / boardSizeCap.boardHeight)
+      : 1;
     const scaleValue = String(scale);
     const scaleChanged = root.style.getPropertyValue("--lfs-board-ui-scale") !== scaleValue;
     if (scaleChanged) {
@@ -802,7 +906,7 @@
     const scale = Number.parseFloat(document.documentElement.style.getPropertyValue("--lfs-board-ui-scale")) || 1;
     zenClockOverlay.style.setProperty("--lfs-zen-clock-font-size", `${settings.zenClockFontSizePx * scale}px`);
     const devicePixelRatio = window.devicePixelRatio || 1;
-    const lineThickness = Math.max(1, Math.round(settings.zenClockLineThicknessPx * scale * devicePixelRatio)) / devicePixelRatio;
+    const lineThickness = Math.max(1, Math.round(settings.zenClockLineThicknessPx * devicePixelRatio)) / devicePixelRatio;
     zenClockOverlay.style.setProperty("--lfs-zen-clock-line-thickness", `${lineThickness}px`);
     zenClockOverlay.style.setProperty("--lfs-zen-clock-line-gap", `${settings.zenClockLineGapPx * scale}px`);
 
@@ -888,7 +992,10 @@
       element.style.removeProperty("--lfs-zen-side-top");
     }
     zenSideElements = nextElements;
-    for (const element of zenSideElements) element.setAttribute("data-lfs-zen-side", "");
+    observeZenSideSizes(zenSideElements);
+    for (const element of zenSideElements) {
+      if (!element.hasAttribute("data-lfs-zen-side")) element.setAttribute("data-lfs-zen-side", "");
+    }
 
     if (!boardRect.width || !boardRect.height) {
       syncZenClockOverlay([], boardRect);
@@ -905,8 +1012,14 @@
       const insideZenBoard = zenBoard.contains(element);
       const originLeft = insideZenBoard ? zenBoardRect.left + zenBoard.clientLeft : 0;
       const originTop = insideZenBoard ? zenBoardRect.top + zenBoard.clientTop : 0;
-      element.style.setProperty("--lfs-zen-side-left", `${left - originLeft}px`);
-      element.style.setProperty("--lfs-zen-side-top", `${top - originTop}px`);
+      const leftValue = `${left - originLeft}px`;
+      const topValue = `${top - originTop}px`;
+      if (element.style.getPropertyValue("--lfs-zen-side-left") !== leftValue) {
+        element.style.setProperty("--lfs-zen-side-left", leftValue);
+      }
+      if (element.style.getPropertyValue("--lfs-zen-side-top") !== topValue) {
+        element.style.setProperty("--lfs-zen-side-top", topValue);
+      }
     };
     place(topMaterial, materialLeft, boardRect.top);
     place(bottomMaterial, materialLeft, boardRect.bottom - (bottomMaterialRect?.height ?? 0));
@@ -1345,6 +1458,7 @@
       element.style.removeProperty("--lfs-zen-side-top");
     }
     zenSideElements = [];
+    observeZenSideSizes(zenSideElements);
     document.dispatchEvent(new Event("scroll"));
   }
 

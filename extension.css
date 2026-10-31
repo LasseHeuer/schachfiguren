@@ -799,6 +799,10 @@ html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-button:focus-
 
 html:not([data-lfs-disabled]) body .cg-wrap[data-lfs-board-size-cap] {
   box-sizing: border-box !important;
+  width: min(var(--lfs-board-size-cap-width), 100%) !important;
+  height: min(var(--lfs-board-size-cap-height), 100%) !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
   max-width: var(--lfs-board-size-cap-width) !important;
   max-height: var(--lfs-board-size-cap-height) !important;
   margin: auto !important;

@@ -3024,9 +3024,13 @@ ${clockMarker}`));
             zenClockShowTimeOnlyWhenLow: false });
           clockTesting.ensureZenClockOverlay();
           const overlay = document.querySelector('#lfs-zen-clock-overlay');
-          overlay.style.setProperty('--lfs-zen-clock-line-thickness', '6px');
           overlay.style.setProperty('--lfs-zen-clock-font-size', '27px');
           const rect = { left: 50, top: 80, width: ${size}, height: ${size}, bottom: ${size + 80} };
+          document.documentElement.style.setProperty('--lfs-board-ui-scale', '0.25');
+          clockTesting.syncZenClockOverlay([], rect, {});
+          const configuredThickness = overlay.style.getPropertyValue('--lfs-zen-clock-line-thickness');
+          document.documentElement.style.removeProperty('--lfs-board-ui-scale');
+          overlay.style.setProperty('--lfs-zen-clock-line-thickness', configuredThickness);
           const results = ['top', 'bottom'].map(side => {
             const source = document.createElement('div');
             source.className = 'clock'; source.textContent = '1:00';
@@ -3051,9 +3055,10 @@ ${clockMarker}`));
               bar: [bar.getBoundingClientRect().left, bar.getBoundingClientRect().top] };
           });
           document.documentElement.removeAttribute('data-lfs-zen-mode');
-          return results;
+          return { results, configuredThickness };
         })()`);
-        for (const [index, clock] of result.entries()) {
+        assert.equal(result.configuredThickness, "6px", "the configured timeline thickness is independent of board UI scaling");
+        for (const [index, clock] of result.results.entries()) {
           assert.deepEqual(clock.start, [3, size / 2 + 9]);
           assert.deepEqual(clock.finish, [size + 15, size / 2 + 9]);
           assert.ok(Math.abs(clock.middle[0] - (size / 2 + 9)) < 0.01);
@@ -3180,13 +3185,13 @@ ${clockMarker}`));
         ready: ["visible", "visible", "visible", "visible", "visible"],
       });
     });
-    await t.test("zen mode centers the board and its material elements together", async () => {
+    await t.test("zen mode centers the board independently and keeps material beside it", async () => {
       const contentSource = readFileSync(join(root, "content.js"), "utf8");
       const marker = "  chrome.runtime.onMessage.addListener";
       assert.ok(contentSource.includes(marker));
       await evaluate(contentSource.replace(marker, `
         globalThis.zenTesting = {
-          centerZenBoard, setBoard(value) { zenBoard = value; }, clearZenOffset, setZenMode,
+          centerZenBoard, syncBoardLayout, findMainBoard, setBoard(value) { zenBoard = value; }, clearZenOffset, setZenMode,
           syncBoardSizeCap, observeZenBoardSize, handleViewportChange, syncBoardAnchoredElements, syncPvLineSliders,
           beginPlaylistRestore() {
             restorePlaylistZenMode = true;
@@ -3204,20 +3209,40 @@ ${marker}`));
         const root = document.documentElement;
         const host = document.createElement('div');
         host.className = 'analyse__board';
-        host.style.cssText = 'position:absolute;left:40px;top:80px;width:240px;height:240px';
-        host.innerHTML = '<div class="cg-wrap" style="width:240px;height:240px"><cg-board style="width:240px;height:240px"></cg-board></div><div class="material material-top" style="width:24px;height:20px">+1</div>';
+        host.style.cssText = 'position:absolute;left:40px;top:80px;width:320px;height:320px';
+        host.innerHTML = '<div class="cg-wrap" style="width:320px;height:320px"><cg-board style="width:75%;height:75%"></cg-board></div><div class="material material-top" style="width:24px;height:20px">+1</div>';
         document.body.append(host);
         root.setAttribute('data-lfs-zen-mode', '');
         host.setAttribute('data-lfs-zen-board', '');
         zenTesting.setBoard(host);
+        zenTesting.observeZenBoardSize(host, host.querySelector('cg-board'));
+        zenTesting.syncBoardSizeCap(host.querySelector('cg-board'));
         zenTesting.centerZenBoard();
         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const board = host.querySelector('cg-board').getBoundingClientRect();
         const material = host.querySelector('.material').getBoundingClientRect();
-        const groupCenter = (Math.min(board.left, material.left) + Math.max(board.right, material.right)) / 2;
-        return { groupCenter, viewportCenter: window.innerWidth / 2, boardWidth: board.width };
+        const boardCenter = (board.left + board.right) / 2;
+        const materialGap = material.left - board.right;
+        host.querySelector('.material').style.width = '60px';
+        host.querySelector('.material').firstChild.textContent = '+123';
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        const resizedBoard = host.querySelector('cg-board').getBoundingClientRect();
+        const resizedMaterial = host.querySelector('.material').getBoundingClientRect();
+        const resizedBoardCenter = (resizedBoard.left + resizedBoard.right) / 2;
+        const resizedMaterialGap = resizedMaterial.left - resizedBoard.right;
+        return {
+          boardCenter,
+          resizedBoardCenter,
+          materialGap,
+          resizedMaterialGap,
+          viewportCenter: window.innerWidth / 2,
+          boardWidth: board.width
+        };
       })()`);
-      assert.ok(Math.abs(result.groupCenter - result.viewportCenter) < 0.5);
+      assert.ok(Math.abs(result.boardCenter - result.viewportCenter) < 0.5);
+      assert.ok(Math.abs(result.resizedBoardCenter - result.viewportCenter) < 0.5);
+      assert.ok(result.materialGap > 0 && result.materialGap < 10);
+      assert.ok(result.resizedMaterialGap > 0 && result.resizedMaterialGap < 10);
       assert.equal(result.boardWidth, 240);
 
       const restored = await evaluate(`(async () => {
@@ -3225,45 +3250,105 @@ ${marker}`));
         const host = document.querySelector('.analyse__board');
         zenTesting.beginPlaylistRestore();
         zenTesting.centerZenBoard();
-        for (let index = 0; index < 5; index++) await new Promise(resolve => requestAnimationFrame(resolve));
+        for (let index = 0; index < 2; index++) await new Promise(resolve => requestAnimationFrame(resolve));
         const material = host.querySelector('.material');
         material.style.width = '60px';
         material.firstChild.textContent = '+123';
         await new Promise(resolve => requestAnimationFrame(resolve));
-        const stayedHidden = root.hasAttribute('data-lfs-zen-restore-pending')
-          && getComputedStyle(host).visibility === 'hidden';
+        const hiddenState = {
+          pending: root.hasAttribute('data-lfs-zen-restore-pending'),
+          boardVisibility: getComputedStyle(host.querySelector('.cg-wrap')).visibility
+        };
+        const stayedHidden = hiddenState.pending && hiddenState.boardVisibility === 'hidden';
         for (let index = 0; index < 12; index++) await new Promise(resolve => requestAnimationFrame(resolve));
         const board = host.querySelector('cg-board').getBoundingClientRect();
         const materialRect = material.getBoundingClientRect();
-        const groupCenter = (Math.min(board.left, materialRect.left) + Math.max(board.right, materialRect.right)) / 2;
+        const boardCenter = (board.left + board.right) / 2;
+        const materialGap = materialRect.left - board.right;
         const pending = root.hasAttribute('data-lfs-zen-restore-pending');
         zenTesting.clearZenOffset(host);
+        zenTesting.observeZenBoardSize(null, null);
         host.remove();
         root.removeAttribute('data-lfs-zen-mode');
         root.removeAttribute('data-lfs-zen-restore-pending');
-        return { stayedHidden, pending, groupCenter, viewportCenter: window.innerWidth / 2 };
+        return { stayedHidden, hiddenState, pending, boardCenter, materialGap, viewportCenter: window.innerWidth / 2 };
       })()`);
-      assert.equal(restored.stayedHidden, true);
+      assert.equal(restored.stayedHidden, true, JSON.stringify(restored.hiddenState));
       assert.equal(restored.pending, false);
-      assert.ok(Math.abs(restored.groupCenter - restored.viewportCenter) < 0.5);
+      assert.ok(Math.abs(restored.boardCenter - restored.viewportCenter) < 0.5);
+      assert.ok(restored.materialGap > 0 && restored.materialGap < 10);
+      await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
+    });
+    await t.test("zen board stays centered while Lichess replaces its container", async () => {
+      await send("Emulation.setDeviceMetricsOverride", { width: 800, height: 600, deviceScaleFactor: 1, mobile: false });
+      const result = await evaluate(`(() => {
+        const root = document.documentElement;
+        const createHost = () => {
+          const host = document.createElement('div');
+          host.className = 'analyse__board lfs-jitter-host';
+          host.style.cssText = 'position:absolute;left:40px;top:80px;width:600px;height:500px';
+          host.innerHTML = '<div class="main-board" style="position:relative;width:600px;height:500px"><div class="cg-wrap" style="position:absolute;left:0;top:0;width:320px;height:320px"><cg-board style="width:75%;height:75%"></cg-board></div></div><div class="material material-top" style="width:24px;height:20px">+1</div>';
+          document.body.append(host);
+          return host;
+        };
+        root.setAttribute('data-lfs-zen-mode', '');
+        const first = createHost();
+        zenTesting.setBoard(first);
+        zenTesting.observeZenBoardSize(first, first.querySelector('cg-board'));
+        zenTesting.syncBoardLayout();
+        first.remove();
+        zenTesting.syncBoardLayout();
+        const modeStayedOnDuringGap = root.hasAttribute('data-lfs-zen-mode');
+        createHost();
+        zenTesting.syncBoardLayout();
+        return { modeStayedOnDuringGap };
+      })()`);
+      assert.equal(result.modeStayedOnDuringGap, true);
+      const centers = await evaluate(`(async () => {
+        const values = [];
+        for (let index = 0; index < 4; index++) {
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          const host = document.querySelector('.lfs-jitter-host');
+          const board = host.querySelector('cg-board').getBoundingClientRect();
+          const material = host.querySelector('.material').getBoundingClientRect();
+          values.push({ center: (board.left + board.right) / 2, gap: material.left - board.right });
+        }
+        return { values, viewportCenter: window.innerWidth / 2 };
+      })()`);
+      assert.ok(centers.values.every(({ center, gap }) => Math.abs(center - centers.viewportCenter) < 0.5 && gap > 0 && gap < 10));
+      await evaluate(`(() => {
+        zenTesting.setZenMode(false);
+        zenTesting.observeZenBoardSize(null, null);
+        document.querySelector('.lfs-jitter-host')?.remove();
+      })()`);
       await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
     });
     await t.test("F11 and Zen keep the board size and alignment in every toggle order", async () => {
       await send("Emulation.setDeviceMetricsOverride", {
-        width: 800, height: 600, screenWidth: 800, screenHeight: 800, deviceScaleFactor: 1, mobile: false
+        width: 800, height: 600, screenWidth: 1200, screenHeight: 800, deviceScaleFactor: 1, mobile: false
       });
       const availableHeight = await evaluate("screen.availHeight");
       const normalHeight = Math.max(100, availableHeight - 100);
       const metrics = height => ({
-        width: 800, height, screenWidth: 800, screenHeight: availableHeight, deviceScaleFactor: 1, mobile: false
+        width: height >= availableHeight ? 1200 : 800, height,
+        screenWidth: 1200, screenHeight: availableHeight, deviceScaleFactor: 1, mobile: false
       });
       await send("Emulation.setDeviceMetricsOverride", metrics(normalHeight));
       await evaluate(`(() => {
         const root = document.documentElement;
+        const decoy = document.createElement('main');
+        decoy.className = 'lfs-decoy-main';
+        decoy.innerHTML = '<div class="cg-wrap lfs-decoy-wrap" style="width:64px;height:64px"><cg-board></cg-board></div>';
+        const inactivePuzzle = document.createElement('div');
+        inactivePuzzle.className = 'puzzle__board lfs-inactive-puzzle';
+        inactivePuzzle.style.cssText = 'display:none;width:900px;height:900px';
+        inactivePuzzle.innerHTML = '<div class="cg-wrap lfs-inactive-puzzle-wrap" style="width:900px;height:900px"><cg-board></cg-board></div>';
+        document.body.prepend(decoy);
+        document.body.prepend(inactivePuzzle);
         const host = document.createElement('div');
-        host.className = 'analyse__board lfs-sequence-host';
-        host.style.cssText = 'position:absolute;left:40px;top:80px;width:600px;height:500px';
-        host.innerHTML = '<div class="main-board lfs-sequence-parent" style="position:relative;width:600px;height:500px"><div class="cg-wrap lfs-sequence-wrap" style="position:absolute;left:0;top:0;width:240px;height:240px"><cg-board style="width:100%;height:100%"></cg-board></div></div><div class="material material-top" style="width:24px;height:20px">+1</div>';
+        host.className = 'analyse__board main-board lfs-sequence-host';
+        host.style.cssText = 'position:relative;left:40px;top:80px;width:320px;height:320px';
+        host.innerHTML = '<div class="cg-wrap lfs-sequence-wrap" style="position:absolute;left:0;top:0;width:100%;height:100%"><cg-container style="position:absolute;inset:0"><cg-board style="width:75%;height:75%"></cg-board></cg-container></div><div class="material material-top" style="width:24px;height:20px">+1</div>';
         const promotion = document.createElement('div');
         promotion.id = 'promotion-choice';
         promotion.style.cssText = 'position:absolute;left:0;top:0;width:40px;height:40px';
@@ -3281,15 +3366,19 @@ ${marker}`));
         zenTesting.syncPvLineSliders();
         const responsiveStyle = document.createElement('style');
         responsiveStyle.id = 'lfs-sequence-style';
-        responsiveStyle.textContent = '@media (min-height: ${availableHeight}px) { .lfs-sequence-wrap { width:320px!important; height:320px!important; } }';
+        responsiveStyle.textContent = '@media (min-height: ${availableHeight}px) { .lfs-sequence-host { width:400px!important; height:400px!important; } .lfs-sequence-wrap { width:100vw!important; height:100vh!important; min-width:100vw!important; min-height:100vh!important; } }';
         document.head.append(responsiveStyle);
         document.body.append(host);
         host.setAttribute('data-lfs-zen-board', '');
         zenTesting.setBoard(host);
         zenTesting.observeZenBoardSize(host, host.querySelector('cg-board'));
-        zenTesting.syncBoardSizeCap(host.querySelector('cg-board'));
+        zenTesting.syncBoardSizeCap();
         return { host, responsiveStyle };
       })()`);
+      assert.equal(await evaluate("zenTesting.findMainBoard() === document.querySelector('.lfs-sequence-wrap cg-board')"), true,
+        "the visible analysis board takes priority over larger hidden and earlier generic boards");
+      assert.equal(await evaluate("document.querySelector('.lfs-decoy-wrap').hasAttribute('data-lfs-board-size-cap')"), false);
+      assert.equal(await evaluate("document.querySelector('.lfs-inactive-puzzle-wrap').hasAttribute('data-lfs-board-size-cap')"), true);
       assert.equal(await evaluate("document.querySelector('.lfs-sequence-wrap').hasAttribute('data-lfs-board-size-cap')"), true);
 
       const sequences = [
@@ -3319,23 +3408,28 @@ ${marker}`));
           await evaluate("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))))");
 
           const state = await evaluate(`(() => {
-            const board = document.querySelector('.lfs-sequence-wrap');
+            const wrapper = document.querySelector('.lfs-sequence-wrap');
+            const board = wrapper.querySelector('cg-board');
             const boardRect = board.getBoundingClientRect();
-            const material = board.closest('.lfs-sequence-host').querySelector('.material').getBoundingClientRect();
+            const materialElement = wrapper.closest('.lfs-sequence-host').querySelector('.material');
+            const material = materialElement.getBoundingClientRect();
             const promotion = document.querySelector('#promotion-choice').getBoundingClientRect();
             const slider = document.querySelector('.lfs-review-slider');
             return {
               zen: document.documentElement.hasAttribute('data-lfs-zen-mode'),
               fullscreen: window.innerHeight >= ${availableHeight},
-              locked: board.hasAttribute('data-lfs-board-size-cap'),
+              locked: wrapper.hasAttribute('data-lfs-board-size-cap'),
               width: boardRect.width,
               height: boardRect.height,
               uiScale: Number(document.documentElement.style.getPropertyValue('--lfs-board-ui-scale')),
               sliderHeight: slider.getBoundingClientRect().height,
               pvSliderHeight: document.querySelector('.pv_box input[type="range"]').getBoundingClientRect().height,
+              materialFontSize: Number.parseFloat(getComputedStyle(materialElement).fontSize),
+              materialParentFontSize: Number.parseFloat(getComputedStyle(materialElement.parentElement).fontSize),
               promotionRect: [promotion.left, promotion.top, promotion.width, promotion.height],
               boardRect: [boardRect.left, boardRect.top, boardRect.width, boardRect.height],
-              groupCenter: (Math.min(boardRect.left, material.left) + Math.max(boardRect.right, material.right)) / 2,
+              boardCenter: (boardRect.left + boardRect.right) / 2,
+              materialGap: material.left - boardRect.right,
               viewportCenter: window.innerWidth / 2
             };
           })()`);
@@ -3347,10 +3441,16 @@ ${marker}`));
           assert.equal(state.uiScale, 1, `${sequence.join(" -> ")}: board UI scale after ${step}`);
           assert.equal(state.sliderHeight, 30, `${sequence.join(" -> ")}: rating slider scale after ${step}`);
           assert.equal(state.pvSliderHeight, 22, `${sequence.join(" -> ")}: candidate slider scale after ${step}`);
+          assert.equal(state.materialFontSize, state.materialParentFontSize,
+            `${sequence.join(" -> ")}: captured-material count size after ${step}`);
           assert.ok(state.promotionRect.every((value, index) => Math.abs(value - state.boardRect[index]) < 0.5),
             `${sequence.join(" -> ")}: promotion selector follows the board after ${step}`);
-          if (state.zen) assert.ok(Math.abs(state.groupCenter - state.viewportCenter) < 0.5,
-            `${sequence.join(" -> ")}: board group remains centered after ${step}`);
+          if (state.zen) {
+            assert.ok(Math.abs(state.boardCenter - state.viewportCenter) < 0.5,
+              `${sequence.join(" -> ")}: board remains centered after ${step}`);
+            assert.ok(state.materialGap > 0 && state.materialGap < 10,
+              `${sequence.join(" -> ")}: material remains beside board after ${step}`);
+          }
         }
       }
 
@@ -3358,7 +3458,7 @@ ${marker}`));
       await send("Emulation.setDeviceMetricsOverride", metrics(availableHeight));
       await evaluate("zenTesting.handleViewportChange()");
       const savedCap = await evaluate("sessionStorage.getItem('lfsPuzzleBoardSizeCap')");
-      assert.equal(savedCap, "240,240");
+      assert.equal(savedCap, "320,320,240,240");
 
       await evaluate(`(() => {
         document.documentElement.removeAttribute('data-lfs-zen-mode');
@@ -3368,7 +3468,7 @@ ${marker}`));
         const nextHost = document.createElement('div');
         nextHost.className = 'analyse__board lfs-sequence-host';
         nextHost.style.cssText = 'position:absolute;left:40px;top:80px;width:600px;height:500px';
-        nextHost.innerHTML = '<div class="main-board lfs-sequence-parent" style="position:relative;width:600px;height:500px"><div class="cg-wrap lfs-sequence-wrap" style="position:absolute;left:0;top:0;width:320px;height:320px"><cg-board style="width:100%;height:100%"></cg-board></div></div><div class="material material-top" style="width:24px;height:20px">+1</div>';
+        nextHost.innerHTML = '<div class="main-board lfs-sequence-parent" style="position:relative;width:600px;height:500px"><div class="cg-wrap lfs-sequence-wrap" style="position:absolute;left:0;top:0;width:400px;height:400px"><cg-board style="width:75%;height:75%"></cg-board></div></div><div class="material material-top" style="width:24px;height:20px">+1</div>';
         document.body.append(nextHost);
       })()`);
       const contentSource = readFileSync(join(root, "content.js"), "utf8");
@@ -3383,9 +3483,11 @@ ${marker}`));
       await evaluate("zenReloadTesting.syncBoardLayout()");
       await evaluate("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))))");
       const nextPuzzle = await evaluate(`(() => {
-        const board = document.querySelector('.lfs-sequence-wrap');
+        const wrapper = document.querySelector('.lfs-sequence-wrap');
+        const board = wrapper.querySelector('cg-board');
         const rect = board.getBoundingClientRect();
-        const material = board.closest('.lfs-sequence-host').querySelector('.material').getBoundingClientRect();
+        const materialElement = wrapper.closest('.lfs-sequence-host').querySelector('.material');
+        const material = materialElement.getBoundingClientRect();
         const promotion = document.querySelector('#promotion-choice').getBoundingClientRect();
         return {
           zen: document.documentElement.hasAttribute('data-lfs-zen-mode'),
@@ -3393,10 +3495,13 @@ ${marker}`));
           height: rect.height,
           uiScale: Number(document.documentElement.style.getPropertyValue('--lfs-board-ui-scale')),
           sliderHeight: document.querySelector('.lfs-review-slider').getBoundingClientRect().height,
+          materialFontSize: Number.parseFloat(getComputedStyle(materialElement).fontSize),
+          materialParentFontSize: Number.parseFloat(getComputedStyle(materialElement.parentElement).fontSize),
           promotionRect: [promotion.left, promotion.top, promotion.width, promotion.height],
           boardRect: [rect.left, rect.top, rect.width, rect.height],
-          capped: board.hasAttribute('data-lfs-board-size-cap'),
-          groupCenter: (Math.min(rect.left, material.left) + Math.max(rect.right, material.right)) / 2,
+          capped: wrapper.hasAttribute('data-lfs-board-size-cap'),
+          boardCenter: (rect.left + rect.right) / 2,
+          materialGap: material.left - rect.right,
           viewportCenter: window.innerWidth / 2
         };
       })()`);
@@ -3406,19 +3511,21 @@ ${marker}`));
       assert.equal(nextPuzzle.height, 240);
       assert.equal(nextPuzzle.uiScale, 1);
       assert.equal(nextPuzzle.sliderHeight, 30);
+      assert.equal(nextPuzzle.materialFontSize, nextPuzzle.materialParentFontSize);
       assert.ok(nextPuzzle.promotionRect.every((value, index) => Math.abs(value - nextPuzzle.boardRect[index]) < 0.5));
-      assert.ok(Math.abs(nextPuzzle.groupCenter - nextPuzzle.viewportCenter) < 0.5);
+      assert.ok(Math.abs(nextPuzzle.boardCenter - nextPuzzle.viewportCenter) < 0.5);
+      assert.ok(nextPuzzle.materialGap > 0 && nextPuzzle.materialGap < 10);
 
       await send("Emulation.setDeviceMetricsOverride", { width: 320, height: normalHeight, screenWidth: 320, screenHeight: availableHeight, deviceScaleFactor: 1, mobile: true });
       await evaluate(`(() => {
-        const style = document.createElement('style');
-        style.textContent = '@media (max-width: 400px) { .lfs-sequence-wrap { width:180px!important; height:180px!important; } }';
-        document.head.append(style);
+        const parent = document.querySelector('.lfs-sequence-parent');
+        parent.style.width = '240px';
+        parent.style.height = '240px';
         zenTesting.handleViewportChange();
       })()`);
       await evaluate("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))))");
       const scaledControls = await evaluate(`(() => {
-        const board = document.querySelector('.lfs-sequence-wrap').getBoundingClientRect();
+        const board = document.querySelector('.lfs-sequence-wrap cg-board').getBoundingClientRect();
         const promotion = document.querySelector('#promotion-choice').getBoundingClientRect();
         return {
           board: [board.left, board.top, board.width, board.height],
@@ -3429,7 +3536,7 @@ ${marker}`));
         };
       })()`);
       assert.ok(scaledControls.promotion.every((value, index) => Math.abs(value - scaledControls.board[index]) < 0.5));
-      assert.equal(scaledControls.scale, 0.75);
+      assert.equal(scaledControls.scale, 0.75, JSON.stringify(scaledControls));
       assert.equal(scaledControls.sliderHeight, 22.5);
       assert.equal(scaledControls.pvSliderHeight, 16.5);
 
@@ -3443,6 +3550,8 @@ ${marker}`));
         zenReloadTesting.observeZenBoardSize(null, null);
         zenTesting.syncBoardSizeCap(null);
         document.querySelector('.lfs-sequence-host').remove();
+        document.querySelector('.lfs-decoy-main')?.remove();
+        document.querySelector('.lfs-inactive-puzzle')?.remove();
         document.querySelector('#promotion-choice')?.remove();
         document.querySelector('#lfs-puzzle-playlist-toolbar')?.remove();
         document.querySelector('.pv_box')?.remove();
