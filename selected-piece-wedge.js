@@ -32,6 +32,7 @@
   let defenseHighlightFilterId = 0;
   let defenseHighlightLineId = 0;
   let defenseHighlightMaskId = 0;
+  let settingsRevision = 0;
 
 
   function scheduleRender(board) {
@@ -237,7 +238,7 @@
   }
 
   function getPieceScreenSquare(element, board, blackOrientation, boardRect, animationState = getPreviewAnimationState(element)) {
-    if (animationState === "pending") {
+    if (animationState === "pending" || (animationState === "running" && board.id === "lfs-pv-preview")) {
       const source = element.dataset.lfsPvAnimationSourceSquare?.toLowerCase();
       const match = /^([a-h])([1-8])$/.exec(source ?? "");
       if (match) return logicalToScreen({ row: 8 - Number(match[2]), col: match[1].charCodeAt(0) - 97 }, blackOrientation);
@@ -3952,12 +3953,28 @@
     return drawMoveOutline(board, null, cells, settings.moveDotsPlayerColor ? color : null, "last-move-preview");
   }
 
-  function renderBoard(board, entry) {
-    clearMoveDestinationMarkers(board);
+  function shouldSkipCandidateAnimationRender(board, entry, parsed) {
+    if (board.id !== "lfs-pv-preview") return false;
+    const positionKey = JSON.stringify([
+      parsed?.position ?? null,
+      parsed?.selected ?? null,
+      parsed?.blackOrientation ?? null,
+      entry.hoveredSquare,
+      settingsRevision
+    ]);
+    const animationInProgress = [...board.querySelectorAll(":scope > piece[data-lfs-pv-animation-source-square]")]
+      .some(piece => ["pending", "running"].includes(getPreviewAnimationState(piece)));
+    const unchanged = entry.candidatePositionKey === positionKey;
+    entry.candidatePositionKey = positionKey;
+    return animationInProgress && unchanged;
+  }
 
+  function renderBoard(board, entry) {
     const movePreview = globalThis.LichessThreatCoding?.getInteractionPreview(board);
     const dragPreview = movePreview;
     const parsed = movePreview ? readDragPreview(movePreview) : readPosition(board);
+    if (shouldSkipCandidateAnimationRender(board, entry, parsed)) return;
+    clearMoveDestinationMarkers(board);
     updateDefenseHighlight(board, entry, parsed, movePreview);
     const selectedPiece = parsed?.selected && parsed.position[parsed.selected.row]?.[parsed.selected.col];
     const selectedColor = settings?.enabled && settings.moveDotsPlayerColor ? selectedPiece?.color : null;
@@ -4581,9 +4598,12 @@
   }
 
   documentObserver = new MutationObserver(mutations => {
-    if (!mutations.some(mutation => [...mutation.addedNodes, ...mutation.removedNodes].some(containsBoard))) return;
+    const changedBoards = mutations.flatMap(mutation => [...mutation.addedNodes, ...mutation.removedNodes]).filter(containsBoard);
+    if (!changedBoards.length) return;
     scanBoards();
-    for (const board of observedBoards.keys()) scheduleRender(board);
+    if (changedBoards.some(board => board.id !== "lfs-pv-preview")) {
+      for (const board of observedBoards.keys()) scheduleRender(board);
+    }
   });
   documentObserver.observe(document, { childList: true, subtree: true });
   scanBoards();
@@ -4592,9 +4612,18 @@
     createLastMovePreview,
     renderLastMoveOutline,
     renderMoveOutline,
+    prepareCandidatePreview(board) {
+      if (!settings || !board?.isConnected) return;
+      observeBoard(board);
+      const entry = observedBoards.get(board);
+      if (entry.frame) cancelAnimationFrame(entry.frame);
+      entry.frame = 0;
+      renderBoard(board, entry);
+    },
     update(nextSettings) {
       advanceHatchScroll();
       settings = nextSettings;
+      settingsRevision++;
       updatePinnedPieceOutlineFilters();
       scanBoards();
       for (const [board, entry] of observedBoards) syncHighlightLineMasks(entry, board);

@@ -888,6 +888,53 @@ test("right-click move preview stays visual and restores the live board", {
       await settle();
     });
 
+    await t.test("candidate variations reuse configured dashed piece paths", async () => {
+      const result = await evaluate(`(() => {
+        const previous = {
+          userArrowDashed: previewSettings.userArrowDashed,
+          userArrowWidthPercent: previewSettings.userArrowWidthPercent,
+          userArrowOpacity: previewSettings.userArrowOpacity,
+          userArrowDashLengthPercent: previewSettings.userArrowDashLengthPercent,
+          userArrowDashGapPercent: previewSettings.userArrowDashGapPercent,
+          userArrowCornerRadiusPercent: previewSettings.userArrowCornerRadiusPercent
+        };
+        Object.assign(previewSettings, {
+          userArrowDashed: true,
+          userArrowWidthPercent: 6,
+          userArrowOpacity: 60,
+          userArrowDashLengthPercent: 10,
+          userArrowDashGapPercent: 5,
+          userArrowCornerRadiusPercent: 0
+        });
+        LichessMovePreview.update(previewSettings);
+        const board = document.createElement('cg-board');
+        board.id = 'lfs-pv-preview';
+        const svg = LichessMovePreview.createVariationPathSvg(
+          '7k/8/8/8/8/8/8/R6K w - - 0 1', ['a1a2', 'h8g8', 'a2a4'], false);
+        board.append(svg);
+        document.body.append(board);
+        const paths = [...svg.querySelectorAll('path')];
+        const output = {
+          count: paths.length,
+          white: paths.find(path => path.dataset.pieceColor === 'w')?.getAttribute('d'),
+          black: paths.find(path => path.dataset.pieceColor === 'b')?.getAttribute('d'),
+          dash: paths[0]?.getAttribute('stroke-dasharray'),
+          position: getComputedStyle(svg).position
+        };
+        board.remove();
+        Object.assign(previewSettings, previous);
+        LichessMovePreview.update(previewSettings);
+        return output;
+      })()`);
+      assert.deepEqual(result, {
+        count: 2,
+        white: "M 6.25 93.75 L 6.25 81.25 L 6.25 56.25",
+        black: "M 93.75 6.25 L 81.25 6.25",
+        dash: "1.25 0.625",
+        position: "absolute"
+      });
+    });
+
     await t.test("same-piece turns share a configurable rounded path", async () => {
       await evaluate("setBoardFen('4k3/8/8/8/8/8/8/R3K3 w - - 0 1')");
       await settle();

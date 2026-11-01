@@ -192,10 +192,11 @@
   let boardSizeCapWrappers = new Set();
   let pvPreviewFrame;
   let pvAnimationPositionFrame;
-  let pvAnimationPositionSnapshot = null;
+  let pvAnimationInProgress = false;
   let pvPreview;
   let pvPreviewBoard;
   let pvPreviewSlider;
+  let pvHoveredSlider;
   let pvPreviewFen;
   let pvPreviewSourceSlider;
   let pvPreviewSourceRow;
@@ -1065,43 +1066,18 @@
     pvPreviewFrame = requestAnimationFrame(syncPvPreview);
   }
 
-  function getPvAnimationPositionSnapshot(board) {
-    const moving = [];
+  function hasPvAnimationInProgress(board) {
     for (const piece of board.querySelectorAll(":scope > piece[data-lfs-pv-animation-source-square]")) {
-      const animations = piece.getAnimations();
-      const state = animations.some(animation => animation.playState === "running")
-        ? "running"
-        : animations.some(animation => animation.playState === "pending") ? "pending" : null;
-      if (state) moving.push({ piece, state });
-    }
-    if (!moving.length) return null;
-
-    const boardRect = board.getBoundingClientRect();
-    const blackOrientation = board.closest(".cg-wrap")?.classList.contains("orientation-black") ?? false;
-    const positions = [];
-    for (const { piece, state } of moving) {
-      let row;
-      let col;
-      if (state === "running" && boardRect.width && boardRect.height) {
-        const rect = piece.getBoundingClientRect();
-        const screenCol = Math.max(0, Math.min(7, Math.floor(((rect.left + rect.width / 2 - boardRect.left) / boardRect.width) * 8)));
-        const screenRow = Math.max(0, Math.min(7, Math.floor(((rect.top + rect.height / 2 - boardRect.top) / boardRect.height) * 8)));
-        row = blackOrientation ? 7 - screenRow : screenRow;
-        col = blackOrientation ? 7 - screenCol : screenCol;
-      } else {
-        const square = (state === "pending" ? piece.dataset.lfsPvAnimationSourceSquare : piece.dataset.square)?.toLowerCase();
-        if (!/^[a-h][1-8]$/.test(square ?? "")) continue;
-        row = 8 - Number(square[1]);
-        col = square.charCodeAt(0) - 97;
+      if (piece.getAnimations().some(animation => animation.playState === "running" || animation.playState === "pending")) {
+        return true;
       }
-      positions.push(`${piece.dataset.piece}:${row},${col}`);
     }
-    return positions.length ? positions.join("|") : null;
+    return false;
   }
 
   function hasPvAnimationAnalysis() {
     return settings.enabled && settings.analysisEnabled && (
-      settings.kingMovementFieldsEnabled || settings.threatColoringEnabled || settings.selectedPieceWedgeEnabled
+      settings.kingMovementFieldsEnabled || settings.selectedPieceWedgeEnabled
       || settings.threatenedPieceOutlineEnabled || settings.pinnedPieceOutlineEnabled
       || settings.defenseCirclesEnabled || settings.threatCenterOutlineEnabled
       || settings.attackHighlightEnabled || settings.defenseHighlightEnabled || settings.highlightCascadesEnabled
@@ -1115,19 +1091,20 @@
     pvAnimationPositionFrame = requestAnimationFrame(() => {
       pvAnimationPositionFrame = 0;
       if (board !== pvPreview || !board.isConnected) return;
-      const snapshot = getPvAnimationPositionSnapshot(board);
-      if (snapshot !== pvAnimationPositionSnapshot) {
-        pvAnimationPositionSnapshot = snapshot;
-        document.dispatchEvent(new CustomEvent("lfs-pv-animation-position", { detail: board }));
+      const animationInProgress = hasPvAnimationInProgress(board);
+      if (animationInProgress !== pvAnimationInProgress) {
+        const animationFinished = pvAnimationInProgress && !animationInProgress;
+        pvAnimationInProgress = animationInProgress;
+        if (animationFinished) document.dispatchEvent(new CustomEvent("lfs-pv-animation-position", { detail: board }));
       }
-      if (snapshot && hasPvAnimationAnalysis()) schedulePvAnimationPositionTracking();
+      if (animationInProgress && hasPvAnimationAnalysis()) schedulePvAnimationPositionTracking();
     });
   }
 
   function resetPvAnimationPositionTracking() {
     cancelAnimationFrame(pvAnimationPositionFrame);
     pvAnimationPositionFrame = 0;
-    pvAnimationPositionSnapshot = null;
+    pvAnimationInProgress = false;
   }
 
   function previewPvMove(slider, index, moves = [...(slider._lfsPvRow?.querySelectorAll(":scope > .pv-san") ?? [])]) {
@@ -1174,6 +1151,34 @@
     previewPvMove(slider, Math.round(progress * (moves.length - 1)), moves);
   }
 
+  function isPvSliderPointerWithinHoverRange(slider, event) {
+    const rect = slider.getBoundingClientRect();
+    const threshold = settings.pvSliderHoverThresholdPx;
+    return event.clientX >= rect.left && event.clientX <= rect.right
+      && event.clientY >= rect.top - threshold && event.clientY <= rect.bottom + threshold;
+  }
+
+  function beginPvSliderHover(slider, event) {
+    if (event.pointerType === "touch") return;
+    pvHoveredSlider = slider;
+    previewPvMoveAtPointer(slider, event.clientX);
+  }
+
+  function handlePvSliderPointerMove(event) {
+    if (event.pointerType === "touch") return;
+    const targetSlider = event.target?.closest?.('.pv_box[data-lfs-pv-sliders] input[type="range"]');
+    if (targetSlider) pvHoveredSlider = targetSlider;
+    if (!pvHoveredSlider) return;
+    if (!isPvSliderPointerWithinHoverRange(pvHoveredSlider, event)) {
+      pvHoveredSlider = null;
+      clearPvPreview();
+      return;
+    }
+    previewPvMoveAtPointer(pvHoveredSlider, event.clientX);
+  }
+
+  document.addEventListener("pointermove", handlePvSliderPointerMove);
+
   function syncPvLineSliders() {
     const slidersToPosition = [];
     for (const box of document.querySelectorAll(".pv_box")) {
@@ -1182,10 +1187,15 @@
       if (!rows.length) {
         container?.remove();
         box.removeAttribute("data-lfs-pv-sliders");
+        box.style.removeProperty("--lfs-pv-slider-area-height");
         continue;
       }
 
       box.setAttribute("data-lfs-pv-sliders", "");
+      const sliderAreaHeight = `${settings.pvSliderAreaHeightPx}px`;
+      if (box.style.getPropertyValue("--lfs-pv-slider-area-height") !== sliderAreaHeight) {
+        box.style.setProperty("--lfs-pv-slider-area-height", sliderAreaHeight);
+      }
       if (!container) {
         container = document.createElement("div");
         container.setAttribute("data-lfs-pv-slider-container", "");
@@ -1203,11 +1213,11 @@
           slider.step = "1";
           slider.dir = "ltr";
           slider.setAttribute("aria-label", `Vorschau Kandidatenlinie ${index + 1}`);
-          slider.addEventListener("pointerenter", event => previewPvMoveAtPointer(slider, event.clientX));
-          slider.addEventListener("pointermove", event => {
-            if (event.pointerType !== "touch") previewPvMoveAtPointer(slider, event.clientX);
+          slider.addEventListener("pointerenter", event => beginPvSliderHover(slider, event));
+          slider.addEventListener("pointerleave", event => {
+            if (event.pointerType === "touch"
+              || pvHoveredSlider === slider && !isPvSliderPointerWithinHoverRange(slider, event)) clearPvPreview();
           });
-          slider.addEventListener("pointerleave", clearPvPreview);
           slider.addEventListener("blur", clearPvPreview);
           slider.addEventListener("pointerdown", event => event.stopPropagation());
           slider.addEventListener("input", () => previewPvMove(slider, Number(slider.value)));
@@ -1240,10 +1250,11 @@
       const scoreRight = score?.getBoundingClientRect().right;
       const start = score ? scoreRight - boxRect.left + 6 : rowRect.left - boxRect.left + 8;
       const end = rowRect.right - boxRect.left - 8;
+      const sliderAreaHeight = settings.pvSliderAreaHeightPx;
       return {
         slider,
         left: `${start}px`,
-        top: `${rowRect.top - boxRect.top + rowRect.height / 2 - 11}px`,
+        top: `${rowRect.top - boxRect.top + rowRect.height / 2 - sliderAreaHeight / 2}px`,
         width: `${Math.max(24, end - start)}px`
       };
     });
@@ -1257,6 +1268,7 @@
   function clearPvPreview() {
     cancelAnimationFrame(pvPreviewFrame);
     pvPreviewFrame = 0;
+    pvHoveredSlider = null;
     resetPvAnimationPositionTracking();
     pvPreview?.remove();
     pvPreviewBoard?.removeAttribute("data-lfs-pv-preview");
@@ -1277,10 +1289,86 @@
     pvPreviewStepDuration = undefined;
   }
 
+  function replacePvPreviewChildren(fragment, pieces) {
+    const retainedPieces = new Set(pieces);
+    for (const child of [...pvPreview.children]) {
+      if (child.localName === "piece" ? !retainedPieces.has(child)
+        : !child.hasAttribute("data-lfs-board-overlay")) child.remove();
+    }
+    const firstChild = pvPreview.firstChild;
+    for (const child of [...fragment.childNodes]) pvPreview.insertBefore(child, firstChild);
+    const abovePieces = [...pvPreview.children].find(child => child.dataset?.lfsBoardOverlay === "above-pieces");
+    for (const piece of pieces) {
+      if (piece.parentElement !== pvPreview) pvPreview.insertBefore(piece, abovePieces ?? null);
+    }
+  }
+
+  function getPvPreviewPieces(fen, blackOrientation) {
+    const placement = fen?.split(/\s+/)[0]?.split("[")[0];
+    const ranks = placement?.split("/");
+    if (ranks?.length !== 8) return null;
+
+    const roles = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
+    const pieces = [];
+    for (const [rankIndex, rank] of ranks.entries()) {
+      let file = 0;
+      for (const symbol of rank) {
+        if (symbol === "~") continue;
+        if (/\d/.test(symbol)) {
+          file += Number(symbol);
+          continue;
+        }
+        const role = roles[symbol.toLowerCase()];
+        if (!role || file >= 8) return null;
+        const color = symbol === symbol.toUpperCase() ? "white" : "black";
+        pieces.push({
+          square: `${String.fromCharCode(97 + file)}${8 - rankIndex}`,
+          piece: `${color} ${role}`,
+          color,
+          role,
+          left: (blackOrientation ? 7 - file : file) * 12.5,
+          top: (blackOrientation ? 7 - rankIndex : rankIndex) * 12.5
+        });
+        file++;
+      }
+      if (file !== 8) return null;
+    }
+    return pieces;
+  }
+
+  function preparePvPreviewAnalysis(board) {
+    globalThis.LichessThreatCoding?.prepareCandidatePreview?.(board);
+    globalThis.LichessKingMovementFields?.prepareCandidatePreview?.(board);
+    globalThis.LichessSelectedPieceWedge?.prepareCandidatePreview?.(board);
+  }
+
+  function alignPvPreview(board, preview) {
+    const parent = preview.offsetParent;
+    if (!parent?.offsetWidth || !parent.offsetHeight || !parent.clientWidth || !parent.clientHeight) return;
+    const parentRect = parent.getBoundingClientRect();
+    const boardRect = board.getBoundingClientRect();
+    const scaleX = parentRect.width / parent.offsetWidth;
+    const scaleY = parentRect.height / parent.offsetHeight;
+    const width = parent.clientWidth * scaleX;
+    const height = parent.clientHeight * scaleY;
+    if (!width || !height) return;
+    const values = {
+      "--lfs-pv-left": (boardRect.left - parentRect.left - parent.clientLeft * scaleX) / width * 100,
+      "--lfs-pv-top": (boardRect.top - parentRect.top - parent.clientTop * scaleY) / height * 100,
+      "--lfs-pv-width": boardRect.width / width * 100,
+      "--lfs-pv-height": boardRect.height / height * 100
+    };
+    for (const [property, value] of Object.entries(values)) {
+      const text = `${value}%`;
+      if (preview.style.getPropertyValue(property) !== text) preview.style.setProperty(property, text);
+    }
+  }
+
   function syncPvPreview() {
     if (!settings.enabled) {
       for (const box of document.querySelectorAll(".pv_box[data-lfs-pv-sliders]")) {
         box.removeAttribute("data-lfs-pv-sliders");
+        box.style.removeProperty("--lfs-pv-slider-area-height");
         box.querySelector(":scope > [data-lfs-pv-slider-container]")?.remove();
       }
       clearPvPreview();
@@ -1289,7 +1377,7 @@
 
     syncPvLineSliders();
     const boards = [...document.querySelectorAll(".round__app .main-board cg-board, .analyse__board cg-board, .bot-game__board cg-board, .puzzle__board cg-board, .study__board cg-board")];
-    const board = boards.find(candidate => candidate.getBoundingClientRect().width > 0 && candidate.getBoundingClientRect().height > 0);
+    const board = boards.find(candidate => candidate !== pvPreview && candidate.getBoundingClientRect().width > 0 && candidate.getBoundingClientRect().height > 0);
     const row = pvPreviewSlider?._lfsPvRow;
     const move = row?.querySelectorAll(":scope > .pv-san")[Number(pvPreviewSlider.value)];
     if (!board || !pvPreviewSlider?.isConnected || !row?.isConnected || !move?.dataset.board
@@ -1321,47 +1409,60 @@
       clearPvPreview();
       return;
     }
-    if (pvPreview.parentElement !== wrapper) wrapper.append(pvPreview);
-    board.setAttribute("data-lfs-pv-preview", "");
-    if (pvPreview.dataset.position === key) return;
+    const container = board.parentElement;
+    if (!container) {
+      clearPvPreview();
+      return;
+    }
+    if (pvPreview.parentElement !== container) container.append(pvPreview);
+    alignPvPreview(board, pvPreview);
+    if (pvPreview.dataset.position === key) {
+      board.setAttribute("data-lfs-pv-preview", "");
+      return;
+    }
 
     // Use Lichess's per-move FEN, not the mini-board's pixel-sized DOM.
     const [fen, uci] = move.dataset.board.split("|");
     const previewMoves = [...row.querySelectorAll(":scope > .pv-san")];
     const previewIndex = Number(pvPreviewSlider.value);
+    const boardRect = board.getBoundingClientRect();
+    const baseDuration = pvPreviewStepDuration ?? (settings.moveAnimationLichessSpeed ? 250 : settings.moveAnimationDuration);
+    const initializingPreview = !pvPreview.dataset.position;
+    let initialPositionSeeded = false;
+    const canAnimateFirstMove = initializingPreview && previewIndex === 0
+      && settings.enabled && !settings.disableAnimations && typeof Element.prototype.animate === "function"
+      && baseDuration > 0 && boardRect.width > 0 && boardRect.height > 0;
+    if (canAnimateFirstMove) {
+      const initialFen = row.closest(".pv_box")?.dataset.fen;
+      const initialPieces = getPvPreviewPieces(initialFen, blackOrientation);
+      if (initialPieces) {
+        pvPreview.replaceChildren(...initialPieces.map(target => {
+          const piece = document.createElement("piece");
+          piece.className = `lfs-pv-piece ${target.color} ${target.role}`;
+          piece.dataset.piece = target.piece;
+          piece.dataset.square = target.square;
+          piece.style.left = `${target.left}%`;
+          piece.style.top = `${target.top}%`;
+          return piece;
+        }));
+        pvPreview.dataset.position = JSON.stringify(["initial", initialFen, blackOrientation]);
+        pvPreviewSourceSlider = pvPreviewSlider;
+        pvPreviewSourceRow = row;
+        pvPreviewSourceFen = pvPreviewFen;
+        pvPreviewSourceOrientation = blackOrientation;
+        pvPreviewSourceIndex = -1;
+        initialPositionSeeded = true;
+        preparePvPreviewAnalysis(pvPreview);
+      }
+    }
     const samePreviewLine = pvPreviewSourceSlider === pvPreviewSlider && pvPreviewSourceRow === row
       && pvPreviewSourceFen === pvPreviewFen && pvPreviewSourceOrientation === blackOrientation;
     const adjacentPreview = samePreviewLine && Math.abs(previewIndex - pvPreviewSourceIndex) === 1;
     const transitionUci = previewIndex > pvPreviewSourceIndex
       ? uci
       : previewMoves[pvPreviewSourceIndex]?.dataset.board.split("|")[1];
-    const roles = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
-    const targets = [];
-    fen.split(" ")[0].split("[")[0].split("/").forEach((rank, rankIndex) => {
-      let file = 0;
-      for (const symbol of rank) {
-        if (/\d/.test(symbol)) {
-          file += Number(symbol);
-          continue;
-        }
-        const role = roles[symbol.toLowerCase()];
-        if (!role) continue;
-        const color = symbol === symbol.toUpperCase() ? "white" : "black";
-        const targetFile = blackOrientation ? 7 - file : file;
-        const targetRank = blackOrientation ? 7 - rankIndex : rankIndex;
-        targets.push({
-          square: `${String.fromCharCode(97 + file)}${8 - rankIndex}`,
-          piece: `${color} ${role}`,
-          color,
-          role,
-          left: targetFile * 12.5,
-          top: targetRank * 12.5
-        });
-        file++;
-      }
-    });
+    const targets = getPvPreviewPieces(fen, blackOrientation) ?? [];
 
-    const boardRect = board.getBoundingClientRect();
     const existingPieces = [...pvPreview.querySelectorAll(":scope > piece.lfs-pv-piece")];
     const squareAtPoint = (x, y) => {
       if (!boardRect.width || !boardRect.height) return null;
@@ -1430,9 +1531,16 @@
     const movingColor = targets.find(target => target.square === previewMove?.[2])?.color[0];
     const lastMoveOutline = globalThis.LichessLastMoveLine.createPreviewLine(uci, blackOrientation, board, movingColor);
     if (lastMoveOutline) fragment.append(lastMoveOutline);
-    const shouldAnimate = Boolean(pvPreview.dataset.position) && sameBoard && samePreviewLine && settings.enabled && !settings.disableAnimations
+    const variationPaths = globalThis.LichessMovePreview?.createVariationPathSvg(
+      pvPreviewFen,
+      previewMoves.slice(0, previewIndex + 1).map(candidate => candidate.dataset.board?.split("|")[1]),
+      blackOrientation
+    );
+    if (variationPaths) fragment.append(variationPaths);
+    const shouldAnimate = Boolean(pvPreview.dataset.position) && (sameBoard || initialPositionSeeded)
+      && samePreviewLine && settings.enabled && !settings.disableAnimations
       && typeof Element.prototype.animate === "function" && boardRect.width > 0 && boardRect.height > 0;
-    const baseDuration = pvPreviewStepDuration ?? (settings.moveAnimationLichessSpeed ? 250 : settings.moveAnimationDuration);
+    const renderedPieces = [];
     for (const target of targets) {
       const piece = reusedPieces.get(target) ?? document.createElement("piece");
       const origin = origins.get(piece);
@@ -1468,9 +1576,11 @@
           };
         }
       }
-      fragment.append(piece);
+      renderedPieces.push(piece);
     }
-    pvPreview.replaceChildren(fragment);
+    replacePvPreviewChildren(fragment, renderedPieces);
+    if (initializingPreview && !initialPositionSeeded) preparePvPreviewAnalysis(pvPreview);
+    board.setAttribute("data-lfs-pv-preview", "");
     pvPreview.dataset.position = key;
     pvPreviewSourceSlider = pvPreviewSlider;
     pvPreviewSourceRow = row;

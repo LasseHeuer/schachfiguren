@@ -284,7 +284,7 @@
     return element;
   }
 
-  function getArrowAttributes(color) {
+  function getArrowAttributes(color, dashed = settings.userArrowDashed) {
     const width = Number(settings.userArrowWidthPercent ?? 3);
     const opacity = Number(settings.userArrowOpacity ?? 100);
     const attributes = {
@@ -295,7 +295,7 @@
       "stroke-linecap": "butt",
       "stroke-linejoin": "miter"
     };
-    if (settings.userArrowDashed) {
+    if (dashed) {
       const dash = Number(settings.userArrowDashLengthPercent ?? 5);
       const gap = Number(settings.userArrowDashGapPercent ?? 3);
       attributes["stroke-dasharray"] = `${(Number.isFinite(dash) ? dash : 5) * 0.125} ${(Number.isFinite(gap) ? gap : 3) * 0.125}`;
@@ -559,6 +559,42 @@
       addSquare(overlay, lastMove.from, "last-move", session.blackOrientation);
       addSquare(overlay, lastMove.to, "last-move", session.blackOrientation);
     }
+  }
+
+  function createVariationPathSvg(baseFen, moves, blackOrientation) {
+    if (!settings || !Array.isArray(moves)) return null;
+    const stateFen = String(baseFen ?? "").replace(/\[[^\]]*\]/, "");
+    let state = boardLogic.parseFen(stateFen);
+    if (!state) return null;
+    let pieceIds = createPieceIds(state.board);
+    const pathsByPiece = new Map();
+    for (const uci of moves) {
+      const match = /^([a-h][1-8])([a-h][1-8])([qrbn])?$/i.exec(uci ?? "");
+      if (!match) break;
+      const from = boardLogic.parseSquare(match[1]);
+      const to = boardLogic.parseSquare(match[2]);
+      const pieceId = pieceIds[from.row][from.col];
+      const piece = state.board[from.row][from.col];
+      const nextState = boardLogic.applyMove(state, from, to, match[3]?.toUpperCase() ?? "Q");
+      if (!pieceId || !piece || !nextState) break;
+      let path = pathsByPiece.get(pieceId);
+      if (!path) {
+        path = { color: piece[0], points: [from, to] };
+        pathsByPiece.set(pieceId, path);
+      } else path.points.push(to);
+      pieceIds = movePieceIds(state, pieceIds, from, to);
+      state = nextState;
+    }
+    if (!pathsByPiece.size) return null;
+    const svg = createSvgElement("svg", { viewBox: "0 0 100 100", "aria-hidden": "true" });
+    svg.classList.add("lfs-move-preview-paths");
+    for (const path of pathsByPiece.values()) {
+      const element = createSvgElement("path", getArrowAttributes(path.color, settings.pvPreviewDashed));
+      element.dataset.pieceColor = path.color;
+      updateArrowPath(element, path.points, blackOrientation);
+      svg.append(element);
+    }
+    return svg;
   }
 
   function render(session) {
@@ -1026,6 +1062,7 @@
     restore,
     isActive: () => Boolean(active),
     getOverlayBoard: board => active?.board === board ? active.overlay : null,
-    getDragPreviewState
+    getDragPreviewState,
+    createVariationPathSvg
   };
 })();

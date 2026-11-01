@@ -52,7 +52,7 @@
     const key = (globalThis.LichessMoveAnimation?.getDestinationKey(element)
       ?? element.dataset.lfsMoveKey ?? element.dataset.key ?? element.dataset.square)?.toLowerCase();
     const target = parseSquare(key);
-    if (target && animationState === "pending") {
+    if (target && (animationState === "pending" || (animationState === "running" && board.id === "lfs-pv-preview"))) {
       return parseSquare(element.dataset.lfsPvAnimationSourceSquare) ?? target;
     }
     if (target && animationState === "running") {
@@ -449,5 +449,16 @@
     initialize();
   }
 
-  globalThis.LichessKingMovementFields = { update, renderPreview, renderDragPreview };
+  globalThis.LichessKingMovementFields = {
+    update, renderPreview, renderDragPreview,
+    prepareCandidatePreview(board) {
+      if (!settings || !board?.isConnected) return;
+      observeBoards([...document.querySelectorAll(boardSelector)]);
+      const entry = observedBoards.get(board);
+      if (!entry) return;
+      if (entry.frame) cancelAnimationFrame(entry.frame);
+      entry.frame = 0;
+      renderBoard(board, entry);
+    }
+  };
 })();

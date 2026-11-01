@@ -126,6 +126,9 @@
     movePreviewOriginOpacity: 0.1,
     movePreviewCorridorWidthPercent: 185,
     movePreviewAnticipationPercent: 40,
+    pvSliderHoverThresholdPx: 20,
+    pvSliderAreaHeightPx: 40,
+    pvPreviewDashed: true,
     moveAnimationTimeDistance: true,
     moveAnimationDistanceFactor: 0.1,
     moveAnimationCurve: [0.2514824867248535, -17.537492682009336, 0.7542110624767485, -85.1984053942622],
@@ -341,6 +344,8 @@
     movePreviewOriginOpacity: [0, 1],
     movePreviewCorridorWidthPercent: [0, 200],
     movePreviewAnticipationPercent: [0, 100],
+    pvSliderHoverThresholdPx: [0, 60],
+    pvSliderAreaHeightPx: [24, 72],
     moveAnimationDistanceFactor: [0, 1],
     puzzleRatingMaxPosition: [0.2, 1]
   };
@@ -351,6 +356,7 @@
     delete result.highlightLineArrivalLeadPercent;
     delete result.highlightLineEaseInPercent;
     delete result.highlightLineEaseOutPercent;
+    delete result.pvSliderSpacingPx;
     if (!Object.prototype.hasOwnProperty.call(values, "highlightLineDecayPercent")
       && Object.prototype.hasOwnProperty.call(values, "defenseHighlightWaveDecayPercent")) {
       result.highlightLineDecayPercent = values.defenseHighlightWaveDecayPercent;
@@ -473,7 +479,7 @@
     result.engineArrowStartOffsetPercent = Math.round(result.engineArrowStartOffsetPercent);
     result.engineArrowEndOffsetPercent = Math.round(result.engineArrowEndOffsetPercent);
     result.lastMoveLineWidth = Math.round(result.lastMoveLineWidth);
-    for (const key of ["zenBackgroundTintPercent", "zenClockFontSizePx", "zenClockMarginPx", "zenClockLineThicknessPx", "zenClockLineGapPx", "zenClockWarningThresholdPercent", "zenClockActiveEndSizePercent", "zenClockActiveEndBlendPercent"]) {
+    for (const key of ["zenBackgroundTintPercent", "zenClockFontSizePx", "zenClockMarginPx", "zenClockLineThicknessPx", "zenClockLineGapPx", "zenClockWarningThresholdPercent", "zenClockActiveEndSizePercent", "zenClockActiveEndBlendPercent", "pvSliderAreaHeightPx"]) {
       result[key] = Math.round(result[key]);
     }
     result.zenClockBlinkFrequency = Number(result.zenClockBlinkFrequency.toFixed(1));
@@ -520,6 +526,7 @@
       "analysisGraphColors",
       "engineArrowOutlineEnabled",
       "userArrowDashed",
+      "pvPreviewDashed",
       "showPlayTimeInHours",
       "analysisEnabled",
       "removeOutlines",

@@ -370,9 +370,12 @@
           </div>
         </details>
         <div class="range-grid single-range">
+          <label class="range-setting" title="Erweitert den Hover-Bereich ober- und unterhalb des Kandidatenzug-Sliders."><span>Kandidatenzug-Slider: vertikale Toleranz</span><output data-value-for="pvSliderHoverThresholdPx"></output><input type="range" min="0" max="60" step="1" data-setting="pvSliderHoverThresholdPx"></label>
+          <label class="range-setting" title="Vergrößert die anklickbare Fläche; der Regler bleibt darin zentriert."><span>Höhe der Kandidatenzug-Sliderbereiche</span><output data-value-for="pvSliderAreaHeightPx"></output><input type="range" min="24" max="72" step="1" data-setting="pvSliderAreaHeightPx"></label>
           <label class="range-setting"><span>Abstand oben (% Fensterhoehe)</span><output data-value-for="boardTopGapPercent"></output><input type="range" min="0" max="30" step="1" data-setting="boardTopGapPercent"></label>
           <label class="range-setting"><span>Zen: nach oben (% Fensterhoehe)</span><output data-value-for="zenBoardUpPercent"></output><input type="range" min="0" max="30" step="1" data-setting="zenBoardUpPercent"></label>
         </div>
+        <label class="switch-setting"><span>Gestrichelte Linie im Kandidatenpreview<small>Zeigt die bisherige gestrichelte Zugspur im Brettpreview.</small></span><input type="checkbox" data-setting="pvPreviewDashed" role="switch"></label>
       </section>
 
       <section class="panel" id="panel-zen" role="tabpanel" aria-labelledby="tab-zen" data-panel="zen" hidden>

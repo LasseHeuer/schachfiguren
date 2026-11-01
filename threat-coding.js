@@ -286,7 +286,7 @@
   function getLogicalSquare(element, board, blackOrientation, boardRect = null, animationState = getPreviewAnimationState(element)) {
     // Chessground keeps unused square nodes with inline display:none for later reuse.
     if (element.style?.display === "none") return null;
-    if (animationState === "pending") {
+    if (animationState === "pending" || (animationState === "running" && board.id === "lfs-pv-preview")) {
       const source = element.dataset.lfsPvAnimationSourceSquare?.toLowerCase();
       if (source && /^[a-h][1-8]$/.test(source)) {
         return { row: 8 - Number(source[1]), col: source.charCodeAt(0) - 97 };
@@ -795,7 +795,7 @@
 
   function containsMainBoard(node) {
     return node.nodeType === Node.ELEMENT_NODE && (
-      node.matches(".main-board, .mini-game, .cg-wrap, cg-board#lfs-move-preview") ||
+      node.matches(".main-board, .mini-game, .cg-wrap, cg-board#lfs-move-preview, cg-board#lfs-pv-preview") ||
       Boolean(node.querySelector(boardSelector))
     );
   }
@@ -835,7 +835,7 @@
       });
       boardObserver.observe(board, {
         attributes: true,
-        attributeFilter: ["class", "data-key", "data-lfs-move-key", "style"],
+        attributeFilter: ["class", "data-key", "data-lfs-move-key", "data-lfs-pv-animation-source-square", "style"],
         childList: true,
         subtree: true
       });
@@ -853,9 +853,6 @@
   function initialize() {
     if (!interactionListenersAdded) {
       document.addEventListener("lfs-hover-preview-change", event => scheduleRender(event.detail));
-      document.addEventListener("lfs-pv-animation-position", event => {
-        if (event.detail?.id === "lfs-pv-preview") scheduleRender(event.detail);
-      });
       document.addEventListener("pointerdown", event => {
         lastPointerPosition = { x: event.clientX, y: event.clientY };
         if (event.button !== 0 || typeof event.target?.closest !== "function") return;
@@ -911,8 +908,11 @@
 
     if (!documentObserver) {
       documentObserver = new MutationObserver(mutations => {
-        if (!mutations.some(mutation => [...mutation.addedNodes, ...mutation.removedNodes].some(containsMainBoard))) return;
-        scheduleRender();
+        const changedBoards = mutations.flatMap(mutation => [...mutation.addedNodes, ...mutation.removedNodes]).filter(containsMainBoard);
+        if (!changedBoards.length) return;
+        if (changedBoards.every(board => board.id === "lfs-pv-preview")) {
+          for (const board of changedBoards) scheduleRender(board);
+        } else scheduleRender();
       });
       documentObserver.observe(document, { childList: true, subtree: true });
     }
@@ -931,6 +931,11 @@
 
   globalThis.LichessThreatCoding = {
     update,
+    prepareCandidatePreview(board) {
+      if (!settings?.enabled || !settings.threatColoringEnabled || !board?.closest(".is2d")) return;
+      const parsed = readBoard(board);
+      if (parsed) renderPosition(board, parsed.position, parsed.blackOrientation);
+    },
     calculateThreatMap,
     createPreviewPosition,
     getBoardBaseColor,

@@ -13,6 +13,8 @@
   const suppressedPieces = new Set();
   let settings = null;
   let hoveredPiece = null;
+  let pointerMoveFrame = 0;
+  let latestPointerPosition = null;
 
   function isEnabled() {
     return settings?.enabled && settings.pieceBounceEnabled && !settings.disableAnimations;
@@ -224,8 +226,7 @@
     return null;
   }
 
-  function updateHoveredPiece(event) {
-    if (event.pointerType !== "mouse") return;
+  function updateHoveredPieceAtPointer(event) {
     const nextPiece = findPieceAtPoint(event);
     for (const piece of suppressedPieces) {
       if (piece !== nextPiece && !piece.matches(".anim")) suppressedPieces.delete(piece);
@@ -234,6 +235,47 @@
     if (hoveredPiece) finishCurrentStep(hoveredPiece);
     hoveredPiece = nextPiece;
     if (hoveredPiece) start(hoveredPiece);
+  }
+
+  function clearPendingPointerMove() {
+    cancelAnimationFrame(pointerMoveFrame);
+    pointerMoveFrame = 0;
+    latestPointerPosition = null;
+  }
+
+  function updateHoveredPiece(event) {
+    if (event.pointerType !== "mouse" || !isEnabled()) return;
+    if (event.type !== "pointermove") {
+      clearPendingPointerMove();
+      updateHoveredPieceAtPointer(event);
+      return;
+    }
+    const directPiece = getPiece(event.target)
+      ?? getPiece(document.elementFromPoint(event.clientX, event.clientY));
+    if (directPiece) {
+      clearPendingPointerMove();
+      updateHoveredPieceAtPointer({
+        type: event.type,
+        target: directPiece,
+        clientX: event.clientX,
+        clientY: event.clientY
+      });
+      return;
+    }
+    latestPointerPosition = { x: event.clientX, y: event.clientY };
+    if (pointerMoveFrame) return;
+    pointerMoveFrame = requestAnimationFrame(() => {
+      pointerMoveFrame = 0;
+      const latest = latestPointerPosition;
+      latestPointerPosition = null;
+      if (!latest || !isEnabled()) return;
+      updateHoveredPieceAtPointer({
+        type: "pointermove",
+        target: document.elementFromPoint(latest.x, latest.y),
+        clientX: latest.x,
+        clientY: latest.y
+      });
+    });
   }
 
   document.addEventListener("pointerover", updateHoveredPiece, true);
@@ -257,6 +299,7 @@
     }
   }).observe(document.documentElement, { attributes: true, attributeFilter: ["class"], attributeOldValue: true, subtree: true });
   window.addEventListener("blur", () => {
+    clearPendingPointerMove();
     if (!hoveredPiece) return;
     finishCurrentStep(hoveredPiece);
     hoveredPiece = null;
@@ -268,6 +311,7 @@
     }
     settings = nextSettings;
     if (!isEnabled()) {
+      clearPendingPointerMove();
       for (const [piece, state] of activePieces) stop(piece, state);
       hoveredPiece = null;
       return;

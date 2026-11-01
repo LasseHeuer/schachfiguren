@@ -1017,6 +1017,33 @@ html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] .pv > span {
   display: none !important;
 }
 
+html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] .pv-wrap-toggle {
+  display: none !important;
+}
+
+html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] > .pv {
+  box-sizing: border-box !important;
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  height: var(--lfs-pv-slider-area-height, 40px) !important;
+  min-height: var(--lfs-pv-slider-area-height, 40px) !important;
+  padding: 0 8px !important;
+  border-top: 0 !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--lfs-board-gap-active) 42%, transparent) !important;
+  border-radius: 5px !important;
+  background-color: color-mix(in srgb, var(--lfs-board-light-active) 26%, var(--c-bg-box, white)) !important;
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] > .pv:nth-of-type(even) {
+  background-color: color-mix(in srgb, var(--lfs-board-dark-active) 24%, var(--c-bg-box, white)) !important;
+}
+
+html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] > .pv:hover {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760)) 34%, transparent);
+}
+
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] [data-lfs-pv-slider-container] {
   position: absolute !important;
   inset: 0 !important;
@@ -1026,51 +1053,76 @@ html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] [data-lfs-pv-slider-c
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"] {
   position: absolute !important;
-  height: 22px !important;
+  height: var(--lfs-pv-slider-area-height, 40px) !important;
   margin: 0 !important;
   padding: 0 !important;
   border: 0 !important;
-  border-radius: 0 !important;
+  border-radius: 6px !important;
   appearance: none !important;
   background: oklch(0.000000000000000 0.000000000000000 0.000000000000 / 0) !important;
   cursor: ew-resize !important;
   pointer-events: auto !important;
+  z-index: 1 !important;
 }
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-webkit-slider-runnable-track {
-  height: 3px;
-  border-radius: 3px;
-  background: linear-gradient(to right in srgb, var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760)) var(--lfs-pv-progress, 0%), var(--c-border, oklch(0.738018666131950 0.000000027508905 89.875562537916)) var(--lfs-pv-progress, 0%));
+  height: 8px;
+  border: 1px solid color-mix(in srgb, var(--lfs-board-gap-active) 70%, transparent);
+  border-radius: 5px;
+  background:
+    linear-gradient(to right,
+      color-mix(in srgb, var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760)) 48%, transparent) 0 var(--lfs-pv-progress, 0%),
+      transparent var(--lfs-pv-progress, 0%) 100%),
+    repeating-linear-gradient(to right,
+      var(--lfs-board-light-active) 0 calc(12.5% - 1px),
+      var(--lfs-board-gap-active) calc(12.5% - 1px) 12.5%,
+      var(--lfs-board-dark-active) 12.5% calc(25% - 1px),
+      var(--lfs-board-gap-active) calc(25% - 1px) 25%);
 }
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-webkit-slider-thumb {
-  width: 12px;
-  height: 12px;
-  margin-top: -4.5px;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  margin-top: -5px;
   appearance: none;
   border: 2px solid var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760));
-  border-radius: 50%;
-  background: var(--c-bg-box, oklch(0.999999993473546 0.000000037273996 89.875563095902));
+  border-radius: 4px;
+  background: radial-gradient(circle, var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760)) 0 2px, var(--c-bg-box, white) 2.5px);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--lfs-board-dark-active) 40%, transparent);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.12);
+  box-shadow: 0 2px 7px color-mix(in srgb, var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760)) 38%, transparent);
 }
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-moz-range-track {
-  height: 3px;
-  border-radius: 3px;
-  background: var(--c-border, oklch(0.738018666131950 0.000000027508905 89.875562537916));
+  height: 8px;
+  border: 1px solid color-mix(in srgb, var(--lfs-board-gap-active) 70%, transparent);
+  border-radius: 5px;
+  background: repeating-linear-gradient(to right,
+    var(--lfs-board-light-active) 0 calc(12.5% - 1px),
+    var(--lfs-board-gap-active) calc(12.5% - 1px) 12.5%,
+    var(--lfs-board-dark-active) 12.5% calc(25% - 1px),
+    var(--lfs-board-gap-active) calc(25% - 1px) 25%);
 }
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-moz-range-progress {
-  height: 3px;
-  border-radius: 3px;
-  background: var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760));
+  height: 8px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760)) 48%, transparent);
 }
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]::-moz-range-thumb {
-  width: 8px;
-  height: 8px;
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
   border: 2px solid var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760));
-  border-radius: 50%;
-  background: var(--c-bg-box, oklch(0.999999993473546 0.000000037273996 89.875563095902));
+  border-radius: 4px;
+  background: radial-gradient(circle, var(--c-primary, oklch(0.632491577234571 0.101452648604777 144.260038393760)) 0 2px, var(--c-bg-box, white) 2.5px);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--lfs-board-dark-active) 40%, transparent);
 }
 
 html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] input[type="range"]:focus-visible {
@@ -1084,10 +1136,12 @@ html:not([data-lfs-disabled]) .pv_box[data-lfs-pv-sliders] > .pv-board {
 
 html:not([data-lfs-disabled]) #lfs-pv-preview {
   position: absolute !important;
-  inset: 0 !important;
+  inset: auto !important;
+  left: var(--lfs-pv-left, 0%) !important;
+  top: var(--lfs-pv-top, 0%) !important;
   z-index: 2147483647 !important;
-  width: 100% !important;
-  height: 100% !important;
+  width: var(--lfs-pv-width, 100%) !important;
+  height: var(--lfs-pv-height, 100%) !important;
   overflow: hidden !important;
   pointer-events: none !important;
   visibility: visible !important;
@@ -1118,6 +1172,16 @@ html:not([data-lfs-disabled]) #lfs-move-preview > piece.lfs-move-preview-piece {
 }
 
 html:not([data-lfs-disabled]) #lfs-move-preview > svg.lfs-move-preview-paths {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 2 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: visible !important;
+  pointer-events: none !important;
+}
+
+html:not([data-lfs-disabled]) #lfs-pv-preview > svg.lfs-move-preview-paths {
   position: absolute !important;
   inset: 0 !important;
   z-index: 2 !important;

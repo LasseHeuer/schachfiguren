@@ -8,6 +8,73 @@ const colors = globalThis.LichessColors;
 const settings = globalThis.LichessSettings;
 const threats = globalThis.LichessThreatCoding;
 
+test("piece hover reacts immediately and only checks the latest fallback position", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const frames = new Map();
+  let nextFrame = 0;
+  class Element {
+    constructor(isPiece = false) {
+      this.isPiece = isPiece;
+      this.isConnected = true;
+      this.classList = { contains: () => false };
+      this.animateCount = 0;
+    }
+    closest(selector) {
+      if (this.isPiece && selector.includes("piece.white")) return this;
+      return selector === ".main-board, .mini-game" ? container : null;
+    }
+    matches() { return false; }
+    querySelector() { return null; }
+    setAttribute() {}
+    removeAttribute() {}
+    animate() {
+      this.animateCount++;
+      return { finished: new Promise(() => {}), cancel() {} };
+    }
+    getBoundingClientRect() { return this.rect; }
+  }
+  const pieceA = new Element(true);
+  pieceA.rect = { left: 75, top: 75, width: 50, height: 50 };
+  const pieceB = new Element(true);
+  pieceB.rect = { left: 275, top: 75, width: 50, height: 50 };
+  const board = {
+    getBoundingClientRect: () => ({ width: 400, height: 400 }),
+    querySelectorAll: () => [pieceA, pieceB]
+  };
+  const container = { querySelector: () => board };
+  const overlay = new Element();
+  const context = vm.createContext({
+    Element,
+    document: { documentElement: {}, addEventListener() {}, elementFromPoint: () => overlay },
+    window: { addEventListener() {} },
+    MutationObserver: class { observe() {} },
+    requestAnimationFrame(callback) { frames.set(++nextFrame, callback); return nextFrame; },
+    cancelAnimationFrame(id) { frames.delete(id); }
+  });
+  const source = readFileSync(join(__dirname, "piece-bounce.js"), "utf8");
+  vm.runInContext(source.replace("  globalThis.LichessPieceBounce = { update };", `
+    globalThis.testing = { update, updateHoveredPiece };
+  `), context);
+  const api = context.testing;
+  api.update({ enabled: true, pieceBounceEnabled: true, disableAnimations: false, pieceBounceLoop: false,
+    pieceBounceStyle: "wiggle-only", pieceBounceWiggleCurve: [0.2, -14, 0.6, -88],
+    pieceBounceWiggleAngle: 5, pieceBounceWiggleDuration: 500, pieceBounceTiming: 0 });
+  const move = (target, clientX) => api.updateHoveredPiece({ type: "pointermove", pointerType: "mouse", target, clientX, clientY: 100 });
+
+  move(pieceA, 100);
+  assert.equal(pieceA.animateCount, 1, "direct piece hits start without waiting for an animation frame");
+  move(overlay, 100);
+  move(overlay, 300);
+  assert.equal(frames.size, 1, "fallback hit tests share one pending frame instead of queuing mouse events");
+  const callback = frames.values().next().value;
+  frames.clear();
+  callback();
+  assert.equal(pieceA.animateCount, 1, "the obsolete fallback position is discarded");
+  assert.equal(pieceB.animateCount, 1, "the most recent fallback position determines the hover target");
+});
+
 test("game analysis publishes only known mainline clock states", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");
@@ -624,7 +691,7 @@ test("System Rund shares existing SVG assets for both piece colors", () => {
   }
 });
 
-test("king movement fields follow preview animation distances and board orientation", () => {
+test("king movement fields stay at the preview source until animation completes", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");
   const { join } = require("node:path");
@@ -708,13 +775,19 @@ test("king movement fields follow preview animation distances and board orientat
   previewKingRect = { ...previewKingRect, left: 517.5 };
   const kingAfterMidpoint = api.readPosition(animationBoard).kings[0];
   assert.equal(kingAfterMidpoint.row, 4);
-  assert.equal(kingAfterMidpoint.col, 5);
+  assert.equal(kingAfterMidpoint.col, 4);
+  api.renderBoard(animationBoard, entry);
+  assert.equal(overlaySvg.children[0].attributes.d, sectorsBeforeMove);
+
+  previewKing.dataset.square = "f4";
+  delete previewKing.dataset.lfsPvAnimationSourceSquare;
+  previewKing.getAnimations = () => [];
+  previewKingRect = { left: 537.5, top: 437.5, width: 25, height: 25 };
+  assert.equal(api.readPosition(animationBoard).kings[0].col, 5);
   api.renderBoard(animationBoard, entry);
   assert.notEqual(overlaySvg.children[0].attributes.d, sectorsBeforeMove);
 
   previewKing.dataset.square = "e4";
-  delete previewKing.dataset.lfsPvAnimationSourceSquare;
-  previewKing.getAnimations = () => [];
   previewKingRect = { left: 437.5, top: 437.5, width: 25, height: 25 };
   previewRook.dataset.lfsPvAnimationSourceSquare = "a8";
   previewRook.getAnimations = () => [{ playState: "running" }];
@@ -722,6 +795,12 @@ test("king movement fields follow preview animation distances and board orientat
   api.renderBoard(animationBoard, entry);
   assert.equal(overlaySvg.children.length, 0);
   previewRookRect = { ...previewRookRect, left: 437.5 };
+  assert.equal(api.readPosition(animationBoard).position[0][0], "bR");
+  assert.equal(api.readPosition(animationBoard).position[0][4], "");
+  api.renderBoard(animationBoard, entry);
+  assert.equal(overlaySvg.children.length, 0);
+  delete previewRook.dataset.lfsPvAnimationSourceSquare;
+  previewRook.getAnimations = () => [];
   assert.equal(api.readPosition(animationBoard).position[0][4], "bR");
   api.renderBoard(animationBoard, entry);
   assert.ok(overlaySvg.children.length > 0);
@@ -1191,6 +1270,469 @@ test("hover preview anticipation uses the configured default and clamps saved va
     assert.equal(normalized.movePreviewAnticipationPercent, expected);
     assert.equal(settings.normalize(normalized).movePreviewAnticipationPercent, expected);
   }
+});
+
+test("candidate slider controls are configurable in both settings views", () => {
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  assert.equal(settings.normalize().pvSliderHoverThresholdPx, 20);
+  assert.equal(settings.normalize().pvSliderAreaHeightPx, 40);
+  assert.equal(settings.normalize().pvPreviewDashed, true);
+  assert.equal(settings.normalize({ pvSliderSpacingPx: 6 }).pvSliderSpacingPx, undefined);
+  for (const [saved, expected] of [[0, 0], [24, 24], [60, 60], [-5, 0], [80, 60], ["invalid", 20]]) {
+    assert.equal(settings.normalize({ pvSliderHoverThresholdPx: saved }).pvSliderHoverThresholdPx, expected);
+  }
+  for (const [saved, expected] of [[24, 24], [48, 48], [72, 72], [0, 24], [90, 72], ["invalid", 40]]) {
+    assert.equal(settings.normalize({ pvSliderAreaHeightPx: saved }).pvSliderAreaHeightPx, expected);
+  }
+  assert.equal(settings.normalize({ pvPreviewDashed: false }).pvPreviewDashed, false);
+  for (const file of ["options.html", "popup.html"]) {
+    const html = readFileSync(join(__dirname, file), "utf8");
+    assert.match(html, /type="range"[^>]*data-setting="pvSliderHoverThresholdPx"/);
+    assert.match(html, /type="range"[^>]*data-setting="pvSliderAreaHeightPx"/);
+    assert.match(html, /type="checkbox"[^>]*data-setting="pvPreviewDashed"/);
+  }
+  const stylesheet = readFileSync(join(__dirname, "extension.css"), "utf8");
+  assert.match(stylesheet, /\.pv_box\[data-lfs-pv-sliders\] \.pv-wrap-toggle\s*\{\s*display:\s*none\s*!important;/);
+  assert.match(stylesheet, /height:\s*var\(--lfs-pv-slider-area-height/);
+  assert.match(stylesheet, /repeating-linear-gradient\(to right/);
+});
+
+test("candidate preview keeps overlays when animation analysis skips an unchanged position", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const source = readFileSync(join(__dirname, "content.js"), "utf8");
+  const replaceFunction = source.match(/function replacePvPreviewChildren\(fragment, pieces\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(replaceFunction, "candidate replacement must retain board analysis overlays");
+
+  const overlay = (name, layer) => ({
+    name,
+    localName: "svg",
+    dataset: { lfsBoardOverlay: layer },
+    hasAttribute: attribute => attribute === "data-lfs-board-overlay"
+  });
+  const piece = name => ({ name, localName: "piece", dataset: {} });
+  const betweenPieces = overlay("between-pieces", "between-pieces");
+  const abovePieces = overlay("above-pieces", "above-pieces");
+  const oldPath = { name: "old-preview-path", localName: "svg", dataset: {}, hasAttribute: () => false };
+  const retained = piece("retained-piece");
+  const removed = piece("removed-piece");
+  const added = piece("new-piece");
+  const board = {
+    children: [oldPath, betweenPieces, retained, removed, abovePieces],
+    get firstChild() { return this.children[0] ?? null; },
+    insertBefore(node, reference) {
+      assert.notEqual(node.parentElement, this, "retained nodes must not be detached and reinserted");
+      const index = reference ? this.children.indexOf(reference) : this.children.length;
+      this.children.splice(index, 0, node);
+      node.parentElement = this;
+    }
+  };
+  for (const child of board.children) {
+    child.parentElement = board;
+    child.remove = () => {
+      assert.notEqual(child, retained, "retained piece must remain connected");
+      assert.notEqual(child, betweenPieces, "analysis overlay must remain connected");
+      assert.notEqual(child, abovePieces, "analysis overlay must remain connected");
+      board.children.splice(board.children.indexOf(child), 1);
+      child.parentElement = null;
+    };
+  }
+  const context = vm.createContext({ pvPreview: board });
+  vm.runInContext(`${replaceFunction}\nglobalThis.replace = replacePvPreviewChildren;`, context);
+  const fragment = {
+    childNodes: [
+      { name: "new-last-move", localName: "svg" },
+      { name: "new-variation-path", localName: "svg" }
+    ]
+  };
+  context.replace(fragment, [retained, added]);
+
+  assert.deepEqual(board.children.map(child => child.name), [
+    "new-last-move", "new-variation-path", "between-pieces", "retained-piece", "new-piece", "above-pieces"
+  ]);
+  assert.equal(retained.parentElement, board);
+  assert.equal(betweenPieces.parentElement, board);
+  assert.equal(abovePieces.parentElement, board);
+  assert.equal(removed.parentElement, null);
+});
+
+test("candidate first-move setup maps the initial FEN for either board orientation", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const source = readFileSync(join(__dirname, "content.js"), "utf8");
+  const helper = source.match(/function getPvPreviewPieces\([^)]*\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(helper, "candidate preview can read its FEN position");
+  const context = vm.createContext({});
+  const getPieces = vm.runInContext(`${helper}\ngetPvPreviewPieces`, context);
+  const summarize = pieces => JSON.parse(JSON.stringify(pieces?.map(({ square, piece, left, top }) => ({ square, piece, left, top }))));
+  const fen = "8/8/8/8/8/8/R7/7k w - - 0 1";
+
+  assert.deepEqual(summarize(getPieces(fen, false)), [
+    { square: "a2", piece: "white rook", left: 0, top: 75 },
+    { square: "h1", piece: "black king", left: 87.5, top: 87.5 }
+  ]);
+  assert.deepEqual(summarize(getPieces(fen, true)), [
+    { square: "a2", piece: "white rook", left: 87.5, top: 12.5 },
+    { square: "h1", piece: "black king", left: 0, top: 0 }
+  ]);
+  assert.equal(getPieces("7k/8/8/8/8/8/R7/Q~6K w - - 0 1", false)?.some(piece => piece.square === "a1"), true);
+  assert.equal(getPieces("invalid", false), null);
+});
+
+test("candidate preview aligns with the actual board inside a scaled container", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const source = readFileSync(join(__dirname, "content.js"), "utf8");
+  const helper = source.match(/function alignPvPreview\([^)]*\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(helper);
+  const align = vm.runInNewContext(`${helper}\nalignPvPreview`);
+  const properties = new Map();
+  const parent = {
+    offsetWidth: 200, offsetHeight: 100, clientWidth: 190, clientHeight: 90, clientLeft: 5, clientTop: 5,
+    getBoundingClientRect: () => ({ left: 100, top: 50, width: 400, height: 200 })
+  };
+  const preview = { offsetParent: parent, style: {
+    getPropertyValue: name => properties.get(name) ?? "",
+    setProperty: (name, value) => properties.set(name, value)
+  } };
+  const board = { getBoundingClientRect: () => ({ left: 130, top: 70, width: 360, height: 160 }) };
+  align(board, preview);
+  assert.equal(parseFloat(properties.get("--lfs-pv-left")), 20 / 380 * 100);
+  assert.equal(parseFloat(properties.get("--lfs-pv-top")), 10 / 180 * 100);
+  assert.equal(parseFloat(properties.get("--lfs-pv-width")), 360 / 380 * 100);
+  assert.equal(parseFloat(properties.get("--lfs-pv-height")), 160 / 180 * 100);
+});
+
+test("candidate preview prepares analysis before switching boards and retains pieces", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const source = readFileSync(join(__dirname, "content.js"), "utf8");
+  const extract = name => {
+    const match = source.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n  \\}`));
+    assert.ok(match, name);
+    return match[0];
+  };
+  const calls = [];
+  class Element {
+    constructor(localName) {
+      this.localName = localName;
+      this.children = [];
+      this.dataset = {};
+      this.style = {};
+      this.attributes = {};
+      this.isConnected = true;
+    }
+    get firstChild() { return this.children[0] ?? null; }
+    setAttribute(name, value) { this.attributes[name] = value; if (name === "data-lfs-pv-preview") calls.push("show"); }
+    hasAttribute(name) { return Object.hasOwn(this.attributes, name); }
+    removeAttribute(name) { delete this.attributes[name]; }
+    append(...nodes) { for (const node of nodes) this.insertBefore(node, null); }
+    insertBefore(node, reference) {
+      if (node.parentElement) node.remove();
+      const index = reference ? this.children.indexOf(reference) : this.children.length;
+      this.children.splice(index, 0, node);
+      node.parentElement = this;
+    }
+    remove() {
+      if (!this.parentElement) return;
+      this.parentElement.children.splice(this.parentElement.children.indexOf(this), 1);
+      this.parentElement = null;
+    }
+    replaceChildren(...nodes) { for (const node of [...this.children]) node.remove(); this.append(...nodes); }
+    querySelectorAll() { return this.children.filter(child => child.localName === "piece"); }
+    animate(frames) { calls.push(`animate:${this.dataset.lfsPvAnimationSourceSquare}`); this.frames = frames; return { cancel() {} }; }
+  }
+  const wrapper = { classList: { contains: () => false } };
+  const container = new Element("cg-container");
+  const board = new Element("cg-board");
+  board.closest = () => wrapper;
+  board.getBoundingClientRect = () => ({ left: 40, top: 0, width: 800, height: 800 });
+  container.append(board);
+  const box = { dataset: { fen: "7k/8/8/8/8/8/R7/7K w - - 0 1" } };
+  const move = { dataset: { board: "7k/8/8/8/8/R7/8/7K b - - 1 1|a2a3" } };
+  const row = { isConnected: true, closest: () => box, querySelectorAll: () => [move] };
+  const slider = { isConnected: true, value: "0", _lfsPvRow: row };
+  const document = {
+    querySelectorAll: () => [board],
+    createElement: name => new Element(name),
+    createDocumentFragment: () => ({ childNodes: [], append(node) { this.childNodes.push(node); } })
+  };
+  const prepare = name => ({ prepareCandidatePreview(preview) {
+    assert.equal(preview.parentElement, container);
+    assert.equal(board.hasAttribute("data-lfs-pv-preview"), false);
+    assert.ok(preview.children.some(piece => piece.dataset.square === "a2"));
+    calls.push(name);
+  } });
+  const context = vm.createContext({
+    document, Element,
+    settings: { enabled: true, disableAnimations: false, moveAnimationDuration: 200, moveAnimationCurve: [0, 0, 1, -90] },
+    pvPreview: null, pvPreviewBoard: null, pvPreviewSlider: slider, pvPreviewFen: box.dataset.fen,
+    pvPreviewSourceIndex: -1, pvPreviewSourceSlider: null, pvPreviewSourceRow: null,
+    pvPreviewSourceFen: null, pvPreviewSourceOrientation: null, pvPreviewStepDuration: undefined,
+    syncPvLineSliders() {}, clearPvPreview() {}, resetPvAnimationPositionTracking() {}, schedulePvAnimationPositionTracking() {},
+    LichessLastMoveLine: { createPreviewLine: () => null },
+    LichessThreatCoding: prepare("threat"), LichessKingMovementFields: prepare("king"),
+    LichessSelectedPieceWedge: prepare("lines")
+  });
+  vm.runInContext(["replacePvPreviewChildren", "getPvPreviewPieces", "preparePvPreviewAnalysis", "alignPvPreview", "syncPvPreview"].map(extract).join("\n")
+    + "\nglobalThis.sync = syncPvPreview;", context);
+  context.sync();
+  assert.deepEqual(calls, ["threat", "king", "lines", "animate:a2", "show"]);
+  const preview = container.children[1];
+  const rook = preview.children.find(piece => piece.dataset.piece === "white rook");
+  assert.equal(rook.dataset.square, "a3");
+  assert.deepEqual(JSON.parse(JSON.stringify(rook.frames)), [
+    { left: "0%", top: "75%" }, { left: "0%", top: "62.5%" }
+  ]);
+  assert.equal(rook.parentElement, preview);
+});
+
+test("candidate board mount does not redraw the original analysis", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
+  const observer = source.match(/documentObserver = new MutationObserver\(mutations => \{([\s\S]*?)\n  \}\);/)?.[1];
+  assert.ok(observer);
+  const original = { id: "original" };
+  const candidate = { id: "lfs-pv-preview" };
+  const scheduled = [];
+  let scans = 0;
+  const context = vm.createContext({
+    containsBoard: node => Boolean(node.id),
+    scanBoards: () => scans++,
+    observedBoards: new Map([[original, {}], [candidate, {}]]),
+    scheduleRender: board => scheduled.push(board.id)
+  });
+  const update = vm.runInContext(`mutations => {${observer}}`, context);
+  update([{ addedNodes: [candidate], removedNodes: [] }]);
+  update([{ addedNodes: [], removedNodes: [candidate] }]);
+  assert.equal(scans, 2);
+  assert.deepEqual(scheduled, []);
+  update([{ addedNodes: [original], removedNodes: [] }]);
+  assert.deepEqual(scheduled, ["original", "lfs-pv-preview"]);
+});
+
+test("candidate slider follows the pointer across overlapping rows", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const source = readFileSync(join(__dirname, "content.js"), "utf8");
+  const hoverRange = source.match(/function isPvSliderPointerWithinHoverRange\(slider, event\) \{[\s\S]*?\n  \}/)?.[0];
+  const beginHover = source.match(/function beginPvSliderHover\(slider, event\) \{[\s\S]*?\n  \}/)?.[0];
+  const pointerMove = source.match(/function handlePvSliderPointerMove\(event\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(hoverRange && beginHover && pointerMove, "candidate slider hover tracking is present");
+  const slider = { id: "first", getBoundingClientRect: () => ({ left: 100, right: 300, top: 20, bottom: 42 }) };
+  const nextSlider = { id: "second", getBoundingClientRect: () => ({ left: 100, right: 300, top: 38, bottom: 60 }) };
+  const thirdSlider = { id: "third", getBoundingClientRect: () => ({ left: 100, right: 300, top: 56, bottom: 78 }) };
+  const thirdSliderTarget = { closest: () => thirdSlider };
+  const context = vm.createContext({
+    settings: { pvSliderHoverThresholdPx: 0 },
+    pvHoveredSlider: slider,
+    previewedX: [],
+    cleared: false
+  });
+  vm.runInContext(`
+    function previewPvMoveAtPointer(slider, clientX) { previewedX.push(slider.id + ":" + clientX); }
+    function clearPvPreview() { pvHoveredSlider = null; cleared = true; }
+    ${hoverRange}\n${beginHover}\n${pointerMove}
+    globalThis.begin = beginPvSliderHover;
+    globalThis.update = handlePvSliderPointerMove;
+  `, context);
+  context.begin(slider, { pointerType: "mouse", clientX: 120, clientY: 31 });
+  context.begin(nextSlider, { pointerType: "mouse", clientX: 280, clientY: 40 });
+  context.update({ pointerType: "mouse", target: { closest: () => nextSlider }, clientX: 200, clientY: 40 });
+  assert.equal(context.pvHoveredSlider, nextSlider);
+  assert.deepEqual(Array.from(context.previewedX), ["first:120", "second:280", "second:200"]);
+  context.update({ pointerType: "mouse", target: thirdSliderTarget, clientX: 260, clientY: 70 });
+  context.update({ pointerType: "mouse", target: thirdSliderTarget, clientX: 160, clientY: 70 });
+  assert.equal(context.pvHoveredSlider, thirdSlider);
+  assert.deepEqual(Array.from(context.previewedX), [
+    "first:120", "second:280", "second:200", "third:260", "third:160"
+  ]);
+  context.update({ pointerType: "mouse", clientX: 280, clientY: 79 });
+  assert.equal(context.pvHoveredSlider, null);
+  assert.equal(context.cleared, true);
+});
+
+test("candidate preview overlays update only after all animations settle", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const source = readFileSync(join(__dirname, "content.js"), "utf8");
+  const extract = name => {
+    const match = source.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n  \\}`));
+    assert.ok(match, `${name} must remain available for candidate animation tracking`);
+    return match[0];
+  };
+  let geometryReads = 0;
+  const pieces = [
+    { dataset: { lfsPvAnimationSourceSquare: "e1" }, animations: [{ playState: "running" }],
+      getAnimations() { return this.animations; }, getBoundingClientRect() { geometryReads++; } },
+    { dataset: { lfsPvAnimationSourceSquare: "h1" }, animations: [{ playState: "running" }],
+      getAnimations() { return this.animations; }, getBoundingClientRect() { geometryReads++; } }
+  ];
+  const board = { isConnected: true, querySelectorAll: () => pieces };
+  const frameCallbacks = [];
+  const events = [];
+  const context = vm.createContext({
+    settings: { enabled: true, analysisEnabled: true, kingMovementFieldsEnabled: true },
+    pvPreview: board,
+    pvAnimationPositionFrame: 0,
+    pvAnimationInProgress: false,
+    document: { dispatchEvent: event => events.push(event) },
+    CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init.detail; } },
+    requestAnimationFrame(callback) { frameCallbacks.push(callback); return frameCallbacks.length; }
+  });
+  vm.runInContext(`${extract("hasPvAnimationInProgress")}\n${extract("hasPvAnimationAnalysis")}\n${extract("schedulePvAnimationPositionTracking")}\nglobalThis.start = schedulePvAnimationPositionTracking;`, context);
+
+  const runFrame = () => frameCallbacks.shift()();
+  context.start();
+  runFrame();
+  runFrame();
+  assert.equal(events.length, 0, "movement within the animation must not dispatch redraws");
+  assert.equal(geometryReads, 0, "tracking does not read animated layout geometry");
+
+  pieces[0].dataset.lfsPvAnimationSourceSquare = "";
+  pieces[0].animations = [];
+  runFrame();
+  assert.equal(events.length, 0, "one finished piece must wait while another is still moving");
+  pieces[1].dataset.lfsPvAnimationSourceSquare = "";
+  pieces[1].animations = [];
+  runFrame();
+  assert.deepEqual(events.map(event => event.type), ["lfs-pv-animation-position"]);
+  assert.equal(frameCallbacks.length, 0);
+});
+
+test("candidate previews draw configured piece paths across their variation", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  require("./move-preview-board.js");
+  const boardLogic = globalThis.LichessMovePreviewBoard;
+  const source = readFileSync(join(__dirname, "move-preview.js"), "utf8");
+  const extract = name => {
+    const match = source.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n  \\}`));
+    assert.ok(match, `${name} must remain available for candidate variation paths`);
+    return match[0];
+  };
+  const createdElements = [];
+  const context = vm.createContext({
+    boardLogic,
+    settings: {
+      enabled: true,
+      userArrowWidthPercent: 6,
+      userArrowOpacity: 60,
+      userArrowDashed: true,
+      pvPreviewDashed: true,
+      userArrowDashLengthPercent: 10,
+      userArrowDashGapPercent: 5,
+      userArrowCornerRadiusPercent: 0,
+      whitePieceColor: "#ffffff",
+      blackPieceColor: "#000000"
+    },
+    svgNamespace: "http://www.w3.org/2000/svg",
+    document: {
+      createElementNS(namespace, name) {
+        const element = {
+          namespace,
+          name,
+          attributes: {},
+          dataset: {},
+          children: [],
+          classes: [],
+          classList: { add: value => element.classes.push(value) },
+          setAttribute(key, value) { this.attributes[key] = String(value); },
+          append(...nodes) { this.children.push(...nodes); }
+        };
+        createdElements.push(element);
+        return element;
+      }
+    }
+  });
+  const helpers = ["createSvgElement", "getArrowAttributes", "screenSquare", "getPathPointsData",
+    "updateArrowPath", "createPieceIds", "movePieceIds", "createVariationPathSvg"].map(extract).join("\n");
+  vm.runInContext(`${helpers}\nglobalThis.create = createVariationPathSvg;`, context);
+
+  const svg = context.create("7k/8/8/8/8/8/8/R6K w - - 0 1", ["a1a2", "h8g8", "a2a4"], false);
+  assert.equal(svg.classes.includes("lfs-move-preview-paths"), true);
+  const whitePath = svg.children.find(path => path.dataset.pieceColor === "w");
+  const blackPath = svg.children.find(path => path.dataset.pieceColor === "b");
+  assert.equal(whitePath.attributes.stroke, "#ffffff");
+  assert.equal(whitePath.attributes["stroke-width"], "0.75");
+  assert.equal(whitePath.attributes["stroke-opacity"], "0.6");
+  assert.equal(whitePath.attributes["stroke-dasharray"], "1.25 0.625");
+  assert.equal(whitePath.attributes.d, "M 6.25 93.75 L 6.25 81.25 L 6.25 56.25");
+  assert.equal(blackPath.attributes.d, "M 93.75 6.25 L 81.25 6.25");
+  context.settings.userArrowDashed = false;
+  const dashedDespiteArrowPreference = context.create("7k/8/8/8/8/8/8/R6K w - - 0 1", ["a1a2"], false);
+  assert.equal(dashedDespiteArrowPreference.children[0].attributes["stroke-dasharray"], "1.25 0.625");
+  context.settings.pvPreviewDashed = false;
+  const solidPreview = context.create("7k/8/8/8/8/8/8/R6K w - - 0 1", ["a1a2"], false);
+  assert.equal(solidPreview.children[0].attributes["stroke-dasharray"], undefined);
+  assert.equal(context.create("invalid", [], false), null);
+  assert.ok(createdElements.length > 0);
+});
+
+test("candidate analysis skips identical source positions during piece animation", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
+  const extract = name => {
+    const match = source.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n  \\}`));
+    assert.ok(match, `${name} must remain available for candidate render stability`);
+    return match[0];
+  };
+  const context = vm.createContext({ settingsRevision: 0 });
+  vm.runInContext(`${extract("getPreviewAnimationState")}\n${extract("shouldSkipCandidateAnimationRender")}\nglobalThis.shouldSkip = shouldSkipCandidateAnimationRender;`, context);
+  const piece = {
+    dataset: { lfsPvAnimationSourceSquare: "e2" },
+    getAnimations: () => [{ playState: "running" }]
+  };
+  const board = { id: "lfs-pv-preview", querySelectorAll: () => [piece] };
+  const entry = { hoveredSquare: null };
+  const parsed = { position: [["wK"]], selected: null, blackOrientation: false };
+  assert.equal(context.shouldSkip(board, entry, parsed), false, "the first source state still renders");
+  assert.equal(context.shouldSkip(board, entry, parsed), true, "repeated animation frames retain the existing overlays");
+  parsed.position[0][0] = "bK";
+  assert.equal(context.shouldSkip(board, entry, parsed), false, "a changed position must render");
+  context.settingsRevision++;
+  assert.equal(context.shouldSkip(board, entry, parsed), false, "changed settings must render");
+  piece.getAnimations = () => [{ playState: "pending" }];
+  assert.equal(context.shouldSkip(board, entry, parsed), true, "pending animations also retain the source overlays");
+  piece.getAnimations = () => [];
+  assert.equal(context.shouldSkip(board, entry, parsed), false, "the settled destination gets a final render");
+});
+
+test("candidate attack and defense analysis keeps animated pieces at their source square", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
+  const extract = name => {
+    const match = source.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n  \\}`));
+    assert.ok(match, `${name} must remain available for candidate position analysis`);
+    return match[0];
+  };
+  const pieceSquareFunction = source.match(/function getPieceScreenSquare[\s\S]*?\n  \}/)?.[0];
+  assert.ok(pieceSquareFunction, "getPieceScreenSquare must remain available for candidate position analysis");
+  const context = vm.createContext({ globalThis: {} });
+  vm.runInContext(`${extract("getPreviewAnimationState")}\n${pieceSquareFunction}\n${extract("logicalToScreen")}\nglobalThis.getPieceScreenSquare = getPieceScreenSquare;`, context);
+  const piece = {
+    dataset: { lfsPvAnimationSourceSquare: "e2", square: "f4" },
+    getAnimations: () => [{ playState: "running" }]
+  };
+  const board = { id: "lfs-pv-preview" };
+  const whiteSquare = context.getPieceScreenSquare(piece, board, false, {});
+  const blackSquare = context.getPieceScreenSquare(piece, board, true, {});
+  assert.deepEqual([whiteSquare.row, whiteSquare.col], [6, 4]);
+  assert.deepEqual([blackSquare.row, blackSquare.col], [1, 3]);
 });
 
 test("puzzle rating maximum has a stable default and supported limits", () => {
@@ -3011,10 +3553,66 @@ ${marker}`);
       const contentMarker = "  chrome.runtime.onMessage.addListener";
       assert.ok(contentSource.includes(contentMarker));
       await evaluate(contentSource.replace(contentMarker, `
-        globalThis.pvTesting = { syncPvLineSliders, previewPvMove, clearPvPreview, schedulePvAnimationPositionTracking,
+        globalThis.pvTesting = { syncPvLineSliders, previewPvMove, clearPvPreview, schedulePvAnimationPositionTracking, hasPvAnimationAnalysis,
+          getHoveredSlider: () => pvHoveredSlider,
           configure(value) { settings = normalize(value); } };
         return;
 ${contentMarker}`));
+      await t.test("candidate slider hover tolerates vertical deviation up to the configured threshold", async () => {
+        const result = await evaluate(`(() => {
+          const box = document.createElement('div');
+          box.className = 'pv_box'; box.dataset.fen = 'base';
+          box.innerHTML = '<div class="pv"><span class="pv-san">Ra1</span><span class="pv-san">Re1</span></div>';
+          document.body.append(box);
+          pvTesting.configure({ enabled: true, pvSliderHoverThresholdPx: 20 });
+          pvTesting.syncPvLineSliders();
+          const slider = box.querySelector('input[type="range"]');
+          Object.defineProperty(slider, 'getBoundingClientRect', { value: () => ({
+            left: 100, right: 300, width: 200, top: 20, bottom: 42, height: 22
+          }) });
+          slider.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse', clientX: 120, clientY: 31 }));
+          document.body.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse', clientX: 280, clientY: 55 }));
+          const withinThreshold = { value: slider.value, active: pvTesting.getHoveredSlider() === slider };
+          document.body.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse', clientX: 280, clientY: 63 }));
+          const clearedOutsideThreshold = pvTesting.getHoveredSlider() === null;
+          pvTesting.clearPvPreview(); box.remove();
+          return { withinThreshold, clearedOutsideThreshold };
+        })()`);
+        assert.deepEqual(result, {
+          withinThreshold: { value: "1", active: true },
+          clearedOutsideThreshold: true
+        });
+      });
+      await t.test("candidate slider areas grow while keeping each track centered", async () => {
+        const result = await evaluate(`(() => {
+          const box = document.createElement('div');
+          box.className = 'pv_box';
+          box.style.cssText = 'position:relative;width:320px';
+          box.innerHTML = [0, 1, 2].map(() => '<div class="pv"><span class="pv-san">Ra1</span><span class="pv-san">Re1</span></div>').join('');
+          document.body.append(box);
+          pvTesting.configure({ enabled: true, pvSliderAreaHeightPx: 56 });
+          pvTesting.syncPvLineSliders();
+          const rows = [...box.querySelectorAll(':scope > .pv')];
+          const sliders = [...box.querySelectorAll('input[type="range"]')];
+          const centerOffsets = rows.map((row, index) => {
+            const rowRect = row.getBoundingClientRect();
+            const sliderRect = sliders[index].getBoundingClientRect();
+            return Math.abs((rowRect.top + rowRect.bottom) / 2 - (sliderRect.top + sliderRect.bottom) / 2);
+          });
+          const result = {
+            rowHeights: rows.map(row => row.getBoundingClientRect().height),
+            sliderHeights: sliders.map(slider => slider.getBoundingClientRect().height),
+            centerOffsets,
+            boardTrack: getComputedStyle(sliders[0], '::-webkit-slider-runnable-track').backgroundImage
+          };
+          box.remove();
+          return result;
+        })()`);
+        assert.deepEqual(result.rowHeights, [56, 56, 56]);
+        assert.deepEqual(result.sliderHeights, [56, 56, 56]);
+        assert.deepEqual(result.centerOffsets, [0, 0, 0]);
+        assert.match(result.boardTrack, /repeating-linear-gradient/);
+      });
       for (const size of [512, 320]) for (const orientation of ["white", "black"]) {
         const result = await evaluate(`(async () => {
           const host = document.querySelector('.is2d');
@@ -3045,6 +3643,13 @@ ${contentMarker}`));
           await new Promise(resolve => requestAnimationFrame(resolve));
           const preview = document.querySelector('#lfs-pv-preview');
           const parsed = testing.readPosition(preview);
+          pvTesting.configure({ ...options, selectedPieceWedgeEnabled: false, kingMovementFieldsEnabled: false,
+            threatenedPieceOutlineEnabled: false, pinnedPieceOutlineEnabled: false, defenseCirclesEnabled: false,
+            threatCenterOutlineEnabled: false,
+            attackHighlightEnabled: false, defenseHighlightEnabled: false, highlightCascadesEnabled: false,
+            highlightCascadeLinesEnabled: false });
+          const tracksThreatOnly = pvTesting.hasPvAnimationAnalysis();
+          pvTesting.configure(options);
           const paint = element => {
             const before = getComputedStyle(element, '::before');
             const style = before.content !== 'none' ? before : getComputedStyle(element);
@@ -3085,12 +3690,17 @@ ${contentMarker}`));
             screenCol = 4;
             await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))));
             liveAnimation = {
-              threatUpdated: preview.style.getPropertyValue('--lfs-threat-background') !== beforeThreat,
-              linesAndWedgesUpdated: paths() !== beforePaths
+              threatStableDuringAnimation: preview.style.getPropertyValue('--lfs-threat-background') === beforeThreat,
+              linesAndWedgesStableDuringAnimation: paths() === beforePaths
             };
+            rook.removeAttribute('data-lfs-pv-animation-source-square');
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            liveAnimation.threatUpdatedAtDestination = preview.style.getPropertyValue('--lfs-threat-background') !== beforeThreat;
+            liveAnimation.linesAndWedgesUpdatedAtDestination = paths() !== beforePaths;
           }
           const output = {
             matchingColors,
+            tracksThreatOnly,
             duplicateFigures: preview.querySelectorAll(':scope > span.lfs-pv-piece').length,
             colors: [...preview.querySelectorAll(':scope > piece')].map(piece =>
               piece.classList.contains('white') ? 'white' : piece.classList.contains('black') ? 'black' : 'unknown'),
@@ -3110,11 +3720,17 @@ ${contentMarker}`));
         assert.equal(result.rook, "rook");
         assert.equal(result.queen, "queen");
         assert.deepEqual(result.matchingColors, [true, true], "both player colors must use the normal board rendering");
+        assert.equal(result.tracksThreatOnly, false, "static threat overlays must not trigger per-frame animation tracking");
         assert.equal(result.duplicateFigures, 0, "preview pieces must not be drawn twice");
         assert.ok(result.markers > 0, "the candidate position must have visible analysis paths");
         if (result.liveAnimation) liveAnimationResult = result.liveAnimation;
       }
-      assert.deepEqual(liveAnimationResult, { threatUpdated: true, linesAndWedgesUpdated: true });
+      assert.deepEqual(liveAnimationResult, {
+        threatStableDuringAnimation: true,
+        linesAndWedgesStableDuringAnimation: true,
+        threatUpdatedAtDestination: true,
+        linesAndWedgesUpdatedAtDestination: true
+      });
       assert.deepEqual(runtimeErrors, []);
     });
     await t.test("zen clocks follow both half-board contours and shrink along their paths", async () => {

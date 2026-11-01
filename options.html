@@ -306,8 +306,11 @@
           <div class="section-heading"><span class="section-index">08</span><div><h2>Weitere Einstellungen</h2><p>Profilanzeige, Analysegraph und Seitenfarben.</p></div></div>
           <div class="control-grid">
             <label class="field field-wide"><span>Position für „Nochmal“</span><input type="range" min="0.2" max="1" step="0.01" data-setting="puzzleRatingMaxPosition"><output data-value-for="puzzleRatingMaxPosition"></output><small>Legt fest, ab welcher Sliderposition die maximale Bewertung erreicht wird.</small></label>
+            <label class="field field-wide"><span>Kandidatenzug-Slider: vertikale Toleranz</span><input type="range" min="0" max="60" step="1" data-setting="pvSliderHoverThresholdPx"><output data-value-for="pvSliderHoverThresholdPx"></output><small>Erweitert den Hover-Bereich ober- und unterhalb der Kandidatenzug-Slider.</small></label>
+            <label class="field field-wide"><span>Höhe der Kandidatenzug-Sliderbereiche</span><input type="range" min="24" max="72" step="1" data-setting="pvSliderAreaHeightPx"><output data-value-for="pvSliderAreaHeightPx"></output><small>Vergrößert die anklickbare Fläche; der Regler bleibt darin zentriert.</small></label>
             <label class="field"><span>Farbe der blauen Buttons auf Lichess</span><input type="color" data-setting="primaryButtonColor"><small>Einheitlich auf allen Lichess-Seiten.</small></label>
           </div>
+          <label class="switch-field"><span><strong>Gestrichelte Linie im Kandidatenpreview</strong><small>Zeigt die bisherige gestrichelte Zugspur im Brettpreview.</small></span><input type="checkbox" data-setting="pvPreviewDashed" role="switch"></label>
           <div class="theme-grid">
             <details class="theme-panel theme-color-details">
               <summary>Hell</summary>
