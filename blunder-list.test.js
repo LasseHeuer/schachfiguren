@@ -490,7 +490,7 @@ test("home playlist button shows the number of new and due puzzles", () => {
   assert.equal(panel.children[0].textContent, "Rätsel-Playlist (2)");
 });
 
-test("playlist click still starts directly when all saved cards are scheduled for later", () => {
+test("playlist click opens the list when all saved cards are scheduled for later", () => {
   const { api, assigned, context } = loadList("puzzle-playlist.js", `
     ensureHomeClickHandler,
     setup: () => {
@@ -502,7 +502,8 @@ test("playlist click still starts directly when all saved cards are scheduled fo
   api.setup();
   api.ensureHomeClickHandler();
   context.click({ target: { closest: () => ({ dataset: { action: "open" } }) } });
-  assert.equal(assigned[0], "/training/Abc12");
+  assert.equal(assigned.length, 0);
+  assert.equal(context.location.hash, "puzzle-playlist");
 });
 
 test("playlist continuation preserves zen mode when moving to the next puzzle", async () => {

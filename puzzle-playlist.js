@@ -366,7 +366,7 @@
       const control = event.target.closest("[data-action]");
       if (control?.dataset.action === "open") {
         const ready = dueItems();
-        if (playlist.items.length) startQueue((ready.length ? ready : playlist.items).map(item => item.id));
+        if (ready.length) startQueue(ready.map(item => item.id));
         else location.hash = "puzzle-playlist";
       } else if (control?.dataset.action === "blunders") {
         document.dispatchEvent(new CustomEvent("lfs-blunder-open"));
