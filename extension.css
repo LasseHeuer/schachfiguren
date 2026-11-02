@@ -1730,6 +1730,10 @@ html:not([data-lfs-disabled]) .material {
   white-space: nowrap !important;
 }
 
+html:not([data-lfs-disabled]):not([data-lfs-zen-mode]) .material {
+  justify-content: flex-start !important;
+}
+
 html:not([data-lfs-disabled]) .material > div {
   display: inline-block !important;
   margin-inline-start: calc(6.25px * var(--lfs-board-ui-scale, 1)) !important;

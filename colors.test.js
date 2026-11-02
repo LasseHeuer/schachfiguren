@@ -385,6 +385,89 @@ test("threat wedges point at the piece and share line placement in both display 
   assert.equal(mixed.children[1].tag, "path");
 });
 
+test("threat dots share spacing and highlight endpoints in both display roles", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const element = (_, tag) => ({
+    tag, attributes: {}, children: [],
+    setAttribute(key, value) { this.attributes[key] = value; },
+    append(child) { this.children.push(child); }
+  });
+  const context = vm.createContext({ document: { addEventListener() {}, createElementNS: element } });
+  const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
+  vm.runInContext(source.replace("  documentObserver = new MutationObserver", `
+    getFigureRadii = () => new Map([["pawn", Array(720).fill(0.2)]]);
+    globalThis.testing = { renderThreatSegmentsInto, configure(value) { settings = value; } };
+    return;
+    documentObserver = new MutationObserver`), context);
+  const api = context.testing;
+  const options = settings.normalize({
+    threatAttackDisplayMode: "dots", threatDefenseDisplayMode: "dots",
+    threatDotSizePercent: 8, threatLineThickness: 0.02, threatLineGap: 0.01, threatDotGap: 0.07
+  });
+  assert.equal(options.threatAttackDisplayMode, "dots");
+  assert.equal(options.threatDefenseDisplayMode, "dots");
+  assert.equal(settings.normalize({ threatDotSizePercent: 50 }).threatDotSizePercent, 25);
+  assert.equal(settings.normalize().threatDotSizePercent, 5);
+  assert.equal(settings.normalize().threatDotGap, 0.03);
+  assert.equal(settings.normalize({ threatLineGap: 0.11 }).threatDotGap, 0.11, "saved shared gaps carry over to dots");
+  assert.equal(settings.normalize({ threatLineGap: 0.11, threatDotGap: 0.05 }).threatDotGap, 0.05);
+  for (const file of ["options.html", "popup.html"]) {
+    const html = readFileSync(join(__dirname, file), "utf8");
+    assert.equal((html.match(/<option value="dots">Punkte<\/option>/g) ?? []).length, 2);
+    const dotGroups = [...html.matchAll(/<div[^>]*data-threat-display-group="dots"[^>]*>([\s\S]*?)<\/div>/g)];
+    assert.equal(dotGroups.length, file === "popup.html" ? 2 : 1);
+    for (const [, group] of dotGroups) {
+      assert.match(group, /data-setting="threatDotSizePercent"/);
+      assert.match(group, /data-setting="threatDotGap"/);
+      assert.doesNotMatch(group, /data-setting="threatLineGap"/);
+    }
+    const wedgeGroups = [...html.matchAll(/<div[^>]*data-threat-display-group="wedge"[^>]*>([\s\S]*?)<\/div>/g)];
+    assert.equal(wedgeGroups.length, file === "popup.html" ? 2 : 1);
+    for (const [, group] of wedgeGroups) assert.match(group, /data-setting="threatLineGap"/);
+  }
+  api.configure(options);
+  const segment = {
+    target: { row: 3, col: 3 }, source: { row: 3, col: 6 },
+    type: "pawn", angle: 0, color: "#20cc60"
+  };
+  const svg = element();
+  const endpoints = api.renderThreatSegmentsInto(svg, [segment], [segment], "dots", "dots");
+  assert.equal(svg.children.length, 2);
+  assert.ok(svg.children.every(dot => dot.tag === "circle"));
+  for (const dot of svg.children) {
+    assert.equal(dot.attributes.r, "0.04");
+    assert.equal(dot.attributes.fill, segment.color);
+  }
+  const centerDistance = Math.abs(Number(svg.children[0].attributes.cy) - Number(svg.children[1].attributes.cy));
+  assert.ok(Math.abs(centerDistance - options.threatLineThickness - options.threatDotGap) < 1e-10);
+  const endpoint = endpoints.get("3,3:3,6");
+  assert.ok(svg.children.some(dot => Number(dot.attributes.cx) === endpoint.x && Number(dot.attributes.cy) === endpoint.y));
+
+  const singleDotSvg = element();
+  const singleDotEndpoints = api.renderThreatSegmentsInto(singleDotSvg, [segment], [], "dots", "wedge");
+  const singleWedgeSvg = element();
+  api.renderThreatSegmentsInto(singleWedgeSvg, [segment], [], "wedge", "dots");
+  const [wedgeTip, wedgeLeft, wedgeRight] = singleWedgeSvg.children[0].attributes.points.split(" ")
+    .map(point => point.split(",").map(Number));
+  const wedgeMidpoint = {
+    x: (wedgeTip[0] + (wedgeLeft[0] + wedgeRight[0]) / 2) / 2,
+    y: (wedgeTip[1] + (wedgeLeft[1] + wedgeRight[1]) / 2) / 2
+  };
+  const singleDotPoint = singleDotEndpoints.get("3,3:3,6");
+  assert.ok(Math.abs(singleDotPoint.x - wedgeMidpoint.x) < 1e-10);
+  assert.ok(Math.abs(singleDotPoint.y - wedgeMidpoint.y) < 1e-10);
+
+  const wedgeSvg = element();
+  api.renderThreatSegmentsInto(wedgeSvg, [segment], [segment], "wedge", "wedge");
+  const baseCenters = wedgeSvg.children.map(wedge => {
+    const [, left, right] = wedge.attributes.points.split(" ").map(point => point.split(",").map(Number));
+    return (left[1] + right[1]) / 2;
+  });
+  assert.ok(Math.abs(Math.abs(baseCenters[0] - baseCenters[1]) - options.threatLineThickness - options.threatLineGap) < 1e-10);
+});
+
 test("empty move-field attacks and defenses share their configured radius in every display mode", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");
@@ -411,6 +494,7 @@ test("empty move-field attacks and defenses share their configured radius in eve
   const expectedRadii = {
     lines: 0.42 + options.threatLineLength,
     wedge: 0.42 + options.threatWedgeLengthPercent / 100,
+    dots: 0.42 + options.threatWedgeLengthPercent / 200,
     segments: 0.42 + options.threatArcThickness,
     square: 0.42 + options.threatSquareThickness / 2
   };
@@ -534,7 +618,7 @@ test("highlight lines meet the rendered markers in either animation direction", 
   const root = { row: 3, col: 3 };
   const source = { row: 3, col: 6 };
   const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-10, `${actual} != ${expected}`);
-  for (const mode of ["lines", "wedge", "segments", "square"]) for (const reverse of [false, true]) {
+  for (const mode of ["lines", "wedge", "dots", "segments", "square"]) for (const reverse of [false, true]) {
     for (const sourceType of ["rook", "knight"]) {
       api.configure(settings.normalize({ highlightCascadeLinesHoldEnabled: true }));
       const svg = element();
@@ -545,6 +629,8 @@ test("highlight lines meet the rendered markers in either animation direction", 
       if (mode === "wedge") {
         const [, left, right] = drawn.attributes.points.split(" ").map(point => point.split(",").map(Number));
         expected = { x: (left[0] + right[0]) / 2, y: (left[1] + right[1]) / 2 };
+      } else if (mode === "dots") {
+        expected = { x: Number(drawn.attributes.cx), y: Number(drawn.attributes.cy) };
       } else if (mode === "segments") {
         const [, radius] = /A ([\d.e+-]+)/.exec(drawn.attributes.d);
         expected = { x: root.col + 0.5 + Number(radius), y: root.row + 0.5 };
@@ -600,8 +686,8 @@ test("highlight lines meet the rendered markers in either animation direction", 
       assert.equal(line.path.attributes["stroke-linecap"], "round");
     }
   }
-  for (const attackMode of ["lines", "wedge", "segments", "square"]) {
-    for (const defenseMode of ["lines", "wedge", "segments", "square"]) for (const reverse of [false, true]) {
+  for (const attackMode of ["lines", "wedge", "dots", "segments", "square"]) {
+    for (const defenseMode of ["lines", "wedge", "dots", "segments", "square"]) for (const reverse of [false, true]) {
       api.configure(settings.normalize({ highlightCascadeLinesHoldEnabled: true }));
       const marker = { target: root, source, type: "pawn", angle: 0, color: "#20cc60", sourceType: "rook" };
       const endpoints = api.renderThreatSegmentsInto(element(), [marker],
@@ -646,7 +732,7 @@ test("segment highlight endpoints stay on rendered geometry across directions, l
       documentObserver = new MutationObserver`), context);
   const api = context.testing;
   const target = { row: 3, col: 3 };
-  const modes = ["segments", "square", "lines", "wedge"];
+  const modes = ["segments", "square", "lines", "wedge", "dots"];
   let clampedEndpoints = 0;
   for (const mode of ["segments", "square"]) for (const otherMode of modes) {
     for (const role of ["attack", "defense"]) for (const cornerRadius of [0, 6, 50]) {
@@ -4898,7 +4984,7 @@ ${marker}`));
       await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
     });
     await t.test("board highlights connect to the visible marker instead of the piece center", async () => {
-      for (const size of [512, 320]) for (const mode of ["lines", "wedge", "segments", "square"]) for (const reverse of [false, true]) {
+      for (const size of [512, 320]) for (const mode of ["lines", "wedge", "dots", "segments", "square"]) for (const reverse of [false, true]) {
         await send("Emulation.setDeviceMetricsOverride", { width: size, height: size, deviceScaleFactor: 1, mobile: size === 320 });
         const result = await evaluate(`(() => {
           testing.configure(LichessSettings.normalize({ pieceSet: "system_rund", defenseHighlightDepth: 1,
@@ -4913,11 +4999,13 @@ ${marker}`));
             angle: Math.atan2(-2, 1), color: "#20cc60"
           }], [], "lines", "${mode}");
           const line = entry.defenseHighlightRuns[0].lines[0];
-          const marker = entry.arcSvg.querySelector("polygon, path");
+          const marker = entry.arcSvg.querySelector("polygon, path, circle");
           let expected;
           if (marker.tagName === "polygon") {
             const [, left, right] = [...marker.points];
             expected = [(left.x + right.x) / 2, (left.y + right.y) / 2];
+          } else if ("${mode}" === "dots") {
+            expected = [Number(marker.getAttribute("cx")), Number(marker.getAttribute("cy"))];
           } else if ("${mode}" === "segments") {
             const radius = Number(/A ([\\d.e+-]+)/.exec(marker.getAttribute("d"))[1]);
             const angle = Math.atan2(-2, 1);

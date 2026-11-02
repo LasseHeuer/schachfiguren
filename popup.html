@@ -179,7 +179,7 @@
           <label class="range-setting range-wide"><span>Radius leerer Bewegungsfelder (% der Feldbreite)</span><output data-value-for="threatMoveFieldRadius"></output><input type="range" min="0.1" max="0.7" step="0.01" data-setting="threatMoveFieldRadius"></label>
           <label class="switch-setting"><span><strong>Angriffsrichtungen aktivieren</strong><small>Zeigt Angriffsrichtungen am bedrohten Feld.</small></span><input type="checkbox" data-setting="threatenedPieceOutlineEnabled" role="switch"></label>
           <div data-threat-role="attack" data-depends-on="threatenedPieceOutlineEnabled">
-          <label class="select-setting threat-display-select"><span>Angriffsdarstellung</span><select data-setting="threatAttackDisplayMode"><option value="segments">Kreissegmente</option><option value="lines">Linien</option><option value="square">Eckig</option><option value="wedge">Keil</option></select></label>
+          <label class="select-setting threat-display-select"><span>Angriffsdarstellung</span><select data-setting="threatAttackDisplayMode"><option value="segments">Kreissegmente</option><option value="lines">Linien</option><option value="square">Eckig</option><option value="wedge">Keil</option><option value="dots">Punkte</option></select></label>
           <p class="display-setting-label" data-threat-display-label="segments">Kreissegment-Einstellungen</p>
           <div class="range-grid" data-threat-display-group="segments">
             <label class="range-setting outline-width-setting"><span>Radius (ab Feldmitte)</span><output data-value-for="threatArcRadius"></output><input type="range" min="0.3" max="0.7" step="0.01" data-setting="threatArcRadius"></label>
@@ -202,7 +202,12 @@
           <div class="range-grid" data-threat-display-group="wedge" hidden>
             <label class="range-setting"><span>Keillänge (% der Feldbreite)</span><output data-value-for="threatWedgeLengthPercent"></output><input type="range" min="1" max="30" step="1" data-setting="threatWedgeLengthPercent"></label>
             <label class="range-setting"><span>Basisbreite (% der Feldbreite)</span><output data-value-for="threatWedgeWidthPercent"></output><input type="range" min="1" max="30" step="1" data-setting="threatWedgeWidthPercent"></label>
-            <label class="range-setting"><span>Abstand gleichgerichteter Linien</span><output data-value-for="threatLineGap"></output><input type="range" min="0" max="0.2" step="0.01" data-setting="threatLineGap"></label>
+            <label class="range-setting"><span>Abstand gleichgerichteter Keile</span><output data-value-for="threatLineGap"></output><input type="range" min="0" max="0.2" step="0.01" data-setting="threatLineGap"></label>
+          </div>
+          <p class="display-setting-label" data-threat-display-label="dots" hidden>Punkteinstellungen</p>
+          <div class="range-grid" data-threat-display-group="dots" hidden>
+            <label class="range-setting"><span>Punktgröße (% der Feldbreite)</span><output data-value-for="threatDotSizePercent"></output><input type="range" min="1" max="25" step="0.5" data-setting="threatDotSizePercent"></label>
+            <label class="range-setting"><span>Abstand gleichgerichteter Punkte</span><output data-value-for="threatDotGap"></output><input type="range" min="0" max="0.2" step="0.01" data-setting="threatDotGap"></label>
           </div>
           <p class="display-setting-label" data-threat-display-label="square" hidden>Eckige Segment-Einstellungen</p>
           <div class="range-grid" data-threat-display-group="square" hidden>
@@ -217,7 +222,7 @@
           </div>
           <label class="switch-setting"><span><strong>Verteidigungsrichtungen aktivieren</strong><small>Zeigt Verbindungen von deckenden zu eigenen Figuren.</small></span><input type="checkbox" data-setting="defenseCirclesEnabled" role="switch"></label>
           <div data-threat-role="defense" data-depends-on="defenseCirclesEnabled">
-          <label class="select-setting threat-display-select"><span>Verteidigungsdarstellung</span><select data-setting="threatDefenseDisplayMode"><option value="segments">Kreissegmente</option><option value="lines">Linien</option><option value="square">Eckig</option><option value="wedge">Keil</option></select></label>
+          <label class="select-setting threat-display-select"><span>Verteidigungsdarstellung</span><select data-setting="threatDefenseDisplayMode"><option value="segments">Kreissegmente</option><option value="lines">Linien</option><option value="square">Eckig</option><option value="wedge">Keil</option><option value="dots">Punkte</option></select></label>
             <p class="display-setting-label" data-threat-display-label="segments">Kreissegment-Einstellungen</p>
             <div class="range-grid" data-threat-display-group="segments">
               <label class="range-setting outline-width-setting"><span>Radius (ab Feldmitte)</span><output data-value-for="threatArcRadius"></output><input type="range" min="0.3" max="0.7" step="0.01" data-setting="threatArcRadius"></label>
@@ -241,7 +246,12 @@
             <div class="range-grid" data-threat-display-group="wedge" hidden>
               <label class="range-setting"><span>Keillänge (% der Feldbreite)</span><output data-value-for="threatWedgeLengthPercent"></output><input type="range" min="1" max="30" step="1" data-setting="threatWedgeLengthPercent"></label>
               <label class="range-setting"><span>Basisbreite (% der Feldbreite)</span><output data-value-for="threatWedgeWidthPercent"></output><input type="range" min="1" max="30" step="1" data-setting="threatWedgeWidthPercent"></label>
-              <label class="range-setting"><span>Abstand gleichgerichteter Linien</span><output data-value-for="threatLineGap"></output><input type="range" min="0" max="0.2" step="0.01" data-setting="threatLineGap"></label>
+              <label class="range-setting"><span>Abstand gleichgerichteter Keile</span><output data-value-for="threatLineGap"></output><input type="range" min="0" max="0.2" step="0.01" data-setting="threatLineGap"></label>
+            </div>
+            <p class="display-setting-label" data-threat-display-label="dots" hidden>Punkteinstellungen</p>
+            <div class="range-grid" data-threat-display-group="dots" hidden>
+              <label class="range-setting"><span>Punktgröße (% der Feldbreite)</span><output data-value-for="threatDotSizePercent"></output><input type="range" min="1" max="25" step="0.5" data-setting="threatDotSizePercent"></label>
+              <label class="range-setting"><span>Abstand gleichgerichteter Punkte</span><output data-value-for="threatDotGap"></output><input type="range" min="0" max="0.2" step="0.01" data-setting="threatDotGap"></label>
             </div>
             <p class="display-setting-label" data-threat-display-label="square" hidden>Eckige Segment-Einstellungen</p>
             <div class="range-grid" data-threat-display-group="square" hidden>

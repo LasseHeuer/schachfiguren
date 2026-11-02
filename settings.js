@@ -207,8 +207,10 @@
     threatLineLength: 0.16,
     threatWedgeLengthPercent: 16,
     threatWedgeWidthPercent: 10,
+    threatDotSizePercent: 5,
     threatLineThickness: 0.035,
     threatLineGap: 0.03,
+    threatDotGap: 0.03,
     threatLineGapPercent: 29,
     threatLineFigureMargin: 0.04,
     threatLineCurvature: 0.09,
@@ -299,8 +301,10 @@
     threatLineLength: [0, 0.3],
     threatWedgeLengthPercent: [1, 30],
     threatWedgeWidthPercent: [1, 30],
+    threatDotSizePercent: [1, 25],
     threatLineThickness: [0.005, 0.1],
     threatLineGap: [0, 0.2],
+    threatDotGap: [0, 0.2],
     threatLineGapPercent: [0, 50],
     threatLineFigureMargin: [-0.1, 0.2],
     threatLineCurvature: [-0.5, 0.5],
@@ -352,6 +356,10 @@
 
   function normalize(values = {}) {
     const result = { ...defaults, ...values };
+    if (!Object.prototype.hasOwnProperty.call(values, "threatDotGap")
+      && Object.prototype.hasOwnProperty.call(values, "threatLineGap")) {
+      result.threatDotGap = values.threatLineGap;
+    }
     delete result.highlightLineDurationMs;
     delete result.highlightLineArrivalLeadPercent;
     delete result.highlightLineEaseInPercent;
@@ -441,7 +449,7 @@
     if (!["normal", "rightClickPreview"].includes(result.userArrowMode)) {
       result.userArrowMode = defaults.userArrowMode;
     }
-    const displayModes = ["segments", "lines", "square", "wedge"];
+    const displayModes = ["segments", "lines", "square", "wedge", "dots"];
     const legacyDisplayMode = displayModes.includes(values.threatDisplayMode) ? values.threatDisplayMode : defaults.threatAttackDisplayMode;
     for (const key of ["threatAttackDisplayMode", "threatDefenseDisplayMode"]) {
       result[key] = displayModes.includes(values[key]) ? values[key] : legacyDisplayMode;

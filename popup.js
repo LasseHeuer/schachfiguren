@@ -87,7 +87,7 @@
     if (["pieceBounceWiggleAngle", "threatArcAngleDeg", "threatSquareAngleDeg", "threatCenterHatchAngleDeg"].includes(control.dataset.setting)) {
       return `${control.value}°`;
     }
-    if (["threatOwnSeeThrough", "threatOpponentSeeThrough", "threatDepthFactor", "threatArcRadius", "threatArcThickness", "segmentFigureMargin", "threatSquareRadius", "threatSquareThickness", "threatSquareFigureMargin", "threatMoveFieldRadius", "threatLineRadius", "threatLineLength", "threatLineThickness", "threatLineGap", "threatLineFigureMargin", "threatLineCurvature"].includes(control.dataset.setting)) {
+    if (["threatOwnSeeThrough", "threatOpponentSeeThrough", "threatDepthFactor", "threatArcRadius", "threatArcThickness", "segmentFigureMargin", "threatSquareRadius", "threatSquareThickness", "threatSquareFigureMargin", "threatMoveFieldRadius", "threatLineRadius", "threatLineLength", "threatLineThickness", "threatLineGap", "threatDotGap", "threatLineFigureMargin", "threatLineCurvature"].includes(control.dataset.setting)) {
       return `${Math.round(Number(control.value) * 100)}%`;
     }
     return `${control.value}%`;
@@ -757,7 +757,11 @@
 
   const settingKeys = [...new Set([...Object.keys(globalThis.LichessSettings.defaults), soundFilesKey])];
   chrome.storage.local.get(settingKeys, values => {
-    showSettings(values);
+    const settings = globalThis.LichessSettings.normalize(values);
+    showSettings(settings);
+    if (!Object.prototype.hasOwnProperty.call(values, "threatDotGap")) {
+      chrome.storage.local.set({ threatDotGap: settings.threatDotGap });
+    }
     currentSoundSettings = values[soundSettingsKey] && typeof values[soundSettingsKey] === "object" ? values[soundSettingsKey] : {};
     customSoundNames = Array.isArray(values[soundFilesKey]) ? values[soundFilesKey] : [];
     renderSoundSettings();

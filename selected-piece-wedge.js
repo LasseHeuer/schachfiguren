@@ -2098,7 +2098,9 @@
       const normal = { x: -direction.y, y: direction.x };
       const offsets = [0];
       for (let index = 1; index < group.length; index++) {
-        offsets.push(offsets[index - 1] + settings.threatLineThickness + settings.threatLineGap);
+        const previousGap = group[index - 1].dot ? settings.threatDotGap : settings.threatLineGap;
+        const currentGap = group[index].dot ? settings.threatDotGap : settings.threatLineGap;
+        offsets.push(offsets[index - 1] + settings.threatLineThickness + (previousGap + currentGap) / 2);
       }
       const groupCenter = (offsets[0] + offsets[offsets.length - 1]) / 2;
 
@@ -2116,8 +2118,10 @@
           figureBlend: segment.figureBlend,
           color: segment.color,
           wedge: segment.wedge,
+          dot: segment.dot,
+          gap: segment.dot ? settings.threatDotGap : settings.threatLineGap,
           moveFieldRadius: segment.moveFieldRadius,
-          length: segment.wedge ? settings.threatWedgeLengthPercent / 100 : settings.threatLineLength,
+          length: segment.wedge || segment.dot ? settings.threatWedgeLengthPercent / 100 : settings.threatLineLength,
           direction,
           normal,
           offset,
@@ -2128,10 +2132,9 @@
     }
 
     const gap = settings.threatLineLength * settings.threatLineGapPercent / 100;
-    const laneSpacing = settings.threatLineThickness + settings.threatLineGap;
-    const axialStagger = settings.threatLineGap / 2;
-    const proximityThreshold = Math.max(laneSpacing, gap + settings.threatLineThickness);
-    const lateralTolerance = laneSpacing + 0.000001;
+    function getLaneSpacing(a, b) {
+      return settings.threatLineThickness + (a.gap + b.gap) / 2;
+    }
 
     function updateLineRadii(line) {
       const radius = line.moveFieldRadius ?? settings.threatLineRadius;
@@ -2177,7 +2180,7 @@
       if (a.normal.x * b.normal.x + a.normal.y * b.normal.y < 0.99) return Infinity;
       const axialGap = Math.max(0, Math.max(a.start, b.start) - Math.min(a.end, b.end));
       const lateralGap = Math.abs(a.lateral - b.lateral);
-      if (lateralGap > lateralTolerance) return Infinity;
+      if (lateralGap > getLaneSpacing(a.line, b.line) + 0.000001) return Infinity;
       return Math.hypot(axialGap, lateralGap);
     }
     const unitParent = unitRecords.map((_, index) => index);
@@ -2186,7 +2189,7 @@
       for (let j = i + 1; j < unitRecords.length; j++) {
         const a = unitRecords[i];
         const b = unitRecords[j];
-        if (getSegmentDistance(a, b) > proximityThreshold) continue;
+        if (getSegmentDistance(a, b) > Math.max(getLaneSpacing(a.line, b.line), gap + settings.threatLineThickness)) continue;
         unitParent[findUnit(i)] = findUnit(j);
       }
     }
@@ -2210,9 +2213,16 @@
       // Keep the larger direction block together on the left/top, as in the mockup.
       const orderedMembers = laneIncreasesRightOrDown ? [...primary, ...secondary] : [...secondary, ...primary];
       const meanLateral = members.reduce((sum, member) => sum + member.lateral, 0) / members.length;
+      const laneOffsets = [0];
+      for (let index = 1; index < orderedMembers.length; index++) {
+        const previousGap = orderedMembers[index - 1].line.gap;
+        const currentGap = orderedMembers[index].line.gap;
+        laneOffsets.push(laneOffsets[index - 1] + settings.threatLineThickness + (previousGap + currentGap) / 2);
+      }
+      const laneOffsetCenter = (laneOffsets[0] + laneOffsets[laneOffsets.length - 1]) / 2;
       orderedMembers.forEach((member, index) => {
         const { line, normal } = member;
-        const targetLateral = meanLateral + (index - (members.length - 1) / 2) * laneSpacing;
+        const targetLateral = meanLateral + laneOffsets[index] - laneOffsetCenter;
         line.offset = (targetLateral - (line.center.x * normal.x + line.center.y * normal.y)) / (line.normal.x * normal.x + line.normal.y * normal.y);
         line.laneLateral = targetLateral;
         line.primaryOrientation = primaryOrientation;
@@ -2260,9 +2270,9 @@
       if (!members.some(member => member.line.partner)) continue;
       for (const { line } of members) {
         if (line.orientation === line.primaryOrientation) continue;
-        line.axialShift = axialStagger;
-        line.innerRadius += axialStagger;
-        line.outerRadius += axialStagger;
+        line.axialShift = line.gap / 2;
+        line.innerRadius += line.axialShift;
+        line.outerRadius += line.axialShift;
       }
     }
 
@@ -2292,8 +2302,8 @@
       const distance = distanceX * line.direction.x + distanceY * line.direction.y;
       const lineLimit = (2 * distance + line.innerRadius - 2 * partner.innerRadius) / 3;
       const partnerLimit = (2 * distance + partner.innerRadius - 2 * line.innerRadius) / 3;
-      if (lineLimit <= line.innerRadius + (line.wedge ? 0 : settings.threatLineThickness)
-        || partnerLimit <= partner.innerRadius + (partner.wedge ? 0 : settings.threatLineThickness)) {
+      if (lineLimit <= line.innerRadius + (line.wedge || line.dot ? 0 : settings.threatLineThickness)
+        || partnerLimit <= partner.innerRadius + (partner.wedge || partner.dot ? 0 : settings.threatLineThickness)) {
         line.suppressed = true;
         partner.suppressed = true;
       } else {
@@ -2319,7 +2329,7 @@
         ? Math.min(...partnerLengths)
         : Math.min(...active.map(line => line.outerRadius - line.innerRadius));
       const commonLength = Math.min(...active.map(line => line.length), candidateLength);
-      if (commonLength <= 0 || active.some(line => !line.wedge && commonLength < settings.threatLineThickness)) {
+      if (commonLength <= 0 || active.some(line => !line.wedge && !line.dot && commonLength < settings.threatLineThickness)) {
         for (const line of active) {
           line.suppressed = true;
           if (line.partner) line.partner.suppressed = true;
@@ -2371,7 +2381,7 @@
         ...active.map(line => line.length),
         ...active.map(line => line.finalOuter - line.finalInner)
       );
-      if (commonLength <= 0 || active.some(line => !line.wedge && commonLength < settings.threatLineThickness)) {
+      if (commonLength <= 0 || active.some(line => !line.wedge && !line.dot && commonLength < settings.threatLineThickness)) {
         for (const line of active) {
           line.suppressed = true;
           if (line.partner) line.partner.suppressed = true;
@@ -2386,15 +2396,20 @@
       const { center, direction, normal, offset } = line;
       const innerRadius = line.finalInner;
       const outerRadius = Math.min(line.finalOuter, innerRadius + line.length);
+      const midpointRadius = (innerRadius + outerRadius) / 2;
+      line.dotPoint = {
+        x: center.x + direction.x * midpointRadius + normal.x * offset,
+        y: center.y + direction.y * midpointRadius + normal.y * offset
+      };
       line.outerPoint = {
         x: center.x + direction.x * outerRadius + normal.x * offset,
         y: center.y + direction.y * outerRadius + normal.y * offset
       };
-      if (line.curved && !line.wedge) {
+      if (line.curved && !line.wedge && !line.dot) {
         svg.append(createKnightCurvePath(line, innerRadius, outerRadius));
       }
-      if (line.sourceKey) highlightEndpoints?.set(`${line.targetKey}:${line.sourceKey}`, line.outerPoint);
-      if (line.curved && !line.wedge) continue;
+      if (line.sourceKey) highlightEndpoints?.set(`${line.targetKey}:${line.sourceKey}`, line.dot ? line.dotPoint : line.outerPoint);
+      if (line.curved && !line.wedge && !line.dot) continue;
       if (line.wedge) {
         const tipX = center.x + direction.x * innerRadius + normal.x * offset;
         const tipY = center.y + direction.y * innerRadius + normal.y * offset;
@@ -2406,6 +2421,16 @@
         triangle.setAttribute("fill", line.color);
         triangle.setAttribute("pointer-events", "none");
         svg.append(triangle);
+        continue;
+      }
+      if (line.dot) {
+        const dot = document.createElementNS(svgNamespace, "circle");
+        dot.setAttribute("cx", String(line.dotPoint.x));
+        dot.setAttribute("cy", String(line.dotPoint.y));
+        dot.setAttribute("r", String(settings.threatDotSizePercent / 200));
+        dot.setAttribute("fill", line.color);
+        dot.setAttribute("pointer-events", "none");
+        svg.append(dot);
         continue;
       }
       const element = document.createElementNS(svgNamespace, "line");
@@ -4262,8 +4287,10 @@
 
   function renderThreatDisplaySet(svg, segments, figureRadii, displayMode, highlightEndpoints) {
     if (!segments.length) return;
-    if (displayMode === "lines" || displayMode === "wedge") {
-      renderLineSet(svg, segments.map(segment => ({ ...segment, wedge: displayMode === "wedge" })), figureRadii, highlightEndpoints);
+    if (displayMode === "lines" || displayMode === "wedge" || displayMode === "dots") {
+      renderLineSet(svg, segments.map(segment => ({
+        ...segment, wedge: displayMode === "wedge", dot: displayMode === "dots"
+      })), figureRadii, highlightEndpoints);
     }
     else if (displayMode === "square") renderSquareSegmentSet(svg, segments, figureRadii, highlightEndpoints);
     else renderSegmentSet(svg, segments, figureRadii, highlightEndpoints);
@@ -4328,10 +4355,12 @@
     const highlightEndpoints = new Map();
     const preparedDefenseSegments = defenseSegments.map(segment => ({ ...segment, category: "defense" }));
     const figureRadii = getFigureRadii(settings.pieceSet);
-    if ([attackDisplayMode, defenseDisplayMode].every(mode => mode === "lines" || mode === "wedge")) {
+    if ([attackDisplayMode, defenseDisplayMode].every(mode => mode === "lines" || mode === "wedge" || mode === "dots")) {
       renderLineSet(svg, [
-        ...attackSegments.map(segment => ({ ...segment, wedge: attackDisplayMode === "wedge" })),
-        ...preparedDefenseSegments.map(segment => ({ ...segment, wedge: defenseDisplayMode === "wedge" }))
+        ...attackSegments.map(segment => ({ ...segment,
+          wedge: attackDisplayMode === "wedge", dot: attackDisplayMode === "dots" })),
+        ...preparedDefenseSegments.map(segment => ({ ...segment,
+          wedge: defenseDisplayMode === "wedge", dot: defenseDisplayMode === "dots" }))
       ], figureRadii, highlightEndpoints);
     } else if (attackDisplayMode === defenseDisplayMode) {
       renderThreatDisplaySet(svg, [...attackSegments, ...preparedDefenseSegments], figureRadii, attackDisplayMode, highlightEndpoints);

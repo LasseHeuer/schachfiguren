@@ -70,7 +70,7 @@
       output.value = `${control.value}°`;
       return;
     }
-    if (["threatOwnSeeThrough", "threatOpponentSeeThrough", "threatDepthFactor", "threatArcRadius", "threatArcThickness", "segmentFigureMargin", "threatSquareRadius", "threatSquareThickness", "threatSquareFigureMargin", "threatMoveFieldRadius", "threatLineRadius", "threatLineLength", "threatLineThickness", "threatLineGap", "threatLineFigureMargin", "threatLineCurvature"].includes(control.dataset.setting)) {
+    if (["threatOwnSeeThrough", "threatOpponentSeeThrough", "threatDepthFactor", "threatArcRadius", "threatArcThickness", "segmentFigureMargin", "threatSquareRadius", "threatSquareThickness", "threatSquareFigureMargin", "threatMoveFieldRadius", "threatLineRadius", "threatLineLength", "threatLineThickness", "threatLineGap", "threatDotGap", "threatLineFigureMargin", "threatLineCurvature"].includes(control.dataset.setting)) {
       output.value = `${Math.round(Number(control.value) * 100)}%`;
       return;
     }
@@ -152,7 +152,7 @@
   function updateThreatDisplayControls() {
     const attackMode = document.querySelector('[data-setting="threatAttackDisplayMode"]').value;
     const defenseMode = document.querySelector('[data-setting="threatDefenseDisplayMode"]').value;
-    const modeNames = { segments: "Kreissegment-Einstellungen", lines: "Linieneinstellungen", square: "Eckige Segment-Einstellungen", wedge: "Keil-Einstellungen" };
+    const modeNames = { segments: "Kreissegment-Einstellungen", lines: "Linieneinstellungen", square: "Eckige Segment-Einstellungen", wedge: "Keil-Einstellungen", dots: "Punkteinstellungen" };
     for (const group of threatDisplayGroups) {
       const mode = group.dataset.threatDisplayGroup ?? group.dataset.threatDisplayLabel;
       if (group.dataset.threatDisplayLabel) {
@@ -234,8 +234,12 @@
   });
 
   chrome.storage.local.get(null, values => {
-    showSettings(values);
-    document.body.classList.toggle("extension-disabled", !normalize(values).enabled);
+    const settings = normalize(values);
+    showSettings(settings);
+    if (!Object.prototype.hasOwnProperty.call(values, "threatDotGap")) {
+      chrome.storage.local.set({ threatDotGap: settings.threatDotGap });
+    }
+    document.body.classList.toggle("extension-disabled", !settings.enabled);
     status.textContent = "Einstellungen gespeichert";
   });
 })();
