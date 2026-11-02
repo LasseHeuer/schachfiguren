@@ -470,6 +470,54 @@ test("releasing the playlist rating slider saves the rating and continues the qu
   assert.equal(persisted.lfsPuzzlePlaylist.activeIndex, 1);
 });
 
+test("clicking the unchanged slider handle records its current rating once", () => {
+  const document = listDocument();
+  const parent = document.createElement("section");
+  document.querySelector = selector => selector === ".puzzle__session" ? parent
+    : selector === ".puzzle__feedback.after" ? {} : {};
+  const { api, assigned, persisted } = loadList("puzzle-playlist.js", `
+    renderPuzzleToolbar,
+    setup: value => {
+      playlist = normalizePlaylist(value);
+      render = () => {};
+      puzzleId = () => "Abc12";
+    },
+    getToolbar: () => puzzleToolbar
+  `, { document });
+  api.setup({ ratingScaleVersion: 2, items: [{ id: "Abc12", lastRating: 0.37 }, { id: "Def34" }], activeQueue: ["Abc12", "Def34"], activeIndex: 0 });
+  api.renderPuzzleToolbar();
+  const slider = api.getToolbar().children[0].children[1];
+  slider.listeners.click();
+  slider.listeners.click();
+  assert.equal(persisted.lfsPuzzlePlaylist.items[0].lastRating, 0.37);
+  assert.equal(persisted.lfsPuzzlePlaylist.items[0].reps, 1);
+  assert.equal(persisted.lfsPuzzlePlaylist.activeIndex, 1);
+  assert.equal(assigned.at(-1), "/training/Def34");
+});
+
+test("rating slider endpoints schedule the exact easy and again ratings", () => {
+  for (const rating of [0, 1]) {
+    const document = listDocument();
+    const parent = document.createElement("section");
+    document.querySelector = selector => selector === ".puzzle__session" ? parent
+      : selector === ".puzzle__feedback.after" ? {} : {};
+    const { api, persisted } = loadList("puzzle-playlist.js", `
+      renderPuzzleToolbar,
+      setup: value => {
+        playlist = normalizePlaylist(value);
+        render = () => {};
+        puzzleId = () => "Abc12";
+      },
+      getToolbar: () => puzzleToolbar
+    `, { document });
+    api.setup({ items: [{ id: "Abc12" }] });
+    api.renderPuzzleToolbar();
+    api.getToolbar().listeners.change({ target: { closest: () => ({ dataset: { action: "rate" }, value: String(rating) }) } });
+    assert.equal(persisted.lfsPuzzlePlaylist.items[0].lastRating, rating);
+    assert.equal(persisted.lfsPuzzlePlaylist.items[0].state, rating === 0 ? "review" : "learning");
+  }
+});
+
 test("home playlist button shows the number of new and due puzzles", () => {
   const document = listDocument();
   const { api } = loadList("puzzle-playlist.js", `

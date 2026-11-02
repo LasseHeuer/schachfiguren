@@ -477,6 +477,7 @@
         slider.style.setProperty("--lfs-review-value", `${Number(slider.value) * 100}%`);
       };
       slider.addEventListener("input", updateSliderPosition);
+      slider.addEventListener("click", () => ratePlaylistPuzzle(slider));
       updateSliderPosition();
       ratings.append(easy, slider, hard);
       puzzleToolbar.append(ratings);
@@ -500,24 +501,28 @@
     puzzleToolbar.dataset.handlerBound = "true";
     puzzleToolbar.addEventListener("change", event => {
       const control = event.target.closest('[data-action="rate"]');
-      if (!control) return;
-      if (puzzleToolbar.dataset.puzzleId !== puzzleId()) {
-        render();
-        return;
-      }
-      const rating = Number(control.value);
-      if (!Number.isFinite(rating) || rating < 0 || rating > 1) return;
-      const currentId = puzzleId();
-      const index = playlist.items.findIndex(item => item.id === currentId);
-      if (index < 0) return;
-      const items = [...playlist.items];
-      items[index] = scheduler.scheduleEase(items[index], rating, Date.now(), ratingMaxPosition);
-      const next = { ...playlist, items };
-      playlist = normalizePlaylist(next);
-      const isActive = playlist.activeIndex !== null && playlist.activeQueue[playlist.activeIndex] === currentId;
-      if (isActive && continuePlaylist(currentId)) return;
-      savePlaylist(next, advanceNativePuzzle);
+      if (control) ratePlaylistPuzzle(control);
     });
+  }
+
+  function ratePlaylistPuzzle(control) {
+    const currentId = puzzleId();
+    if (puzzleToolbar.dataset.puzzleId !== currentId) {
+      render();
+      return;
+    }
+    const index = playlist.items.findIndex(item => item.id === currentId);
+    if (index < 0 || playlist.items[index].lastReviewedAt >= pageLoadedAt) return;
+    const position = Number(control.value);
+    if (!Number.isFinite(position)) return;
+    const rating = Math.max(0, Math.min(1, position));
+    const items = [...playlist.items];
+    items[index] = scheduler.scheduleEase(items[index], rating, Date.now(), ratingMaxPosition);
+    const next = { ...playlist, items };
+    playlist = normalizePlaylist(next);
+    const isActive = playlist.activeIndex !== null && playlist.activeQueue[playlist.activeIndex] === currentId;
+    if (isActive && continuePlaylist(currentId)) return;
+    savePlaylist(next, advanceNativePuzzle);
   }
 
   function advanceNativePuzzle() {
