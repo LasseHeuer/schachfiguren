@@ -47,10 +47,16 @@
   }
 
   function isFullscreenWindow() {
-    const availableHeight = globalThis.screen?.availHeight;
+    const screenHeight = globalThis.screen?.height ?? globalThis.screen?.availHeight;
+    const screenWidth = globalThis.screen?.width;
+    const viewport = globalThis.window;
     return Boolean(document.fullscreenElement)
-      || Number.isFinite(availableHeight) && availableHeight > 0
-        && Number.isFinite(globalThis.window?.innerHeight) && globalThis.window.innerHeight >= availableHeight - 1;
+      || Boolean(viewport?.matchMedia?.("(display-mode: fullscreen)").matches)
+      || Number.isFinite(screenHeight) && screenHeight > 0
+        && (Number.isFinite(viewport?.innerHeight) && Math.abs(viewport.innerHeight - screenHeight) <= 1
+          || Number.isFinite(screenWidth) && screenWidth > 0 && viewport?.innerWidth > 0
+            && Math.abs(viewport.outerHeight - screenHeight) <= 1 && Math.abs(viewport.outerWidth - screenWidth) <= 1
+            && Math.abs(viewport.innerHeight * screenWidth / viewport.innerWidth - screenHeight) <= 2);
   }
 
   function persistBoardSizeCap() {
@@ -229,6 +235,7 @@
   function clearBoardSizeCap() {
     for (const wrapper of boardSizeCapWrappers) {
       wrapper.removeAttribute("data-lfs-board-size-cap");
+      wrapper.removeAttribute("data-lfs-board-size-fixed");
       wrapper.style.removeProperty("--lfs-board-size-cap-width");
       wrapper.style.removeProperty("--lfs-board-size-cap-height");
     }
@@ -246,10 +253,15 @@
       clearBoardSizeCap();
       boardSizeCapBoard = board;
     }
+    const fullscreenWindow = isFullscreenWindow();
+    const keepSize = settings.enabled && (fullscreenWindow
+      || document.documentElement.hasAttribute("data-lfs-zen-mode"));
+    // In windowed mode, let Lichess size the board and keep the latest size for F11.
+    if (!keepSize) clearBoardSizeCap();
     if (!board || !wrapper) return;
 
     let capturedBoardSizeCap = false;
-    if (!boardSizeCap) {
+    if (!keepSize || !boardSizeCap) {
       const wrapperRect = wrapper.getBoundingClientRect();
       const boardRect = board.getBoundingClientRect();
       if (!wrapperRect.width || !wrapperRect.height || !boardRect.width || !boardRect.height) return;
@@ -261,6 +273,7 @@
       };
       capturedBoardSizeCap = true;
     }
+    if (!keepSize) return;
     const wrappers = new Set([...document.querySelectorAll(primaryBoardSelector)]
       .map(candidate => candidate.closest(".cg-wrap"))
       .filter(Boolean));
@@ -268,6 +281,7 @@
     for (const previousWrapper of boardSizeCapWrappers) {
       if (wrappers.has(previousWrapper)) continue;
       previousWrapper.removeAttribute("data-lfs-board-size-cap");
+      previousWrapper.removeAttribute("data-lfs-board-size-fixed");
       previousWrapper.style.removeProperty("--lfs-board-size-cap-width");
       previousWrapper.style.removeProperty("--lfs-board-size-cap-height");
     }
@@ -275,6 +289,8 @@
       candidateWrapper.style.setProperty("--lfs-board-size-cap-width", `${boardSizeCap.width}px`);
       candidateWrapper.style.setProperty("--lfs-board-size-cap-height", `${boardSizeCap.height}px`);
       candidateWrapper.setAttribute("data-lfs-board-size-cap", "");
+      if (fullscreenWindow) candidateWrapper.setAttribute("data-lfs-board-size-fixed", "");
+      else candidateWrapper.removeAttribute("data-lfs-board-size-fixed");
     }
     boardSizeCapWrappers = wrappers;
     if (!boardSizeCap.boardWidth || !boardSizeCap.boardHeight) {
@@ -302,6 +318,7 @@
     zenResizeObserver = new ResizeObserver(() => {
       syncBoardSizeCap();
       scheduleBoardAnchoredElements();
+      scheduleZenClockUpdate();
       if (document.documentElement.hasAttribute("data-lfs-zen-mode")) {
         if (restorePlaylistZenMode) scheduleZenCenter();
         else centerZenBoard();
@@ -490,6 +507,7 @@
 
   function setZenMode(enabled) {
     if (!zenBoard) return;
+    if (enabled) syncBoardSizeCap();
     const root = document.documentElement;
     root.toggleAttribute("data-lfs-zen-mode", enabled);
     zenToggle?.setAttribute("aria-pressed", String(enabled));
@@ -505,6 +523,7 @@
     zenRestoreLayoutSnapshot = undefined;
     zenRestoreStableFrames = 0;
     root.removeAttribute("data-lfs-zen-restore-pending");
+    syncBoardSizeCap();
     persistBoardSizeCap();
     clearZenOffset(zenBoard);
     syncBoardAnchoredElements();
@@ -614,8 +633,9 @@
     const offsetY = parseFloat(zenBoard.style.getPropertyValue("--lfs-zen-offset-y")) || 0;
     const sideRects = zenSideElements.map(element => element.getBoundingClientRect())
       .filter(rect => rect.width > 0 && rect.height > 0);
-    const deltaX = window.innerWidth / 2 - boardRect.left - boardRect.width / 2;
-    const deltaY = window.innerHeight * (0.5 - settings.zenBoardUpPercent / 100) - boardRect.top - boardRect.height / 2;
+    const viewport = window.visualViewport ?? { width: window.innerWidth, height: window.innerHeight, offsetLeft: 0, offsetTop: 0 };
+    const deltaX = viewport.offsetLeft + viewport.width / 2 - boardRect.left - boardRect.width / 2;
+    const deltaY = viewport.offsetTop + viewport.height * (0.5 - settings.zenBoardUpPercent / 100) - boardRect.top - boardRect.height / 2;
     if (Math.abs(deltaX) >= 0.01 || Math.abs(deltaY) >= 0.01) {
       zenBoard.style.setProperty("--lfs-zen-offset-x", `${offsetX + deltaX}px`);
       zenBoard.style.setProperty("--lfs-zen-offset-y", `${offsetY + deltaY}px`);
@@ -680,7 +700,7 @@
     const scale = boardSizeCap?.boardWidth && boardSizeCap.boardHeight
       ? Math.min(1, rect.width / boardSizeCap.boardWidth, rect.height / boardSizeCap.boardHeight)
       : 1;
-    const scaleValue = String(scale);
+    const scaleValue = String(Math.round(scale * 1e6) / 1e6);
     const scaleChanged = root.style.getPropertyValue("--lfs-board-ui-scale") !== scaleValue;
     if (scaleChanged) {
       root.style.setProperty("--lfs-board-ui-scale", scaleValue);
@@ -1035,10 +1055,15 @@
       syncZenClockOverlay([], boardRect);
       return;
     }
+    const scale = Number.parseFloat(document.documentElement.style.getPropertyValue("--lfs-board-ui-scale")) || 1;
+    const padding = 6 * scale;
+    const viewport = window.visualViewport ?? { width: window.innerWidth, height: window.innerHeight, offsetLeft: 0, offsetTop: 0 };
+    const materialLeft = boardRect.right + padding;
+    const sideWidth = viewport.offsetLeft + viewport.width - materialLeft - padding;
+    const maxMaterialWidth = Math.max(topMaterial?.getBoundingClientRect().width ?? 0, bottomMaterial?.getBoundingClientRect().width ?? 0);
+    const besideBoard = sideWidth >= Math.max(48 * scale, maxMaterialWidth);
     const topMaterialRect = topMaterial?.getBoundingClientRect();
     const bottomMaterialRect = bottomMaterial?.getBoundingClientRect();
-    const padding = 6 * (Number.parseFloat(document.documentElement.style.getPropertyValue("--lfs-board-ui-scale")) || 1);
-    const materialLeft = boardRect.right + padding;
     const zenBoardRect = zenBoard.getBoundingClientRect();
 
     const place = (element, left, top) => {
@@ -1055,8 +1080,16 @@
         element.style.setProperty("--lfs-zen-side-top", topValue);
       }
     };
-    place(topMaterial, materialLeft, boardRect.top);
-    place(bottomMaterial, materialLeft, boardRect.bottom - (bottomMaterialRect?.height ?? 0));
+    const placeMaterial = (element, rect, top) => {
+      if (!element || !rect) return;
+      const left = besideBoard ? materialLeft : boardRect.left;
+      const y = besideBoard ? (top ? boardRect.top : boardRect.bottom - rect.height)
+        : (top ? boardRect.top - rect.height - padding : boardRect.bottom + padding);
+      place(element, Math.max(viewport.offsetLeft + padding, Math.min(left, viewport.offsetLeft + viewport.width - rect.width - padding)),
+        Math.max(viewport.offsetTop + padding, Math.min(y, viewport.offsetTop + viewport.height - rect.height - padding)));
+    };
+    placeMaterial(topMaterial, topMaterialRect, true);
+    placeMaterial(bottomMaterial, bottomMaterialRect, false);
 
     syncZenClockOverlayForBoard();
   }

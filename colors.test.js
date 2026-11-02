@@ -148,7 +148,7 @@ test("fullscreen board size cap survives a content-script restart", () => {
       closest: selector => selector === ".cg-wrap" ? wrapper : null,
       getBoundingClientRect: () => ({ width: boardWidth, height: boardHeight })
     };
-    return { board, wrapper };
+    return { board, wrapper, resize(size) { width = height = size; boardWidth = boardHeight = size * 0.75; } };
   };
   const createPage = (sessionStorage, innerHeight, board) => {
     const rootAttributes = new Set();
@@ -171,7 +171,7 @@ test("fullscreen board size cap survives a content-script restart", () => {
     };
     const context = vm.createContext({
       window,
-      screen: { availHeight: 800 },
+      screen: { height: 800, availHeight: 760 },
       document,
       sessionStorage,
       LichessSettings: settings,
@@ -193,6 +193,7 @@ ${marker}`), context);
       syncBoardSizeCap: context.boardCapTesting.syncBoardSizeCap,
       handleViewportChange: context.boardCapTesting.handleViewportChange,
       window,
+      screen: context.screen,
       pagehide: () => windowListeners.get("pagehide")?.()
     };
   };
@@ -202,21 +203,40 @@ ${marker}`), context);
   const gamePage = createPage(session, 700, game.board);
   gamePage.syncBoardSizeCap(game.board);
   assert.equal(session.getItem("lfsPuzzleBoardSizeCap"), null);
+  assert.equal(game.wrapper.hasAttribute("data-lfs-board-size-cap"), false);
 
+  game.resize(480);
+  gamePage.window.innerHeight = 760;
+  gamePage.handleViewportChange();
+  assert.equal(game.wrapper.hasAttribute("data-lfs-board-size-cap"), false,
+    "a window filling the available desktop is not F11 fullscreen");
+
+  game.resize(600);
   gamePage.window.innerHeight = 800;
   gamePage.handleViewportChange();
-  assert.equal(game.wrapper.style.getPropertyValue("--lfs-board-size-cap-width"), "320px");
+  assert.equal(game.wrapper.style.getPropertyValue("--lfs-board-size-cap-width"), "480px");
   assert.equal(session.getItem("lfsPuzzleBoardSizeCap"), null);
-  assert.equal(session.getItem("lfsFullscreenBoardSizeCap"), "320,320,240,240");
+  assert.equal(session.getItem("lfsFullscreenBoardSizeCap"), "480,480,360,360");
   gamePage.pagehide();
-  assert.equal(session.getItem("lfsFullscreenBoardSizeCap"), "320,320,240,240");
+  assert.equal(session.getItem("lfsFullscreenBoardSizeCap"), "480,480,360,360");
 
   const analysis = createBoard(500, 500);
   const analysisPage = createPage(session, 800, analysis.board);
   analysisPage.syncBoardSizeCap(analysis.board);
   assert.equal(analysis.wrapper.hasAttribute("data-lfs-board-size-cap"), true);
-  assert.equal(analysis.wrapper.style.getPropertyValue("--lfs-board-size-cap-width"), "320px");
-  assert.equal(analysis.wrapper.style.getPropertyValue("--lfs-board-size-cap-height"), "320px");
+  assert.equal(analysis.wrapper.style.getPropertyValue("--lfs-board-size-cap-width"), "480px");
+  assert.equal(analysis.wrapper.style.getPropertyValue("--lfs-board-size-cap-height"), "480px");
+
+  gamePage.window.innerHeight = 700;
+  game.resize(240);
+  gamePage.handleViewportChange();
+  assert.equal(game.wrapper.hasAttribute("data-lfs-board-size-cap"), false);
+  assert.equal(session.getItem("lfsFullscreenBoardSizeCap"), null);
+  game.resize(600);
+  gamePage.window.innerHeight = 800;
+  gamePage.handleViewportChange();
+  assert.equal(game.wrapper.style.getPropertyValue("--lfs-board-size-cap-width"), "240px",
+    "entering fullscreen again uses the latest smaller windowed board");
 
   const legacySession = createStorage("600,600,450,450");
   const freshBoard = createBoard(320, 320);
@@ -228,7 +248,30 @@ ${marker}`), context);
   const normalBoard = createBoard(500, 500);
   createPage(staleSession, 700, normalBoard.board).syncBoardSizeCap(normalBoard.board);
   assert.equal(staleSession.getItem("lfsFullscreenBoardSizeCap"), null);
-  assert.equal(normalBoard.wrapper.style.getPropertyValue("--lfs-board-size-cap-width"), "500px");
+  assert.equal(normalBoard.wrapper.hasAttribute("data-lfs-board-size-cap"), false);
+
+  const zoomed = createBoard(320, 320);
+  const zoomedPage = createPage(createStorage(), 600, zoomed.board);
+  zoomedPage.syncBoardSizeCap(zoomed.board);
+  zoomedPage.screen.width = 1200;
+  Object.assign(zoomedPage.window, { outerWidth: 1200, outerHeight: 800, innerWidth: 960 });
+  zoomedPage.handleViewportChange();
+  assert.equal(zoomed.wrapper.hasAttribute("data-lfs-board-size-cap"), false,
+    "a maximized zoomed window with browser chrome remains resizable");
+  zoomed.resize(560);
+  zoomedPage.window.innerHeight = 640;
+  zoomedPage.handleViewportChange();
+  assert.equal(zoomed.wrapper.style.getPropertyValue("--lfs-board-size-cap-width"), "320px",
+    "F11 at 125 percent browser zoom preserves the windowed board size");
+
+  Object.assign(zoomedPage.window, { outerHeight: 760, innerHeight: 600 });
+  zoomedPage.handleViewportChange();
+  assert.equal(zoomed.wrapper.hasAttribute("data-lfs-board-size-cap"), false);
+  zoomed.resize(700);
+  zoomedPage.window.matchMedia = query => ({ matches: query === "(display-mode: fullscreen)" });
+  zoomedPage.handleViewportChange();
+  assert.equal(zoomed.wrapper.style.getPropertyValue("--lfs-board-size-cap-width"), "560px",
+    "the browser fullscreen display mode also locks during a viewport transition");
 });
 
 test("promotion preview cycles through promotion pieces at its configured interval", () => {
@@ -3547,7 +3590,7 @@ ${marker}`);
       await new Promise(resolve => setTimeout(resolve, 50));
     }
     assert.equal(await evaluate("Boolean(window.testing)"), true, "the browser loaded the production renderer");
-    await t.test("candidate sliders expose both colors to board analysis and render preview markers", async () => {
+    await t.test("candidate sliders expose both colors to board analysis and render preview markers", async t => {
       let liveAnimationResult = null;
       const contentSource = readFileSync(join(root, "content.js"), "utf8");
       const contentMarker = "  chrome.runtime.onMessage.addListener";
@@ -3924,6 +3967,8 @@ ${clockMarker}`));
         globalThis.zenTesting = {
           centerZenBoard, syncBoardLayout, findMainBoard, setBoard(value) { zenBoard = value; }, clearZenOffset, setZenMode,
           syncBoardSizeCap, observeZenBoardSize, handleViewportChange, syncBoardAnchoredElements, syncPvLineSliders,
+          syncZenClockOverlayForBoard, setAnalysisClocks(value) { analysisClocks = value; },
+          getClockBar(side) { return zenClockRows[side].bar; },
           beginPlaylistRestore() {
             restorePlaylistZenMode = true;
             zenRestorePageLoaded = true;
@@ -4109,8 +4154,24 @@ ${marker}`));
       assert.equal(await evaluate("zenTesting.findMainBoard() === document.querySelector('.lfs-sequence-wrap cg-board')"), true,
         "the visible analysis board takes priority over larger hidden and earlier generic boards");
       assert.equal(await evaluate("document.querySelector('.lfs-decoy-wrap').hasAttribute('data-lfs-board-size-cap')"), false);
-      assert.equal(await evaluate("document.querySelector('.lfs-inactive-puzzle-wrap').hasAttribute('data-lfs-board-size-cap')"), true);
-      assert.equal(await evaluate("document.querySelector('.lfs-sequence-wrap').hasAttribute('data-lfs-board-size-cap')"), true);
+      assert.equal(await evaluate("document.querySelector('.lfs-inactive-puzzle-wrap').hasAttribute('data-lfs-board-size-cap')"), false);
+      assert.equal(await evaluate("document.querySelector('.lfs-sequence-wrap').hasAttribute('data-lfs-board-size-cap')"), false);
+
+      for (const size of [240, 480, 320]) {
+        await evaluate(`(() => {
+          const host = document.querySelector('.lfs-sequence-host');
+          host.style.width = host.style.height = '${size}px';
+          return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        })()`);
+        const boardWidth = await evaluate("document.querySelector('.lfs-sequence-wrap cg-board').getBoundingClientRect().width");
+        assert.equal(boardWidth, size * 0.75, "windowed boards follow the current available space");
+        await send("Emulation.setDeviceMetricsOverride", metrics(availableHeight));
+        await evaluate("zenTesting.handleViewportChange()");
+        assert.equal(await evaluate("document.querySelector('.lfs-sequence-wrap cg-board').getBoundingClientRect().width"), boardWidth,
+          "F11 preserves the most recently resized board, not its initial size");
+        await send("Emulation.setDeviceMetricsOverride", metrics(normalHeight));
+        await evaluate("zenTesting.handleViewportChange()");
+      }
 
       const sequences = [
         ["zenOn", "zenOff", "fullOn", "fullOff"],
@@ -4167,14 +4228,14 @@ ${marker}`));
           })()`);
           assert.equal(state.zen, zenActive, `${sequence.join(" -> ")}: Zen state after ${step}`);
           assert.equal(state.fullscreen, fullscreenActive, `${sequence.join(" -> ")}: fullscreen state after ${step}`);
-          assert.equal(state.locked, true, `${sequence.join(" -> ")}: size cap after ${step}`);
+          assert.equal(state.locked, zenActive || fullscreenActive, `${sequence.join(" -> ")}: size cap after ${step}`);
           assert.equal(state.width, 240, `${sequence.join(" -> ")}: board width after ${step}`);
           assert.equal(state.height, 240, `${sequence.join(" -> ")}: board height after ${step}`);
           assert.equal(state.uiScale, 1, `${sequence.join(" -> ")}: board UI scale after ${step}`);
           assert.equal(state.sliderHeight, 30, `${sequence.join(" -> ")}: rating slider scale after ${step}`);
           assert.equal(state.ratingLabelFontSize, 12.8, `${sequence.join(" -> ")}: rating labels stay readable after ${step}`);
-          assert.equal(state.pvSliderHeight, 22, `${sequence.join(" -> ")}: candidate slider scale after ${step}`);
-          assert.equal(state.materialFontSize, state.materialParentFontSize,
+          assert.equal(state.pvSliderHeight, settings.defaults.pvSliderAreaHeightPx, `${sequence.join(" -> ")}: candidate slider scale after ${step}`);
+          assert.equal(state.materialFontSize, state.materialParentFontSize * (state.zen ? state.uiScale : 1),
             `${sequence.join(" -> ")}: captured-material count size after ${step}`);
           assert.ok(state.promotionRect.every((value, index) => Math.abs(value - state.boardRect[index]) < 0.5),
             `${sequence.join(" -> ")}: promotion selector follows the board after ${step}`);
@@ -4244,7 +4305,7 @@ ${marker}`));
       assert.equal(nextPuzzle.height, 240);
       assert.equal(nextPuzzle.uiScale, 1);
       assert.equal(nextPuzzle.sliderHeight, 30);
-      assert.equal(nextPuzzle.materialFontSize, nextPuzzle.materialParentFontSize);
+       assert.equal(nextPuzzle.materialFontSize, nextPuzzle.materialParentFontSize);
       assert.ok(nextPuzzle.promotionRect.every((value, index) => Math.abs(value - nextPuzzle.boardRect[index]) < 0.5));
       assert.ok(Math.abs(nextPuzzle.boardCenter - nextPuzzle.viewportCenter) < 0.5);
       assert.ok(nextPuzzle.materialGap > 0 && nextPuzzle.materialGap < 10);
@@ -4267,16 +4328,16 @@ ${marker}`));
           sliderHeight: document.querySelector('.lfs-review-slider').getBoundingClientRect().height,
           ratingLabelFontSize: Number.parseFloat(getComputedStyle(document.querySelector('.lfs-review-label')).fontSize),
           pvSliderHeight: document.querySelector('.pv_box input[type="range"]').getBoundingClientRect().height,
-          materialScale: Number.parseFloat(getComputedStyle(document.querySelector('.material')).fontSize)
-            / Number.parseFloat(getComputedStyle(document.querySelector('.material').parentElement).fontSize)
+           materialFontSize: Number.parseFloat(getComputedStyle(document.querySelector('.material')).fontSize),
+           materialParentFontSize: Number.parseFloat(getComputedStyle(document.querySelector('.material').parentElement).fontSize)
         };
       })()`);
       assert.ok(scaledControls.promotion.every((value, index) => Math.abs(value - scaledControls.board[index]) < 0.5));
       assert.equal(scaledControls.scale, 0.75, JSON.stringify(scaledControls));
       assert.equal(scaledControls.sliderHeight, 30);
       assert.equal(scaledControls.ratingLabelFontSize, 12.8);
-      assert.equal(scaledControls.pvSliderHeight, 22);
-      assert.equal(scaledControls.materialScale, 0.75);
+      assert.equal(scaledControls.pvSliderHeight, settings.defaults.pvSliderAreaHeightPx);
+       assert.equal(scaledControls.materialFontSize, scaledControls.materialParentFontSize * scaledControls.scale);
 
       await send("Emulation.setDeviceMetricsOverride", metrics(normalHeight));
       await evaluate(`(() => {
@@ -4295,6 +4356,185 @@ ${marker}`));
         document.querySelector('.pv_box')?.remove();
         document.getElementById('lfs-sequence-style')?.remove();
       })()`);
+      await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
+    });
+    await t.test("non-Zen F11 locks the native Chessground container and refreshes clock contours after layout", async () => {
+      const metrics = height => ({ width: height === 800 ? 1200 : 800, height,
+        screenWidth: 1200, screenHeight: 800, deviceScaleFactor: 1, mobile: false });
+      await send("Emulation.setDeviceMetricsOverride", metrics(600));
+      await evaluate(`(() => {
+        document.documentElement.removeAttribute('data-lfs-zen-mode');
+        const app = document.createElement('main');
+        app.className = 'analyse lfs-native-size-host';
+        app.style.cssText = 'position:absolute;left:40px;top:80px;width:320px;height:320px';
+        app.innerHTML = '<div class="analyse__board main-board" style="position:relative;width:100%;height:0;padding-bottom:100%">'
+          + '<div class="cg-wrap orientation-white" style="width:100%;height:100%">'
+          + '<cg-container style="display:block;position:absolute;top:0;right:0;width:320px;height:320px">'
+          + '<cg-board style="width:100%;height:100%"></cg-board></cg-container></div></div>';
+        document.body.prepend(app);
+        const host = app.querySelector('.analyse__board');
+        const board = host.querySelector('cg-board');
+        zenTesting.setBoard(host);
+        zenTesting.setAnalysisClocks({ white: 100, black: 100 });
+        zenTesting.observeZenBoardSize(host, board);
+        zenTesting.syncBoardSizeCap(board);
+        zenTesting.syncZenClockOverlayForBoard();
+      })()`);
+      const readBounds = `(() => {
+        const host = document.querySelector('.lfs-native-size-host');
+        const board = host.querySelector('cg-board').getBoundingClientRect();
+        const wrapper = host.querySelector('.cg-wrap').getBoundingClientRect();
+        const container = host.querySelector('cg-container').getBoundingClientRect();
+        const bar = zenTesting.getClockBar('top').getBoundingClientRect();
+        return { boardWidth: board.width, boardHeight: board.height,
+          wrapperWidth: wrapper.width, wrapperHeight: wrapper.height,
+          containerWidth: container.width, containerHeight: container.height,
+          barWidth: bar.width, barLeftOffset: bar.left - board.left, barTopOffset: bar.top - board.top };
+      })()`;
+      const before = await evaluate(readBounds);
+      await send("Emulation.setDeviceMetricsOverride", metrics(800));
+      await evaluate(`(async () => {
+        zenTesting.handleViewportChange();
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        const host = document.querySelector('.lfs-native-size-host');
+        host.style.width = host.style.height = '480px';
+        const container = host.querySelector('cg-container');
+        container.style.width = container.style.height = '480px';
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      })()`);
+      const after = await evaluate(readBounds);
+      await send("Emulation.setDeviceMetricsOverride", metrics(600));
+      await evaluate(`(async () => {
+        zenTesting.handleViewportChange();
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        const host = document.querySelector('.lfs-native-size-host');
+        host.style.width = host.style.height = '400px';
+        const container = host.querySelector('cg-container');
+        container.style.width = container.style.height = '400px';
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      })()`);
+      const resized = await evaluate(readBounds);
+      await evaluate(`(() => {
+        zenTesting.observeZenBoardSize(null, null);
+        zenTesting.setBoard(null);
+        zenTesting.setAnalysisClocks(null);
+        zenTesting.syncBoardSizeCap(null);
+        zenTesting.syncZenClockOverlayForBoard();
+        document.querySelector('.lfs-native-size-host').remove();
+      })()`);
+      for (const key of Object.keys(before)) assert.ok(Math.abs(after[key] - before[key]) < 0.1,
+        key + ': ' + JSON.stringify({ before, after }));
+      assert.ok(before.barWidth > 0);
+      assert.equal(resized.boardWidth, 400);
+      assert.ok(Math.abs(resized.barWidth - before.barWidth - 80) < 0.1, JSON.stringify({ before, resized }));
+      assert.ok(Math.abs(resized.barLeftOffset - before.barLeftOffset) < 0.1, JSON.stringify({ before, resized }));
+      await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
+    });
+    await t.test("captured pieces and stacks keep one size across layouts and scale together", async () => {
+      const result = await evaluate(`(() => {
+        const sandbox = document.createElement('div');
+        sandbox.className = 'lfs-material-size-check';
+        sandbox.innerHTML = '<style>.lfs-material-size-check .material { display:flex; flex-wrap:nowrap; align-items:center; height:40px; line-height:0; white-space:nowrap } .lfs-material-size-check .material > div { display:inline-block!important; margin-inline-start:10px } .lfs-material-size-check .material mpiece { display:inline-block; width:32px; height:32px; margin-inline-start:-10px } .lfs-material-size-check .material mpiece.pawn { margin-inline-start:-15px } .lfs-material-size-check .analyse__player_strip { display:none }</style>';
+        document.body.append(sandbox);
+        const root = document.documentElement;
+        const results = [];
+        for (const layout of ['round__app', 'analyse__board', 'puzzle__board', 'study__board', 'bot-game']) {
+          const host = document.createElement('div');
+          host.className = layout;
+          host.style.fontSize = '40px';
+          const materialMarkup = side => '<div class="material material-' + side + '" data-lfs-zen-side>'
+            + '<div style="display:inline-block"><mpiece class="pawn"></mpiece><mpiece class="pawn"></mpiece></div>'
+            + '<div style="display:inline-block"><mpiece class="queen"></mpiece><mpiece class="queen"></mpiece></div><score>+3</score></div>';
+          host.innerHTML = '<div class="analyse__player_strip">' + materialMarkup('top') + '</div>'
+            + '<div class="analyse__player_strip">' + materialMarkup('bottom') + '</div>';
+          sandbox.append(host);
+          host.querySelector('.material-bottom').style.cssText = 'writing-mode:vertical-rl;flex-direction:column';
+          for (const group of host.querySelectorAll('.material > div')) group.style.setProperty('display', 'inline-block', 'important');
+          for (const piece of host.querySelectorAll('.material mpiece')) piece.style.setProperty('display', 'inline-block', 'important');
+          for (const scale of [1, 0.5]) {
+            root.toggleAttribute('data-lfs-zen-mode', scale !== 1);
+            root.style.setProperty('--lfs-board-ui-scale', String(scale));
+            results.push({ layout, scale,
+              sides: [...host.querySelectorAll('.material')].map(material => {
+                const style = getComputedStyle(material);
+                const pieces = [...material.querySelectorAll('mpiece')];
+                return { top: material.classList.contains('material-top'),
+                  flow: [style.display, style.flexDirection, style.flexWrap, style.writingMode],
+                  sizes: pieces.map(piece => [parseFloat(getComputedStyle(piece).width), parseFloat(getComputedStyle(piece).height)]),
+                  margins: pieces.map(piece => parseFloat(getComputedStyle(piece).marginInlineStart)),
+                  groupMargins: [...material.querySelectorAll(':scope > div')].map(group => parseFloat(getComputedStyle(group).marginInlineStart)),
+                  scoreSize: parseFloat(getComputedStyle(material.querySelector('score')).fontSize),
+                  visible: scale === 1 || pieces.every(piece => piece.getBoundingClientRect().width > 0) };
+              })
+            });
+          }
+          host.remove();
+        }
+        root.removeAttribute('data-lfs-zen-mode');
+        root.style.removeProperty('--lfs-board-ui-scale');
+        sandbox.remove();
+        return results;
+      })()`);
+      for (const state of result) {
+        assert.equal(state.sides.length, 2, state.layout);
+        for (const side of state.sides) {
+          assert.deepEqual(side.flow, ["flex", "row", "nowrap", "horizontal-tb"], state.layout);
+          assert.deepEqual(side.sizes, Array.from({ length: 4 }, () => [20 * state.scale, 20 * state.scale]), state.layout);
+          assert.deepEqual(side.margins, [-9.375, -9.375, -6.25, -6.25].map(value => value * state.scale), state.layout);
+          assert.deepEqual(side.groupMargins, Array(2).fill(6.25 * state.scale), state.layout);
+          assert.equal(side.scoreSize, 40 * state.scale, state.layout);
+          assert.equal(side.visible, true, state.layout);
+        }
+        assert.deepEqual(state.sides[0].flow, state.sides[1].flow, `${state.layout}: both players use the same horizontal layout`);
+      }
+    });
+    await t.test("narrow Zen analysis keeps real captured-piece groups visible without resizing the board", async () => {
+      await send("Emulation.setDeviceMetricsOverride", {
+        width: 320, height: 600, screenWidth: 320, screenHeight: 800, deviceScaleFactor: 1, mobile: true
+      });
+      await send("Emulation.setPageScaleFactor", { pageScaleFactor: 1 });
+      const result = await evaluate(`(async () => {
+        const host = document.createElement('div');
+        host.className = 'analyse__board lfs-narrow-material-host';
+        host.setAttribute('data-lfs-zen-board', '');
+        host.style.cssText = 'position:absolute;left:0;top:0;width:240px;height:240px';
+        const pieces = '<div style="display:inline-block">' + '<mpiece class="pawn"></mpiece>'.repeat(8) + '</div>'
+          + '<div style="display:inline-block">' + '<mpiece class="queen"></mpiece>'.repeat(3) + '</div><score>+12</score>';
+        host.innerHTML = '<style>.lfs-narrow-material-host .analyse__player_strip { display:none }</style>'
+          + '<div class="cg-wrap" style="width:100%;height:100%"><cg-board style="width:100%;height:100%"></cg-board></div>'
+          + '<div class="analyse__player_strip"><div class="material material-top">' + pieces + '</div></div>'
+          + '<div class="analyse__player_strip"><div class="material material-bottom">' + pieces + '</div></div>';
+        document.body.append(host);
+        for (const group of host.querySelectorAll('.material > div')) group.style.setProperty('display', 'inline-block', 'important');
+        for (const piece of host.querySelectorAll('.material mpiece')) piece.style.setProperty('display', 'inline-block', 'important');
+        zenTesting.setBoard(host);
+        zenTesting.syncBoardSizeCap(host.querySelector('cg-board'));
+        document.documentElement.setAttribute('data-lfs-zen-mode', '');
+        zenTesting.syncBoardSizeCap(host.querySelector('cg-board'));
+        zenTesting.centerZenBoard();
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const board = host.querySelector('cg-board').getBoundingClientRect();
+        const materials = [...host.querySelectorAll('.material')].map(element => {
+          const rect = element.getBoundingClientRect();
+          return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom,
+            pieceWidths: [...element.querySelectorAll('mpiece')].map(piece => piece.getBoundingClientRect().width) };
+        });
+        zenTesting.clearZenOffset(host);
+        document.documentElement.removeAttribute('data-lfs-zen-mode');
+        document.documentElement.style.removeProperty('--lfs-board-ui-scale');
+        zenTesting.setBoard(null);
+        zenTesting.syncBoardSizeCap(null);
+        host.remove();
+        return { width: board.width, height: board.height, center: board.left + board.width / 2, materials };
+      })()`);
+      assert.ok(Math.abs(result.width - 240) < 0.01);
+      assert.ok(Math.abs(result.height - 240) < 0.01);
+      assert.ok(Math.abs(result.center - 160) < 0.01, JSON.stringify(result));
+      for (const material of result.materials) {
+        assert.ok(material.left >= 0 && material.right <= 320, JSON.stringify(material));
+        assert.ok(material.top >= 0 && material.bottom <= 600, JSON.stringify(material));
+        assert.ok(material.pieceWidths.every(width => Math.abs(width - 20) < 0.01), JSON.stringify(material));
+      }
       await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
     });
     await t.test("rook outlines include occupied a6 destinations from a2 for moves and premoves", async () => {

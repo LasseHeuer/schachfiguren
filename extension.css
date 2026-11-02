@@ -808,6 +808,16 @@ html:not([data-lfs-disabled]) body .cg-wrap[data-lfs-board-size-cap] {
   margin: auto !important;
 }
 
+html:not([data-lfs-disabled]) body .cg-wrap[data-lfs-board-size-cap][data-lfs-board-size-fixed] {
+  width: var(--lfs-board-size-cap-width) !important;
+  height: var(--lfs-board-size-cap-height) !important;
+}
+
+html:not([data-lfs-disabled]) body .cg-wrap[data-lfs-board-size-fixed] > cg-container {
+  max-width: 100% !important;
+  max-height: 100% !important;
+}
+
 html:not([data-lfs-disabled]) body .main-board .cg-wrap[data-lfs-board-size-cap] {
   left: 50% !important;
   right: auto !important;
@@ -899,6 +909,10 @@ html[data-lfs-zen-mode] body .material[data-lfs-zen-side] {
   align-items: center !important;
   column-gap: calc(2px * var(--lfs-board-ui-scale, 1)) !important;
   font-size: calc(1em * var(--lfs-board-ui-scale, 1)) !important;
+}
+
+html[data-lfs-zen-mode] .analyse__player_strip:has(> .material[data-lfs-zen-side]) {
+  display: flex !important;
 }
 
 #lfs-zen-clock-overlay {
@@ -1696,14 +1710,34 @@ html:not([data-lfs-disabled]) #acpl-chart-container {
 }
 
 html:not([data-lfs-disabled]) .material {
+  --lfs-material-size: calc(20px * var(--lfs-board-ui-scale, 1));
   position: relative !important;
   z-index: 2147483646 !important;
+  display: flex !important;
+  flex-flow: row nowrap !important;
+  align-items: center !important;
+  justify-content: center !important;
+  writing-mode: horizontal-tb !important;
+  white-space: nowrap !important;
+}
+
+html:not([data-lfs-disabled]) .material > div {
+  display: inline-block !important;
+  margin-inline-start: calc(6.25px * var(--lfs-board-ui-scale, 1)) !important;
+  white-space: nowrap !important;
 }
 
 html:not([data-lfs-disabled]) .material mpiece {
+  width: var(--lfs-material-size) !important;
+  height: var(--lfs-material-size) !important;
+  margin-inline-start: calc(-6.25px * var(--lfs-board-ui-scale, 1)) !important;
   opacity: 1 !important;
   filter: none !important;
   background: var(--lfs-captured-piece-color) !important;
+}
+
+html:not([data-lfs-disabled]) .material mpiece.pawn {
+  margin-inline-start: calc(-9.375px * var(--lfs-board-ui-scale, 1)) !important;
 }
 
 html:not([data-lfs-disabled]) #promotion-choice square[data-lfs-promotion-tone="light"] {
