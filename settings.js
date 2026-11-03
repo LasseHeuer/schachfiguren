@@ -78,6 +78,17 @@
     idleMixPercent: 50,
     hoverMixPercent: 50,
     hoverDesaturation: 60,
+    boardCursorEnabled: false,
+    boardCursorColor: "oklch(0.82 0.16 153)",
+    boardCursorDiameterPx: 14,
+    boardCursorWidthPx: 2.5,
+    boardCursorOpacity: 90,
+    boardCursorInsetPercent: 4,
+    boardCursorResponseMs: 135,
+    boardCursorSpeedThresholdPxPerSecond: 500,
+    boardCursorTrailTension: 55,
+    boardCursorTrailLengthPx: 18,
+    boardCursorGlowPercent: 55,
     moveDotSize: 7,
     squareMoveDots: true,
     moveIndicatorMode: "outline",
@@ -258,6 +269,15 @@
     idleMixPercent: [0, 100],
     hoverMixPercent: [0, 100],
     hoverDesaturation: [0, 100],
+    boardCursorDiameterPx: [4, 40],
+    boardCursorWidthPx: [0.5, 8],
+    boardCursorOpacity: [0, 100],
+    boardCursorInsetPercent: [0, 30],
+    boardCursorResponseMs: [35, 280],
+    boardCursorSpeedThresholdPxPerSecond: [100, 2000],
+    boardCursorTrailTension: [0, 100],
+    boardCursorTrailLengthPx: [0, 60],
+    boardCursorGlowPercent: [0, 100],
     moveDotSize: [5, 50],
     moveOutlineWidthPx: [0, 10],
     moveGlowOpacity: [0, 100],
@@ -356,6 +376,8 @@
 
   function normalize(values = {}) {
     const result = { ...defaults, ...values };
+    delete result.boardCursorAnticipationPercent;
+    delete result.boardCursorDiagonalPinchPercent;
     if (!Object.prototype.hasOwnProperty.call(values, "threatDotGap")
       && Object.prototype.hasOwnProperty.call(values, "threatLineGap")) {
       result.threatDotGap = values.threatLineGap;
@@ -487,9 +509,10 @@
     result.engineArrowStartOffsetPercent = Math.round(result.engineArrowStartOffsetPercent);
     result.engineArrowEndOffsetPercent = Math.round(result.engineArrowEndOffsetPercent);
     result.lastMoveLineWidth = Math.round(result.lastMoveLineWidth);
-    for (const key of ["zenBackgroundTintPercent", "zenClockFontSizePx", "zenClockMarginPx", "zenClockLineThicknessPx", "zenClockLineGapPx", "zenClockWarningThresholdPercent", "zenClockActiveEndSizePercent", "zenClockActiveEndBlendPercent", "pvSliderAreaHeightPx"]) {
+    for (const key of ["zenBackgroundTintPercent", "zenClockFontSizePx", "zenClockMarginPx", "zenClockLineThicknessPx", "zenClockLineGapPx", "zenClockWarningThresholdPercent", "zenClockActiveEndSizePercent", "zenClockActiveEndBlendPercent", "pvSliderAreaHeightPx", "boardCursorDiameterPx"]) {
       result[key] = Math.round(result[key]);
     }
+    result.boardCursorSpeedThresholdPxPerSecond = Math.round(result.boardCursorSpeedThresholdPxPerSecond / 50) * 50;
     result.zenClockBlinkFrequency = Number(result.zenClockBlinkFrequency.toFixed(1));
     result.engineArrowHeadSizePercent = Math.round(result.engineArrowHeadSizePercent);
 
@@ -528,6 +551,7 @@
 
     for (const key of [
       "enabled",
+      "boardCursorEnabled",
       "markLastMove",
       "squareMoveDots",
       "moveOutlineStraightDiagonals",

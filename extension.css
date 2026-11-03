@@ -1583,6 +1583,46 @@ html:not([data-lfs-disabled]) #lfs-pv-preview > svg.lfs-last-move-outline {
   pointer-events: none !important;
 }
 
+html:not([data-lfs-disabled])[data-lfs-board-cursor-enabled] [data-lfs-board-cursor-board],
+html:not([data-lfs-disabled])[data-lfs-board-cursor-enabled] [data-lfs-board-cursor-board] * {
+  cursor: none !important;
+}
+
+html:not([data-lfs-disabled]) cg-board > svg.lfs-board-cursor {
+  position: absolute !important;
+  z-index: 2147483646 !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: visible !important;
+  pointer-events: none !important;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+html:not([data-lfs-disabled]) cg-board > svg.lfs-board-cursor[data-lfs-cursor-visible] {
+  opacity: 1;
+}
+
+html:not([data-lfs-disabled]) .lfs-board-cursor-glow {
+  stroke: var(--lfs-board-cursor-color) !important;
+  stroke-width: var(--lfs-board-cursor-glow-width) !important;
+  opacity: var(--lfs-board-cursor-glow-opacity) !important;
+  filter: blur(var(--lfs-board-cursor-glow-blur));
+}
+
+html:not([data-lfs-disabled]) .lfs-board-cursor-outline {
+  stroke: var(--lfs-board-cursor-color) !important;
+  stroke-width: var(--lfs-board-cursor-width) !important;
+  opacity: var(--lfs-board-cursor-opacity) !important;
+}
+
+html:not([data-lfs-disabled]) .lfs-board-cursor-highlight {
+  stroke: color-mix(in srgb, white 52%, var(--lfs-board-cursor-color)) !important;
+  stroke-width: 0.8px !important;
+  opacity: var(--lfs-board-cursor-highlight-opacity) !important;
+}
+
 html:not([data-lfs-disabled]) .is2d cg-board > piece[data-lfs-move-preview-origin] {
   opacity: var(--lfs-move-preview-origin-opacity, 0.25) !important;
 }

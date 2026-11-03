@@ -1676,6 +1676,7 @@
       threatCenterOutlineEnabled: false
     };
     globalThis.LichessLastMoveLine?.update(settings);
+    globalThis.LichessBoardCursor?.update(settings);
     globalThis.LichessThreatCoding?.update(analysisSettings);
     globalThis.LichessKingMovementFields?.update(analysisSettings);
     globalThis.LichessPieceBounce?.update(settings);

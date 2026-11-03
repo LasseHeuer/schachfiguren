@@ -41,6 +41,10 @@ input[type="range"] { width: 100%; height: 13px; margin: 1px 0 0; accent-color: 
 .bounce-curve-heading strong, .bounce-curve-heading small { display: block; }
 .bounce-curve-heading small { margin-top: 3px; color: oklch(0.620712577050277 0.016268548991320 142.189058748758); font-size: 8px; }
 .bounce-curve-heading button { padding: 4px 6px; border: 0; border-radius: 4px; background: oklch(0.910255508859632 0.014794863449177 142.225553180026); color: oklch(0.435586641618957 0.027945242672295 152.732098071028); cursor: pointer; font-size: 8px; }
+.board-cursor-panel { gap: 7px; }
+.board-cursor-toggle { min-height: 0; gap: 6px; font-size: 8px; }
+.board-cursor-color { padding-top: 2px; }
+.board-cursor-controls { margin-top: 0; }
 .bounce-curve-tabs { display: flex; gap: 4px; margin-top: 6px; }
 .bounce-curve-tab { padding: 4px 8px; border: 0; border-radius: 4px; background: oklch(0.910255508859632 0.014794863449177 142.225553180026); color: oklch(0.475759447584951 0.027680659575940 148.936886778321); cursor: pointer; font-size: 8px; }
 .bounce-curve-tab[aria-pressed="true"] { background: oklch(0.437733882097912 0.057145795769747 165.011765112525); color: oklch(0.999999993473546 0.000000037273996 89.875563095902); }
