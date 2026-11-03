@@ -31,6 +31,7 @@
   let pickerColor;
   let fieldHue;
   let bounceCurveEditor = null;
+  let boardCursorCurveEditor = null;
   let currentSoundSettings = {};
   let customSoundNames = [];
   let pendingCustomSelection;
@@ -205,6 +206,7 @@
     updateThreatDisplayControls();
     updateDependentControls();
     bounceCurveEditor?.updatePreviewPieces();
+    boardCursorCurveEditor?.setValue(settings.boardCursorCurve, globalThis.LichessSettings.defaults.boardCursorCurve);
   }
 
   function saveControl(control, color) {
@@ -223,6 +225,14 @@
     const value = globalThis.LichessSettings.normalize({ ...currentSettings, [activeCurveKey]: curve })[activeCurveKey];
     currentSettings[activeCurveKey] = value;
     chrome.storage.local.set({ [activeCurveKey]: value }, () => {
+      saveStatus.textContent = "Gespeichert";
+    });
+  }
+
+  function saveBoardCursorCurve(curve) {
+    const value = globalThis.LichessSettings.normalize({ ...currentSettings, boardCursorCurve: curve }).boardCursorCurve;
+    currentSettings.boardCursorCurve = value;
+    chrome.storage.local.set({ boardCursorCurve: value }, () => {
       saveStatus.textContent = "Gespeichert";
     });
   }
@@ -652,6 +662,12 @@
     [1, 3, 7],
     previewPieceUrl
   );
+  boardCursorCurveEditor = globalThis.LichessBezierEditor.mount(
+    document.querySelector('[data-bezier-editor="boardCursorCurve"]'),
+    currentSettings.boardCursorCurve,
+    saveBoardCursorCurve,
+    () => currentSettings.boardCursorResponseMs
+  );
   const linePreview = globalThis.LichessHighlightLinePreview.mount(
     document.querySelector("[data-highlight-line-preview]"),
     () => currentSettings,
@@ -684,6 +700,7 @@
           moveAnimationDuration: "moveAnimationCurve"
         }[control.dataset.setting];
         if (!curveForDuration) {
+          if (control.dataset.setting === "boardCursorResponseMs") boardCursorCurveEditor?.preview();
           if (control.dataset.setting === "moveAnimationDistanceFactor") bounceCurveEditor?.preview();
           return;
         }

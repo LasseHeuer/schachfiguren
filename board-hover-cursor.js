@@ -74,6 +74,40 @@
     return amount * amount * (3 - 2 * amount);
   }
 
+  function bezierCoordinate(first, second, progress) {
+    const inverse = 1 - progress;
+    return 3 * inverse * inverse * progress * first
+      + 3 * inverse * progress * progress * second
+      + progress * progress * progress;
+  }
+
+  function easingProgress(progress, curve) {
+    const target = Math.max(0, Math.min(1, progress));
+    const [time1, value1, time2, value2] = curve;
+    let low = 0;
+    let high = 1;
+    for (let index = 0; index < 16; index++) {
+      const parameter = (low + high) / 2;
+      if (bezierCoordinate(time1, time2, parameter) < target) low = parameter;
+      else high = parameter;
+    }
+    return bezierCoordinate(value1 / -90, value2 / -90, (low + high) / 2);
+  }
+
+  function advanceFieldTransition(timestamp) {
+    const transition = cursorState.fieldTransition;
+    if (!transition) return;
+    const progress = Math.max(0, Math.min(1, (timestamp - transition.startTime) / transition.duration));
+    const eased = easingProgress(progress, transition.curve);
+    cursorState.fieldX = mix(transition.startX, transition.targetX, eased);
+    cursorState.fieldY = mix(transition.startY, transition.targetY, eased);
+    if (progress === 1) {
+      cursorState.fieldX = transition.targetX;
+      cursorState.fieldY = transition.targetY;
+      cursorState.fieldTransition = null;
+    }
+  }
+
   function advanceSpring(positionKey, velocityKey, target, seconds, responseMs = settings.boardCursorResponseMs) {
     const omega = 4.6 / (responseMs / 1000);
     const displacement = cursorState[positionKey] - target;
@@ -90,20 +124,27 @@
     }
   }
 
-  function updateFieldTarget(col, row) {
+  function updateFieldTarget(col, row, timestamp) {
     if (col === cursorState.col && row === cursorState.row) return;
     const targetX = col + 0.5;
     const targetY = row + 0.5;
     if (cursorState.col < 0 || cursorState.row < 0) {
       cursorState.fieldX = targetX;
       cursorState.fieldY = targetY;
-      cursorState.vFieldX = 0;
-      cursorState.vFieldY = 0;
+    } else {
+      advanceFieldTransition(timestamp);
+      cursorState.fieldTransition = {
+        startX: cursorState.fieldX,
+        startY: cursorState.fieldY,
+        targetX,
+        targetY,
+        startTime: timestamp,
+        duration: settings.boardCursorResponseMs,
+        curve: [...settings.boardCursorCurve]
+      };
     }
     cursorState.col = col;
     cursorState.row = row;
-    cursorState.targetFieldX = targetX;
-    cursorState.targetFieldY = targetY;
   }
 
   function mix(start, end, amount) {
@@ -190,7 +231,7 @@
       clearCursor();
       return;
     }
-    updateFieldTarget(col, row);
+    updateFieldTarget(col, row, timestamp);
 
     const seconds = Math.min(0.05, lastFrameTime ? (timestamp - lastFrameTime) / 1000 : 1 / 60);
     lastFrameTime = timestamp;
@@ -207,8 +248,7 @@
       cursorState.morph = 1;
       cursorState.vMorph = 0;
     }
-    advanceSpring("fieldX", "vFieldX", cursorState.targetFieldX, seconds);
-    advanceSpring("fieldY", "vFieldY", cursorState.targetFieldY, seconds);
+    advanceFieldTransition(timestamp);
     const trailResponseMs = mix(220, 40, settings.boardCursorTrailTension / 100);
     advanceSpring("trailX", "vTrailX", cursorState.targetTrailX, seconds, trailResponseMs);
     advanceSpring("trailY", "vTrailY", cursorState.targetTrailY, seconds, trailResponseMs);
@@ -230,9 +270,7 @@
 
     const settled = cursorState.speed < 1
       && Math.abs(cursorState.morph - targetMorph) < 0.002 && Math.abs(cursorState.vMorph) < 0.01
-      && Math.abs(cursorState.targetFieldX - cursorState.fieldX) < 0.002
-      && Math.abs(cursorState.targetFieldY - cursorState.fieldY) < 0.002
-      && Math.abs(cursorState.vFieldX) < 0.01 && Math.abs(cursorState.vFieldY) < 0.01
+      && !cursorState.fieldTransition
       && Math.abs(cursorState.targetTrailX - cursorState.trailX) < 0.002
       && Math.abs(cursorState.targetTrailY - cursorState.trailY) < 0.002
       && Math.abs(cursorState.vTrailX) < 0.01 && Math.abs(cursorState.vTrailY) < 0.01
@@ -268,10 +306,7 @@
       vTrailAmount: 0,
       fieldX: 0,
       fieldY: 0,
-      vFieldX: 0,
-      vFieldY: 0,
-      targetFieldX: 0,
-      targetFieldY: 0,
+      fieldTransition: null,
       row: -1,
       col: -1
     };

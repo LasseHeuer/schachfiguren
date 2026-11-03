@@ -3469,6 +3469,49 @@ test("soft light uses the square root branch on bright backgrounds", () => {
   result.forEach(channel => assert.ok(Math.abs(channel - expected) < 0.001));
 });
 
+test("z shortcut toggles the plugin zen mode and ignores text inputs", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const source = readFileSync(join(__dirname, "content.js"), "utf8");
+  const handler = source.match(/function handleZenShortcut\(event\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(handler, "the plugin zen shortcut handler is present");
+  const toggles = [];
+  let zenMode = false;
+  const context = vm.createContext({
+    zenBoard: {},
+    document: { documentElement: { hasAttribute: () => zenMode } },
+    setZenMode: enabled => { zenMode = enabled; toggles.push(enabled); },
+  });
+  const handle = vm.runInContext(`${handler}\nhandleZenShortcut`, context);
+  const keyEvent = properties => ({
+    key: "z",
+    target: {},
+    repeat: false,
+    prevented: false,
+    stopped: false,
+    preventDefault() { this.prevented = true; },
+    stopImmediatePropagation() { this.stopped = true; },
+    ...properties,
+  });
+
+  const enable = keyEvent();
+  handle(enable);
+  assert.deepEqual(toggles, [true]);
+  assert.equal(enable.prevented, true);
+  assert.equal(enable.stopped, true);
+
+  handle(keyEvent());
+  assert.deepEqual(toggles, [true, false]);
+  handle(keyEvent({ target: { tagName: "INPUT" } }));
+  handle(keyEvent({ target: { isContentEditable: true } }));
+  handle(keyEvent({ ctrlKey: true }));
+  handle(keyEvent({ repeat: true }));
+  context.zenBoard = null;
+  handle(keyEvent());
+  assert.deepEqual(toggles, [true, false]);
+});
+
 test("zen layout observer recenters on class-only puzzle layout changes", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");

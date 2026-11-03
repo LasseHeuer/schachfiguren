@@ -366,6 +366,10 @@
             <label class="range-setting"><span>Nachzieh-Länge</span><output data-value-for="boardCursorTrailLengthPx"></output><input type="range" min="0" max="60" step="1" data-setting="boardCursorTrailLengthPx"></label>
             <label class="range-setting range-wide"><span>Leuchten</span><output data-value-for="boardCursorGlowPercent"></output><input type="range" min="0" max="100" step="1" data-setting="boardCursorGlowPercent"></label>
           </div>
+          <div class="bounce-curve-panel" data-depends-on="boardCursorEnabled">
+            <div class="bounce-curve-heading"><span><strong>Übergangskurve</strong><small>Bestimmt, wie der Cursor innerhalb der Dauer zum Zielfeld übergeht.</small></span><button type="button" data-bezier-reset>Zuruecksetzen</button></div>
+            <div class="bezier-editor" data-bezier-editor="boardCursorCurve"></div>
+          </div>
         </div>
         <label class="color-row"><span>Farbe der blauen Buttons auf Lichess</span><input type="color" data-setting="primaryButtonColor"></label>
         <div class="theme-grid">

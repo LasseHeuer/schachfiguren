@@ -85,6 +85,7 @@
     boardCursorOpacity: 90,
     boardCursorInsetPercent: 4,
     boardCursorResponseMs: 280,
+    boardCursorCurve: [0.25, 0, 0.25, -90],
     boardCursorRoundnessPercent: 60,
     boardCursorSpeedThresholdPxPerSecond: 500,
     boardCursorTrailTension: 55,
@@ -532,7 +533,7 @@
     result.moveAnimationDuration = Math.round(result.moveAnimationDuration / 10) * 10;
     result.promotionPreviewIntervalMs = Math.round(result.promotionPreviewIntervalMs / 10) * 10;
     result.moveAnimationDistanceFactor = Number((Math.round(result.moveAnimationDistanceFactor / 0.05) * 0.05).toFixed(2));
-    for (const key of ["pieceBounceCurve", "pieceBounceWiggleCurve", "moveAnimationCurve"]) {
+    for (const key of ["pieceBounceCurve", "pieceBounceWiggleCurve", "moveAnimationCurve", "boardCursorCurve"]) {
       const curve = Array.isArray(result[key]) ? result[key].map(Number) : null;
       if (!curve || curve.length !== 4 || !curve.every(Number.isFinite)) {
         result[key] = [...defaults[key]];

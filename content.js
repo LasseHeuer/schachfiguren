@@ -531,6 +531,17 @@
     scheduleZenClockUpdate();
   }
 
+  function handleZenShortcut(event) {
+    if (event.key?.toLowerCase() !== "z" || event.altKey || event.ctrlKey || event.metaKey) return;
+    const target = event.target;
+    if (target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName) || !zenBoard) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (!event.repeat) setZenMode(!document.documentElement.hasAttribute("data-lfs-zen-mode"));
+  }
+
+  window.addEventListener("keydown", handleZenShortcut, true);
+
   function clearNormalRoundLayout() {
     cancelAnimationFrame(normalRoundFrame);
     if (normalRoundApp) {

@@ -12,6 +12,8 @@ test("board cursor settings are normalized and exposed in the popup", () => {
   assert.equal(settings.defaults.boardCursorDiameterPx, 14);
   assert.equal(settings.defaults.boardCursorTrailTension, 55);
   assert.equal(settings.defaults.boardCursorResponseMs, 280);
+  assert.deepEqual(settings.defaults.boardCursorCurve, [0.25, 0, 0.25, -90]);
+  assert.deepEqual(settings.normalize({ boardCursorCurve: [2, -300, -1, 200] }).boardCursorCurve, [1, -200, 0, 120]);
   assert.equal(settings.defaults.boardCursorRoundnessPercent, 60);
   assert.equal(settings.normalize({ boardCursorResponseMs: 1200 }).boardCursorResponseMs, 1000);
   assert.equal(settings.normalize({ boardCursorRoundnessPercent: -5 }).boardCursorRoundnessPercent, 0);
@@ -31,6 +33,7 @@ test("board cursor settings are normalized and exposed in the popup", () => {
     "boardCursorOpacity", "boardCursorInsetPercent", "boardCursorSpeedThresholdPxPerSecond",
     "boardCursorResponseMs", "boardCursorRoundnessPercent", "boardCursorTrailTension", "boardCursorTrailLengthPx", "boardCursorGlowPercent"
   ]) assert.match(popup, new RegExp(`data-setting="${key}"`));
+  assert.match(popup, /data-bezier-editor="boardCursorCurve"/);
   assert.doesNotMatch(popup, /boardCursorAnticipationPercent|boardCursorDiagonalPinchPercent/);
 });
 
@@ -116,6 +119,7 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
     boardCursorOpacity: 90,
     boardCursorInsetPercent: 4,
     boardCursorResponseMs: 135,
+    boardCursorCurve: [0.25, 0, 0.25, -90],
     boardCursorRoundnessPercent: 50,
     boardCursorSpeedThresholdPxPerSecond: 500,
     boardCursorTrailTension: 55,
@@ -191,6 +195,16 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
   move(520, 316, 1526);
   tick(1526);
   assert.ok(outlineWidth() > 0.2, "fast movement eases the hover field back into a circle");
+
+  for (let time = 1542; time <= 4500; time += 16) tick(time);
+  cursorSettings.boardCursorResponseMs = 1000;
+  cursorSettings.boardCursorCurve = [0.8, 0, 1, -90];
+  context.LichessBoardCursor.update(cursorSettings);
+  move(610, 316, 5000);
+  for (let time = 5000; time <= 5500; time += 16) tick(time);
+  const transitionStart = /^M([\d.-]+) /.exec(outline());
+  const fieldCenter = Number(transitionStart[1]) + 0.25;
+  assert.ok(fieldCenter > 5.55 && fieldCenter < 5.85, "the configured easing controls progress during the transition duration");
 
   documentListeners.get("pointerout")({ target: square, relatedTarget: new Element("body") });
   assert.equal(board.children.length, 0);
