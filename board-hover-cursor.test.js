@@ -11,8 +11,10 @@ test("board cursor settings are normalized and exposed in the popup", () => {
   assert.equal(settings.defaults.boardCursorEnabled, false);
   assert.equal(settings.defaults.boardCursorDiameterPx, 14);
   assert.equal(settings.defaults.boardCursorTrailTension, 55);
-  assert.equal(settings.defaults.boardCursorResponseMs, 135);
-  assert.equal(settings.normalize({ boardCursorResponseMs: 999 }).boardCursorResponseMs, 280);
+  assert.equal(settings.defaults.boardCursorResponseMs, 280);
+  assert.equal(settings.defaults.boardCursorRoundnessPercent, 60);
+  assert.equal(settings.normalize({ boardCursorResponseMs: 1200 }).boardCursorResponseMs, 1000);
+  assert.equal(settings.normalize({ boardCursorRoundnessPercent: -5 }).boardCursorRoundnessPercent, 0);
   assert.equal(settings.normalize({ boardCursorInsetPercent: -5 }).boardCursorInsetPercent, 0);
   assert.equal(settings.normalize({ boardCursorSpeedThresholdPxPerSecond: 3000 }).boardCursorSpeedThresholdPxPerSecond, 2000);
   assert.equal(settings.normalize({ boardCursorDiameterPx: 2 }).boardCursorDiameterPx, 4);
@@ -27,7 +29,7 @@ test("board cursor settings are normalized and exposed in the popup", () => {
   for (const key of [
     "boardCursorEnabled", "boardCursorColor", "boardCursorDiameterPx", "boardCursorWidthPx",
     "boardCursorOpacity", "boardCursorInsetPercent", "boardCursorSpeedThresholdPxPerSecond",
-    "boardCursorResponseMs", "boardCursorTrailTension", "boardCursorTrailLengthPx", "boardCursorGlowPercent"
+    "boardCursorResponseMs", "boardCursorRoundnessPercent", "boardCursorTrailTension", "boardCursorTrailLengthPx", "boardCursorGlowPercent"
   ]) assert.match(popup, new RegExp(`data-setting="${key}"`));
   assert.doesNotMatch(popup, /boardCursorAnticipationPercent|boardCursorDiagonalPinchPercent/);
 });
@@ -114,12 +116,13 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
     boardCursorOpacity: 90,
     boardCursorInsetPercent: 4,
     boardCursorResponseMs: 135,
+    boardCursorRoundnessPercent: 50,
     boardCursorSpeedThresholdPxPerSecond: 500,
     boardCursorTrailTension: 55,
     boardCursorTrailLengthPx: 18,
     boardCursorGlowPercent: 55,
     boardBevelEnabled: true,
-    boardFieldShape: "round",
+    boardFieldShape: "bevel",
     boardBevelPercent: 40,
     boardRoundPercent: 50
   };
@@ -173,7 +176,16 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
   const fieldStart = /^M([\d.-]+) ([\d.-]+)L([\d.-]+) ([\d.-]+)/.exec(outline());
   assert.ok(Math.abs(Number(fieldStart[1]) - 4.25) < 0.001);
   assert.ok(Math.abs(Number(fieldStart[2]) - 3.04) < 0.001);
-  assert.ok(Math.abs(Number(fieldStart[3]) - 4.75) < 0.001, "the idle cursor takes the field's configured rounding");
+  assert.ok(Math.abs(Number(fieldStart[3]) - 4.75) < 0.001, "the idle cursor uses its configured corner rounding");
+  const roundedFieldPath = outline();
+  assert.match(roundedFieldPath, /C/, "the cursor has rounded corners independently of the board shape");
+  cursorSettings.boardCursorRoundnessPercent = 100;
+  context.LichessBoardCursor.update(cursorSettings);
+  tick(1500);
+  assert.notEqual(outline(), roundedFieldPath, "the cursor rounding control changes the field outline");
+  cursorSettings.boardCursorRoundnessPercent = 50;
+  context.LichessBoardCursor.update(cursorSettings);
+  tick(1500);
 
   move(464, 316, 1510);
   move(520, 316, 1526);

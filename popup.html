@@ -350,7 +350,7 @@
       <section class="panel" id="panel-mehr" role="tabpanel" aria-labelledby="tab-mehr" data-panel="mehr" hidden>
         <div class="bounce-curve-panel board-cursor-panel">
           <div class="bounce-curve-heading">
-            <span><strong>Dynamischer Brettzeiger</strong><small>Der Kreis folgt der Maus und wird bei langsamem Bewegen zur Feldkontur.</small></span>
+            <span><strong>Dynamischer Brettzeiger</strong><small>Der Kreis folgt der Maus und wird bei langsamem Bewegen zur gerundeten Feldkontur.</small></span>
             <label class="switch-setting board-cursor-toggle"><span>Aktiv</span><input type="checkbox" data-setting="boardCursorEnabled" role="switch"></label>
           </div>
           <label class="color-row board-cursor-color"><span>Konturfarbe</span><input type="color" data-setting="boardCursorColor"></label>
@@ -360,7 +360,8 @@
             <label class="range-setting"><span>Deckkraft</span><output data-value-for="boardCursorOpacity"></output><input type="range" min="0" max="100" step="1" data-setting="boardCursorOpacity"></label>
             <label class="range-setting"><span>Feldinnenabstand</span><output data-value-for="boardCursorInsetPercent"></output><input type="range" min="0" max="30" step="1" data-setting="boardCursorInsetPercent"></label>
             <label class="range-setting"><span>Bewegungsschwelle</span><output data-value-for="boardCursorSpeedThresholdPxPerSecond"></output><input type="range" min="100" max="2000" step="50" data-setting="boardCursorSpeedThresholdPxPerSecond"></label>
-            <label class="range-setting"><span>Formübergang</span><output data-value-for="boardCursorResponseMs"></output><input type="range" min="35" max="280" step="5" data-setting="boardCursorResponseMs"></label>
+            <label class="range-setting"><span>Übergangsdauer</span><output data-value-for="boardCursorResponseMs"></output><input type="range" min="35" max="1000" step="10" data-setting="boardCursorResponseMs"></label>
+            <label class="range-setting"><span>Feldrundung</span><output data-value-for="boardCursorRoundnessPercent"></output><input type="range" min="0" max="100" step="1" data-setting="boardCursorRoundnessPercent"></label>
             <label class="range-setting"><span>Spannung</span><output data-value-for="boardCursorTrailTension"></output><input type="range" min="0" max="100" step="1" data-setting="boardCursorTrailTension"></label>
             <label class="range-setting"><span>Nachzieh-Länge</span><output data-value-for="boardCursorTrailLengthPx"></output><input type="range" min="0" max="60" step="1" data-setting="boardCursorTrailLengthPx"></label>
             <label class="range-setting range-wide"><span>Leuchten</span><output data-value-for="boardCursorGlowPercent"></output><input type="range" min="0" max="100" step="1" data-setting="boardCursorGlowPercent"></label>

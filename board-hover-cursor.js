@@ -126,18 +126,10 @@
     const x = centerX - width / 2;
     const y = centerY - height / 2;
     const inset = settings.boardCursorInsetPercent / 100;
-    let endRadiusX = 0;
-    let endRadiusY = 0;
-    let endCurve = 0;
-    if (settings.boardBevelEnabled && settings.boardFieldShape === "round") {
-      endRadiusX = Math.max(0, settings.boardRoundPercent / 200 - inset);
-      endRadiusY = endRadiusX;
-      endCurve = 1;
-    } else if (settings.boardBevelEnabled) {
-      const bevel = settings.boardBevelPercent / 200;
-      endRadiusX = Math.max(0, bevel - inset);
-      endRadiusY = endRadiusX;
-    }
+    const endRadius = Math.max(0, settings.boardCursorRoundnessPercent / 200 - inset);
+    const endRadiusX = endRadius;
+    const endRadiusY = endRadius;
+    const endCurve = 1;
 
     const radiusX = Math.min(width / 2, mix(cursorState.circleWidth / 2, endRadiusX, amount));
     const radiusY = Math.min(height / 2, mix(cursorState.circleHeight / 2, endRadiusY, amount));
