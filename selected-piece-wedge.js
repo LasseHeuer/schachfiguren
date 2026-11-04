@@ -643,8 +643,8 @@
 
   function getLastMoveSquares(board) {
     const squares = [...board.querySelectorAll(":scope > square.last-move")]
-      .map(element => getScreenSquare(element, board));
-    return squares.length === 2 && squares.every(Boolean) ? squares : null;
+      .map(element => getScreenSquare(element, board)).filter(Boolean);
+    return squares.length === 2 ? squares : null;
   }
 
   function getLastMove(board, position, blackOrientation) {
@@ -3634,7 +3634,8 @@
   }
 
   function renderLastMoveOutline(board, entry) {
-    const squares = settings?.enabled && settings.markLastMove && board.closest(".is2d")
+    const squares = settings?.enabled && settings.markLastMove
+      && (board.closest(".is2d") || board.closest(".round__app .main-board"))
       ? getLastMoveSquares(board)
       : null;
     const cells = squares ? getLastMoveOutlineCells(squares[0], squares[1]) : [];

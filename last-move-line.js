@@ -79,6 +79,14 @@
   documentObserver.observe(document, { attributes: true, attributeFilter: ["class"], childList: true, subtree: true });
   scanBoards();
 
+  function scheduleAllBoards() {
+    for (const board of observedBoards.keys()) scheduleRender(board);
+  }
+
+  globalThis.addEventListener?.("resize", scheduleAllBoards);
+  globalThis.visualViewport?.addEventListener("resize", scheduleAllBoards);
+  document.addEventListener("fullscreenchange", scheduleAllBoards);
+
   globalThis.LichessLastMoveLine = {
     createPreviewLine(uci, blackOrientation, board, color) {
       if (!settings?.enabled || !settings.markLastMove) return null;

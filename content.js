@@ -192,6 +192,7 @@
   let normalRoundTable;
   let normalRoundBoardHeight = 0;
   let normalRoundFrame;
+  let normalRoundLayoutTimer;
   let zenBoardMissingTimer;
   let boardSizeCapBoard;
   let boardSizeCap = restoredBoardSizeCap;
@@ -564,7 +565,7 @@
   }
 
   function syncNormalRoundLayout(waitForReflow = false) {
-    if (document.documentElement.hasAttribute("data-lfs-zen-mode")) return;
+    if (document.documentElement.hasAttribute("data-lfs-zen-mode") || normalRoundLayoutTimer) return;
     cancelAnimationFrame(normalRoundFrame);
     const measureAfterFrame = () => {
       normalRoundFrame = requestAnimationFrame(() => {
@@ -1907,9 +1908,18 @@
     if (fullscreenChanged) persistBoardSizeCap();
     scheduleBoardAnchoredElements();
     if (document.documentElement.hasAttribute("data-lfs-zen-mode")) scheduleZenCenter();
-    else {
-      clearNormalRoundLayout();
+    else if (fullscreenWindow) {
+      clearTimeout(normalRoundLayoutTimer);
+      normalRoundLayoutTimer = 0;
       syncNormalRoundLayout(true);
+    } else {
+      clearNormalRoundLayout();
+      clearTimeout(normalRoundLayoutTimer);
+      // Resize events arrive in bursts; apply the fitted layout only after the viewport settles.
+      normalRoundLayoutTimer = setTimeout(() => {
+        normalRoundLayoutTimer = 0;
+        syncNormalRoundLayout(true);
+      }, 100);
     }
     schedulePvPreviewSync();
     scheduleZenClockUpdate();

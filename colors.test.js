@@ -151,6 +151,9 @@ test("fullscreen board size cap survives a content-script restart", () => {
     return { board, wrapper, resize(size) { width = height = size; boardWidth = boardHeight = size * 0.75; } };
   };
   const createPage = (sessionStorage, innerHeight, board) => {
+    const normalLayoutCalls = { clear: 0, sync: [] };
+    const timers = new Map();
+    let nextTimer = 0;
     const rootAttributes = new Set();
     const documentElement = {
       hasAttribute: name => rootAttributes.has(name),
@@ -175,6 +178,9 @@ test("fullscreen board size cap survives a content-script restart", () => {
       document,
       sessionStorage,
       LichessSettings: settings,
+      normalLayoutCalls,
+      setTimeout(callback) { timers.set(++nextTimer, callback); return nextTimer; },
+      clearTimeout(id) { timers.delete(id); },
       getComputedStyle: () => ({ display: "block", visibility: "visible" }),
       chrome: { runtime: { getURL: path => path, sendMessage() {} } },
       location: { href: "https://lichess.org/game/test", origin: "https://lichess.org" }
@@ -182,8 +188,8 @@ test("fullscreen board size cap survives a content-script restart", () => {
     assert.ok(source.includes(marker));
     vm.runInContext(source.replace(marker, `
       scheduleBoardAnchoredElements = () => {};
-      clearNormalRoundLayout = () => {};
-      syncNormalRoundLayout = () => {};
+      clearNormalRoundLayout = () => { normalLayoutCalls.clear++; };
+      syncNormalRoundLayout = wait => { normalLayoutCalls.sync.push(wait); };
       schedulePvPreviewSync = () => {};
       scheduleZenClockUpdate = () => {};
       globalThis.boardCapTesting = { syncBoardSizeCap, handleViewportChange };
@@ -194,6 +200,13 @@ ${marker}`), context);
       handleViewportChange: context.boardCapTesting.handleViewportChange,
       window,
       screen: context.screen,
+      normalLayoutCalls,
+      runLatestTimer() {
+        const [id, callback] = [...timers].at(-1) ?? [];
+        assert.ok(callback, "a delayed layout sync is pending");
+        timers.delete(id);
+        callback();
+      },
       pagehide: () => windowListeners.get("pagehide")?.()
     };
   };
@@ -208,6 +221,13 @@ ${marker}`), context);
   game.resize(480);
   gamePage.window.innerHeight = 760;
   gamePage.handleViewportChange();
+  assert.deepEqual(gamePage.normalLayoutCalls, { clear: 1, sync: [] },
+    "windowed layout fitting waits until viewport resizing settles");
+  gamePage.handleViewportChange();
+  assert.deepEqual(gamePage.normalLayoutCalls, { clear: 2, sync: [] },
+    "repeated resize events do not reapply the fitted layout mid-transition");
+  gamePage.runLatestTimer();
+  assert.deepEqual(gamePage.normalLayoutCalls, { clear: 2, sync: [true] });
   assert.equal(game.wrapper.hasAttribute("data-lfs-board-size-cap"), false,
     "a window filling the available desktop is not F11 fullscreen");
 
@@ -1129,7 +1149,7 @@ test("move outlines keep rounded joins and share formatting with last-move previ
   });
   const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
   vm.runInContext(source.replace("  documentObserver = new MutationObserver", `
-    getScreenSquare = square => square;
+    getScreenSquare = square => square.hidden ? null : square;
     globalThis.testing = { renderMoveOutline, renderLastMoveOutline, createLastMovePreview, getLastMoveSquares, getLastMoveOutlineCells, configure(value) { settings = value; } };
     return;
     documentObserver = new MutationObserver`), context);
@@ -1264,6 +1284,22 @@ test("move outlines keep rounded joins and share formatting with last-move previ
   assert.ok(entry.lastMoveOutlineSvg.innerHTML.includes(`stroke="${outlineSettings.whitePieceColor}" stroke-width="3"`));
   assert.ok(entry.lastMoveOutlineSvg.innerHTML.includes("M4 4L5 4"));
   assert.ok(!entry.lastMoveOutlineSvg.innerHTML.includes("M4 6L5 6"));
+  const roundBoard = {
+    closest: selector => selector === ".round__app .main-board" ? {} : selector === ".cg-wrap"
+      ? { classList: { contains: () => false } } : null,
+    classList: { contains: name => name === "turn-white" },
+    querySelectorAll: selector => selector.includes("piece") ? [movedPiece] : [{ row: 6, col: 4 }, { row: 4, col: 4 }]
+  };
+  const roundEntry = {};
+  context.testing.renderLastMoveOutline(roundBoard, roundEntry);
+  assert.ok(roundEntry.lastMoveOutlineSvg.innerHTML.includes("M4 4L5 4"),
+    "the running game's main board is eligible without an .is2d ancestor");
+  const boardWithStaleSquares = {
+    querySelectorAll: () => [{ hidden: true }, { row: 6, col: 4 }, { row: 4, col: 4 }]
+  };
+  assert.deepEqual(Array.from(context.testing.getLastMoveSquares(boardWithStaleSquares), ({ row, col }) => ({ row, col })),
+    [{ row: 6, col: 4 }, { row: 4, col: 4 }],
+    "hidden stale Chessground squares do not suppress the current move outline");
   movedPieceColor = "black";
   context.testing.renderLastMoveOutline(board, entry);
   assert.ok(entry.lastMoveOutlineSvg.innerHTML.includes(`stroke="${outlineSettings.blackPieceColor}" stroke-width="3"`));
@@ -1273,6 +1309,51 @@ test("move outlines keep rounded joins and share formatting with last-move previ
   assert.doesNotMatch(extensionCss, /\.cg-wrap > cg-container,\s*html[^\n]*\.cg-wrap > cg-board\s*\{\s*clip-path:/);
   assert.match(extensionCss, /\.cg-wrap > cg-container > cg-board\s*\{\s*clip-path:/);
   assert.match(extensionCss, /\.cg-wrap > cg-container > \.cg-custom-svgs\s*\{\s*z-index:\s*2147483647\s*!important;/);
+});
+
+test("last-move outlines redraw after viewport and fullscreen changes", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const listeners = { global: new Map(), viewport: new Map(), document: new Map() };
+  const frames = new Map();
+  let nextFrame = 0;
+  let renders = 0;
+  const wrapper = {};
+  const board = {
+    closest: selector => selector === ".cg-wrap" ? wrapper : null,
+    getBoundingClientRect: () => ({ width: 80, height: 80 })
+  };
+  class MutationObserver { observe() {} disconnect() {} }
+  class ResizeObserver { observe() {} disconnect() {} }
+  const context = vm.createContext({
+    document: {
+      querySelectorAll: () => [board],
+      addEventListener: (type, listener) => listeners.document.set(type, listener)
+    },
+    addEventListener: (type, listener) => listeners.global.set(type, listener),
+    visualViewport: { addEventListener: (type, listener) => listeners.viewport.set(type, listener) },
+    MutationObserver,
+    ResizeObserver,
+    requestAnimationFrame(callback) { frames.set(++nextFrame, callback); return nextFrame; },
+    cancelAnimationFrame(id) { frames.delete(id); },
+    LichessSelectedPieceWedge: { renderLastMoveOutline() { renders++; } }
+  });
+  vm.runInContext(readFileSync(join(__dirname, "last-move-line.js"), "utf8"), context);
+
+  const flushFrame = () => {
+    const [id, callback] = frames.entries().next().value ?? [];
+    assert.ok(callback, "a redraw was scheduled");
+    frames.delete(id);
+    callback();
+  };
+  flushFrame();
+  for (const [group, type] of [["global", "resize"], ["viewport", "resize"], ["document", "fullscreenchange"]]) {
+    const previousRenders = renders;
+    listeners[group].get(type)();
+    flushFrame();
+    assert.equal(renders, previousRenders + 1, `${group} ${type} schedules a fresh outline measurement`);
+  }
 });
 
 const previousColors = {
