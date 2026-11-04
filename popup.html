@@ -355,11 +355,13 @@
           </div>
           <label class="color-row board-cursor-color"><span>Konturfarbe</span><input type="color" data-setting="boardCursorColor"></label>
           <div class="range-grid board-cursor-controls" data-depends-on="boardCursorEnabled">
-            <label class="range-setting"><span>Kreisdurchmesser</span><output data-value-for="boardCursorDiameterPx"></output><input type="range" min="4" max="40" step="1" data-setting="boardCursorDiameterPx"></label>
+            <label class="range-setting"><span>Kreisdurchmesser (% der Feldgröße)</span><output data-value-for="boardCursorDiameterPx"></output><input type="range" min="0" max="100" step="1" data-setting="boardCursorDiameterPx"></label>
             <label class="range-setting"><span>Konturdicke</span><output data-value-for="boardCursorWidthPx"></output><input type="range" min="0.5" max="8" step="0.5" data-setting="boardCursorWidthPx"></label>
             <label class="range-setting"><span>Deckkraft</span><output data-value-for="boardCursorOpacity"></output><input type="range" min="0" max="100" step="1" data-setting="boardCursorOpacity"></label>
             <label class="range-setting"><span>Feldinnenabstand</span><output data-value-for="boardCursorInsetPercent"></output><input type="range" min="0" max="30" step="1" data-setting="boardCursorInsetPercent"></label>
-            <label class="range-setting"><span>Bewegungsschwelle</span><output data-value-for="boardCursorSpeedThresholdPxPerSecond"></output><input type="range" min="100" max="2000" step="50" data-setting="boardCursorSpeedThresholdPxPerSecond"></label>
+            <label class="switch-setting range-wide"><span>Highlightlinien aussparen</span><input type="checkbox" data-setting="boardCursorHighlightGapsEnabled" role="switch"></label>
+            <label class="range-setting range-wide" data-depends-on="boardCursorHighlightGapsEnabled"><span>Lückenbreite</span><output data-value-for="boardCursorHighlightGapWidthPx"></output><input type="range" min="0" max="20" step="1" data-setting="boardCursorHighlightGapWidthPx"></label>
+            <label class="range-setting"><span>Bewegungsschwelle</span><output data-value-for="boardCursorSpeedThresholdPxPerSecond"></output><input type="range" min="0" max="400" step="50" data-setting="boardCursorSpeedThresholdPxPerSecond"></label>
             <label class="range-setting"><span>Übergangsdauer</span><output data-value-for="boardCursorResponseMs"></output><input type="range" min="35" max="1000" step="10" data-setting="boardCursorResponseMs"></label>
             <label class="range-setting"><span>Feldrundung</span><output data-value-for="boardCursorRoundnessPercent"></output><input type="range" min="0" max="100" step="1" data-setting="boardCursorRoundnessPercent"></label>
             <label class="range-setting"><span>Spannung</span><output data-value-for="boardCursorTrailTension"></output><input type="range" min="0" max="100" step="1" data-setting="boardCursorTrailTension"></label>

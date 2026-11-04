@@ -528,6 +528,19 @@
     return analysis;
   }
 
+  function getPreviewedSquares(preview) {
+    if (!preview?.isHoverPreview) return null;
+    const changed = new Set();
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        if (preview.basePosition[row][col] === preview.position[row][col]) continue;
+        const square = logicalToScreen({ row, col }, preview.blackOrientation);
+        changed.add(`${square.row},${square.col}`);
+      }
+    }
+    return changed;
+  }
+
   function getDefenseCascadeLayers(position, root, blackOrientation, depth) {
     if (position[root?.row]?.[root?.col]?.type === "king") return [];
     return getHighlightCascadeLayers(position, root, blackOrientation, depth, false);
@@ -952,6 +965,7 @@
   }
 
   function updatePinnedPieceOutlines(board, position, dragPreview, pinnedPieces, enabled, blackOrientation) {
+    const previewedSquares = getPreviewedSquares(dragPreview);
     for (const element of board.querySelectorAll(":scope > piece")) {
       if (!enabled || element.classList.contains("fading")) {
         clearPinnedPieceOutline(element);
@@ -979,6 +993,10 @@
         square = getPieceScreenSquare(element, board, blackOrientation);
       }
 
+      if (square && previewedSquares?.has(`${square.row},${square.col}`)) {
+        clearPinnedPieceOutline(element);
+        continue;
+      }
       const piece = getPiece(element);
       const occupant = square && position[square.row]?.[square.col];
       const attackerColor = piece && occupant?.color === piece.color && occupant.type === piece.type
@@ -993,6 +1011,7 @@
 
   function updateThreatenedPieces(board, position, dragPreview, threatened, enabled, blackOrientation) {
     const threats = [];
+    const previewedSquares = getPreviewedSquares(dragPreview);
     for (const element of board.querySelectorAll(":scope > piece")) {
       if (!enabled) {
         clearThreatenedPieceOutline(element);
@@ -1020,6 +1039,10 @@
         square = getPieceScreenSquare(element, board, blackOrientation);
       }
 
+      if (square && previewedSquares?.has(`${square.row},${square.col}`)) {
+        clearThreatenedPieceOutline(element);
+        continue;
+      }
       const piece = getPiece(element);
       const occupant = square && position[square.row]?.[square.col];
       const attackers = piece && occupant?.color === piece.color && occupant.type === piece.type
@@ -1040,6 +1063,32 @@
       if (attackers) threats.push({ square, color: piece.color, type: piece.type, attackers });
     }
     return threats;
+  }
+
+  function updateMovePreviewPieceAnalysis(board, entry, preview, position, threatened, pinnedPieces) {
+    const previewImage = entry.previewPieceImage;
+    const dragImage = board.closest(".cg-wrap")?.querySelector("#lfs-move-preview-drag > piece");
+    const image = preview?.isHoverPreview ? previewImage : preview?.isDragging ? dragImage : null;
+    const square = image && preview.legal ? logicalToScreen(preview.target, preview.blackOrientation) : null;
+    const piece = square && position[square.row]?.[square.col];
+    const key = square && `${square.row},${square.col}`;
+    const threatColor = piece && threatened[piece.color]?.has(key) ? piece.color : null;
+    const attackerColor = piece && pinnedPieces?.get(key);
+    const pinColor = attackerColor
+      ? settings.pinnedPieceOutlineUsePlayerColor ? attackerColor : "custom"
+      : null;
+    for (const candidate of new Set([previewImage, dragImage])) {
+      if (!candidate) continue;
+      const active = candidate === image;
+      setPreviewAnalysisAttribute(candidate, "data-lfs-threatened-piece", active ? threatColor : null);
+      setPreviewAnalysisAttribute(candidate, "data-lfs-pinned-piece", active ? pinColor : null);
+    }
+  }
+
+  function setPreviewAnalysisAttribute(element, name, value) {
+    if (value) {
+      if (element.getAttribute(name) !== value) element.setAttribute(name, value);
+    } else if (element.hasAttribute(name)) element.removeAttribute(name);
   }
 
 
@@ -2893,6 +2942,7 @@
     if (connections.size) {
       if (!entry.highlightLineSvg) {
         entry.highlightLineSvg = document.createElementNS(svgNamespace, "svg");
+        entry.highlightLineSvg.setAttribute("data-lfs-highlight-lines", "");
         entry.highlightLineSvg.setAttribute("viewBox", "0 0 8 8");
         entry.highlightLineSvg.setAttribute("aria-hidden", "true");
         entry.highlightLineDefs = document.createElementNS(svgNamespace, "defs");
@@ -2918,6 +2968,7 @@
         const [start, end] = reverse ? [to, from] : [from, to];
         path.setAttribute("d", `M ${start.col + 0.5} ${start.row + 0.5} L ${end.col + 0.5} ${end.row + 0.5}`);
         path.setAttribute("fill", "none");
+        path.setAttribute("data-lfs-highlight-line", "");
         path.setAttribute("stroke", `url(#${id})`);
         path.setAttribute("stroke-width", String(settings.defenseHighlightLineWidthPercent / 100));
         path.setAttribute("stroke-dasharray", "0 100");
@@ -4152,12 +4203,14 @@
           element: hoverPreview ? null : findPieceElement(board, outline.target, dragPreview, parsed.blackOrientation) } };
       })
       : [];
+    // Preview destinations belong to the unmoved piece, not the simulated position at the hovered target.
+    const moveOutlineParsed = idleParsed ?? wedgeParsed;
     const moveOutlinePreviews = updateMoveOutlinePreviews(
       board,
-      wedgeParsed.position,
-      wedgeParsed.selected,
-      wedgeSelectedPiece,
-      wedgeParsed.blackOrientation,
+      moveOutlineParsed.position,
+      moveOutlineParsed.selected,
+      moveOutlineParsed.selected && moveOutlineParsed.position[moveOutlineParsed.selected.row]?.[moveOutlineParsed.selected.col],
+      moveOutlineParsed.blackOrientation,
       screenLegalTargets
     );
     const hoveredTarget = movePreview?.isHoverPreview && logicalToScreen(movePreview.target, parsed.blackOrientation);
@@ -4174,6 +4227,8 @@
       settings.threatDefenseDisplayMode
     );
     renderMovePreviewPiece(board, entry, movePreview);
+    updateMovePreviewPieceAnalysis(board, entry, movePreview, parsed.position, threatenedSquares,
+      pinnedPiecesEnabled ? positionAnalysis.pinnedPieces : new Map());
     if (!wedges.length) {
       entry.svg?.remove();
       entry.svg = null;

@@ -42,6 +42,62 @@ html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > piece[d
   filter: url("#lfs-pinned-piece-outline-custom") !important;
 }
 
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > svg.lfs-move-preview-piece image[data-lfs-threatened-piece] {
+  filter: drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active)) !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap > #lfs-move-preview-drag > piece[data-lfs-threatened-piece] {
+  filter: drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active)) !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > svg.lfs-move-preview-piece image[data-lfs-pinned-piece="w"] {
+  filter: url("#lfs-pinned-piece-outline-w") !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap > #lfs-move-preview-drag > piece[data-lfs-pinned-piece="w"] {
+  filter: url("#lfs-pinned-piece-outline-w") !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > svg.lfs-move-preview-piece image[data-lfs-pinned-piece="b"] {
+  filter: url("#lfs-pinned-piece-outline-b") !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap > #lfs-move-preview-drag > piece[data-lfs-pinned-piece="b"] {
+  filter: url("#lfs-pinned-piece-outline-b") !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > svg.lfs-move-preview-piece image[data-lfs-pinned-piece="custom"] {
+  filter: url("#lfs-pinned-piece-outline-custom") !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap > #lfs-move-preview-drag > piece[data-lfs-pinned-piece="custom"] {
+  filter: url("#lfs-pinned-piece-outline-custom") !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > svg.lfs-move-preview-piece image[data-lfs-threatened-piece][data-lfs-pinned-piece="w"] {
+  filter: url("#lfs-pinned-piece-outline-w") drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active)) !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap > #lfs-move-preview-drag > piece[data-lfs-threatened-piece][data-lfs-pinned-piece="w"] {
+  filter: url("#lfs-pinned-piece-outline-w") drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active)) !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > svg.lfs-move-preview-piece image[data-lfs-threatened-piece][data-lfs-pinned-piece="b"] {
+  filter: url("#lfs-pinned-piece-outline-b") drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active)) !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap > #lfs-move-preview-drag > piece[data-lfs-threatened-piece][data-lfs-pinned-piece="b"] {
+  filter: url("#lfs-pinned-piece-outline-b") drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active)) !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > svg.lfs-move-preview-piece image[data-lfs-threatened-piece][data-lfs-pinned-piece="custom"] {
+  filter: url("#lfs-pinned-piece-outline-custom") drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active)) !important;
+}
+
+html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap > #lfs-move-preview-drag > piece[data-lfs-threatened-piece][data-lfs-pinned-piece="custom"] {
+  filter: url("#lfs-pinned-piece-outline-custom") drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active)) !important;
+}
+
 html.light {
   --lfs-online-indicator-active: var(--lfs-online-indicator-light);
   --lfs-button-background-active: var(--lfs-button-background-light);
@@ -804,6 +860,7 @@ html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-button:focus-
 
 .round__side[data-lfs-normal-fit] {
   translate: 0 var(--lfs-normal-side-offset) !important;
+  transition: none !important;
 }
 
 html:not([data-lfs-disabled]) body .cg-wrap[data-lfs-board-size-cap] {

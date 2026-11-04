@@ -2356,9 +2356,34 @@ test("board preview updates do not trigger round layout and synthetic scroll fee
       observer([{ type: "childList", target, addedNodes: [node], removedNodes: [] }]);
       assert.deepEqual(calls, [], "board overlays and piece changes must not reset hover anticipation via layout updates");
     }
+    const moves = {
+      ...node,
+      parentElement: { matches: selector => selector === ".round__app" },
+      closest: selector => selector.includes("data-lfs-normal-moves") ? moves
+        : selector.includes(".round__app") ? roundApp : null
+    };
+    observer([{ type: "childList", target: moves, addedNodes: [node], removedNodes: [] }]);
+    assert.deepEqual(calls, [], "playback move-list changes must not trigger full round layout measurements");
     const round = { ...node, closest: selector => selector.includes("main") ? round : null };
     observer([{ type: "childList", target: round, addedNodes: [node], removedNodes: [] }]);
     assert.deepEqual(calls, ["board", zenMode ? "zen" : "round", "clock"], "real surrounding layout changes must still be handled");
+    calls.length = 0;
+    const roundApp = {
+      ...node,
+      matches: selector => selector.includes(".round__app"),
+      closest: selector => selector.includes(".round__app") ? roundApp : null
+    };
+    const moveRow = {
+      ...node,
+      parentElement: { matches: () => false },
+      closest: selector => selector.includes(".round__app") ? roundApp : null
+    };
+    observer([{ type: "attributes", attributeName: "class", target: moveRow, addedNodes: [], removedNodes: [] }]);
+    assert.deepEqual(calls, [], "playback row class changes must not repeatedly recalculate the surrounding layout");
+    observer([{ type: "attributes", attributeName: "class", target: moves, addedNodes: [], removedNodes: [] }]);
+    assert.deepEqual(calls, [], "move panel class changes must not reset the replay layout");
+    observer([{ type: "attributes", attributeName: "class", target: roundApp, addedNodes: [], removedNodes: [] }]);
+    assert.deepEqual(calls, ["board", zenMode ? "zen" : "round", "clock"], "changes to the round layout itself must still be handled");
     calls.length = 0;
     const clock = { ...node, textContent: "1:00", closest: selector => selector.includes(".rclock") ? clock : null };
     observer([{ type: "characterData", target: clock, addedNodes: [], removedNodes: [] }]);
@@ -2378,10 +2403,13 @@ test("normal round panel alignment does not chase a transitioning offset", () =>
   const frames = new Map();
   let nextFrame = 0;
   let boardTop = 100;
+  let boardHeight = 400;
   let displayedOffset = 0;
   let targetOffset = 0;
   let scrollEvents = 0;
+  let clearCalls = 0;
   const sideProperties = new Map();
+  const appProperties = new Map();
   const attributes = () => new Set();
   const side = {
     style: {
@@ -2400,7 +2428,10 @@ test("normal round panel alignment does not chase a transitioning offset", () =>
   const round = { querySelector: () => side };
   const app = {
     children: [],
-    style: { setProperty() {}, removeProperty() {} },
+    style: {
+      setProperty(name, value) { appProperties.set(name, value); },
+      removeProperty(name) { appProperties.delete(name); }
+    },
     closest: () => round,
     querySelector: () => table,
     setAttribute(name) { this.attributes.add(name); },
@@ -2410,7 +2441,7 @@ test("normal round panel alignment does not chase a transitioning offset", () =>
   };
   const board = {
     closest: selector => selector === ".round__app" ? app : null,
-    getBoundingClientRect: () => ({ left: 100, top: boardTop, right: 500, width: 400, height: 400 })
+    getBoundingClientRect: () => ({ left: 100, top: boardTop, right: 500, width: 400, height: boardHeight })
   };
   const context = vm.createContext({
     document: {
@@ -2424,11 +2455,11 @@ test("normal round panel alignment does not chase a transitioning offset", () =>
       : { paddingTop: "0px", paddingBottom: "0px", gridArea: "" },
     requestAnimationFrame(callback) { frames.set(++nextFrame, callback); return nextFrame; },
     cancelAnimationFrame(id) { frames.delete(id); },
-    clearNormalRoundLayout() {},
+    clearNormalRoundLayout() { clearCalls++; },
     schedulePvPreviewSync() {},
     normalRoundLayoutTimer: 0
   });
-  vm.runInContext(`let normalRoundApp, normalRoundSide, normalRoundTable, normalRoundBoardHeight = 0, normalRoundFrame = 0;\n${syncFunction}\nglobalThis.sync = syncNormalRoundLayout;`, context);
+  vm.runInContext(`let normalRoundApp, normalRoundSide, normalRoundTable, normalRoundFrame = 0;\n${syncFunction}\nglobalThis.sync = syncNormalRoundLayout;`, context);
 
   const sync = () => {
     context.sync();
@@ -2459,6 +2490,15 @@ test("normal round panel alignment does not chase a transitioning offset", () =>
   sync();
   assert.equal(targetOffset, 120, "a real board layout change must still reposition the side panel");
   assert.equal(scrollEvents, 2);
+
+  boardHeight = 450;
+  sync();
+  assert.equal(appProperties.get("--lfs-normal-app-height"), "450px");
+  assert.equal(clearCalls, 0, "a settling board size must update the fit without removing and reapplying it");
+
+  const extensionCss = readFileSync(join(__dirname, "extension.css"), "utf8");
+  assert.match(extensionCss, /\.round__side\[data-lfs-normal-fit\]\s*\{[^}]*transition:\s*none\s*!important;/s,
+    "the fitted side panel must not animate its position while the page layout settles");
 });
 
 test("hover previews ignore stale move keys and respect active move animations", () => {
@@ -2843,6 +2883,130 @@ test("pins use existing piece values and require one opposing blocker", () => {
   position[4][4] = { color: "w", type: "rook" };
   position[3][3] = { color: "w", type: "knight" };
   assert.equal(context.testing.getPinnedPieces(position).has("2,2"), false, "a second blocker interrupts the pin");
+});
+
+test("hover move analysis follows the virtual piece to its destination", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const context = vm.createContext({ document: { addEventListener() {} } });
+  vm.runInContext(readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8")
+    .replace("  documentObserver = new MutationObserver", `
+      globalThis.testing = {
+        getPreviewedSquares,
+        updateMovePreviewPieceAnalysis,
+        configure(value) { settings = value; }
+      };
+      return;
+      documentObserver = new MutationObserver`), context);
+  context.testing.configure({ pinnedPieceOutlineUsePlayerColor: true });
+
+  const basePosition = Array.from({ length: 8 }, () => Array(8).fill(""));
+  basePosition[6][4] = "wP";
+  const position = basePosition.map(row => [...row]);
+  position[6][4] = "";
+  position[4][4] = "wP";
+  const preview = {
+    isHoverPreview: true,
+    legal: true,
+    source: { row: 6, col: 4 },
+    target: { row: 4, col: 4 },
+    blackOrientation: false,
+    basePosition,
+    position
+  };
+  assert.deepEqual(Array.from(context.testing.getPreviewedSquares(preview)).sort(), ["4,4", "6,4"]);
+
+  const attributes = new Map();
+  const image = {
+    getAttribute(name) { return attributes.get(name) ?? null; },
+    hasAttribute(name) { return attributes.has(name); },
+    removeAttribute(name) { attributes.delete(name); },
+    setAttribute(name, value) { attributes.set(name, value); }
+  };
+  const board = { closest: () => null };
+  const displayedPosition = Array.from({ length: 8 }, () => Array(8).fill(null));
+  displayedPosition[4][4] = { color: "w", type: "pawn" };
+  const threatened = { w: new Map([["4,4", [{}]]]), b: new Map() };
+  const pinnedPieces = new Map([["4,4", "b"]]);
+  context.testing.updateMovePreviewPieceAnalysis(board, { previewPieceImage: image }, preview,
+    displayedPosition, threatened, pinnedPieces);
+  assert.equal(attributes.get("data-lfs-threatened-piece"), "w");
+  assert.equal(attributes.get("data-lfs-pinned-piece"), "b");
+
+  context.testing.updateMovePreviewPieceAnalysis(board, { previewPieceImage: image }, { ...preview, legal: false },
+    displayedPosition, threatened, pinnedPieces);
+  assert.equal(attributes.has("data-lfs-threatened-piece"), false);
+  assert.equal(attributes.has("data-lfs-pinned-piece"), false);
+
+  const dragAttributes = new Map();
+  const dragImage = {
+    getAttribute(name) { return dragAttributes.get(name) ?? null; },
+    hasAttribute(name) { return dragAttributes.has(name); },
+    removeAttribute(name) { dragAttributes.delete(name); },
+    setAttribute(name, value) { dragAttributes.set(name, value); }
+  };
+  const dragBoard = { closest: () => ({ querySelector: () => dragImage }) };
+  context.testing.updateMovePreviewPieceAnalysis(dragBoard, {}, { ...preview, isHoverPreview: false, isDragging: true },
+    displayedPosition, threatened, pinnedPieces);
+  assert.equal(dragAttributes.get("data-lfs-threatened-piece"), "w");
+  assert.equal(dragAttributes.get("data-lfs-pinned-piece"), "b");
+});
+
+test("left- and right-button piece drags schedule move analysis previews", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const listeners = new Map();
+  const dispatched = [];
+  let nextFrame = 0;
+  class MutationObserver {
+    observe() {}
+    disconnect() {}
+  }
+  class CustomEvent {
+    constructor(type, options = {}) { this.type = type; this.detail = options.detail; }
+  }
+  const wrapper = { classList: { contains: () => false } };
+  const piece = {
+    classList: { contains: name => ["white", "pawn"].includes(name) },
+    dataset: {},
+    style: {},
+    getAnimations: () => [],
+    getBoundingClientRect: () => ({ left: 50, top: 50, width: 100, height: 100 })
+  };
+  const board = {
+    id: "main-board",
+    matches: () => true,
+    closest(selector) { return selector === ".cg-wrap" ? wrapper : selector === ".is2d" ? {} : null; },
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 800 }),
+    querySelectorAll(selector) { return selector === ":scope > piece" ? [piece] : []; }
+  };
+  const target = { closest: selector => selector === "cg-board" ? board : null };
+  const document = {
+    documentElement: {},
+    addEventListener(name, listener) { listeners.set(name, listener); },
+    dispatchEvent(event) { dispatched.push(event); },
+    querySelectorAll: () => []
+  };
+  const context = vm.createContext({
+    document,
+    window: { addEventListener() {} },
+    MutationObserver,
+    CustomEvent,
+    requestAnimationFrame() { return ++nextFrame; }
+  });
+  vm.runInContext(readFileSync(join(__dirname, "threat-coding.js"), "utf8"), context);
+  context.LichessThreatCoding.update({ enabled: true });
+
+  for (const button of [0, 2]) {
+    listeners.get("pointerdown")({ button, target, clientX: 100, clientY: 100 });
+    listeners.get("pointermove")({ clientX: 160, clientY: 160 });
+    assert.ok(dispatched.some(event => event.type === "lfs-hover-preview-change" && event.detail === board),
+      `${button === 0 ? "left" : "right"} drag updates its analyzed target`);
+    dispatched.length = 0;
+    listeners.get("pointerup")({ type: "pointerup" });
+  }
 });
 
 test("pinned outline blur starts sharp and clamps to its slider range", () => {

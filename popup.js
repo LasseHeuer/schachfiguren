@@ -76,6 +76,7 @@
     if (["threatMoveDepth", "defenseHighlightDepth", "wedgePotentialCutoffValue", "wedgePotentialPerPieceCount"].includes(control.dataset.setting)) {
       return control.value;
     }
+    if (control.dataset.setting === "boardCursorDiameterPx") return `${control.value}%`;
     if (control.dataset.setting.endsWith("Px")) return `${control.value} px`;
     if (control.dataset.setting === "boardCursorSpeedThresholdPxPerSecond") return `${control.value} px/s`;
     if (["wedgeOpacity", "movePreviewOriginOpacity"].includes(control.dataset.setting)) return `${Math.round(Number(control.value) * 100)}%`;

@@ -608,7 +608,8 @@
     const target = getLogicalSquareAtPoint(board, activePieceDrag.clientX, activePieceDrag.clientY, blackOrientation);
     // The board editor (Stellung aufbauen) has no legal destinations, so every field is a valid target there.
     const isEditor = Boolean(board.closest(".board-editor"));
-    const allowed = target && (isEditor || getAllowedDestinations(board, blackOrientation).has(`${target.row},${target.col}`));
+    const legalDestinations = getAllowedDestinations(board, blackOrientation);
+    const allowed = target && (isEditor || legalDestinations.has(`${target.row},${target.col}`));
     const position = allowed
       ? createPreviewPosition(activePieceDrag.position, activePieceDrag.source, target)
       : null;
@@ -618,6 +619,12 @@
       target: position ? target : activePieceDrag.source,
       legal: Boolean(position),
       basePosition: activePieceDrag.position,
+      legalTargets: (isEditor
+        ? Array.from({ length: 64 }, (_, index) => `${Math.floor(index / 8)},${index % 8}`)
+        : [...legalDestinations]).map(key => {
+        const [row, col] = key.split(",").map(Number);
+        return { row, col };
+      }),
       blackOrientation,
       isHoverPreview: false,
       isDragging: true
@@ -853,9 +860,10 @@
   function initialize() {
     if (!interactionListenersAdded) {
       document.addEventListener("lfs-hover-preview-change", event => scheduleRender(event.detail));
+      document.addEventListener("lfs-move-preview-pointermove", event => scheduleRender(event.detail?.board));
       document.addEventListener("pointerdown", event => {
         lastPointerPosition = { x: event.clientX, y: event.clientY };
-        if (event.button !== 0 || typeof event.target?.closest !== "function") return;
+        if (![0, 2].includes(event.button) || typeof event.target?.closest !== "function") return;
         const board = event.target.closest("cg-board");
         if (!board || !board.matches(boardSelector)) return;
         const parsed = board ? readBoard(board) : null;
@@ -870,6 +878,8 @@
           && getAllowedDestinations(board, parsed.blackOrientation).has(`${source.row},${source.col}`)) return;
         pieceInteractionActive = true;
         activePieceDrag = { board, position: parsed.position, source, clientX: event.clientX, clientY: event.clientY };
+        document.dispatchEvent(new CustomEvent("lfs-hover-preview-change", { detail: board }));
+        scheduleRender(board);
       }, true);
       const updatePointerPosition = event => {
         lastPointerPosition = { x: event.clientX, y: event.clientY };

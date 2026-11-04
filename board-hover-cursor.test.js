@@ -18,11 +18,18 @@ test("board cursor settings are normalized and exposed in the popup", () => {
   assert.equal(settings.normalize({ boardCursorResponseMs: 1200 }).boardCursorResponseMs, 1000);
   assert.equal(settings.normalize({ boardCursorRoundnessPercent: -5 }).boardCursorRoundnessPercent, 0);
   assert.equal(settings.normalize({ boardCursorInsetPercent: -5 }).boardCursorInsetPercent, 0);
-  assert.equal(settings.normalize({ boardCursorSpeedThresholdPxPerSecond: 3000 }).boardCursorSpeedThresholdPxPerSecond, 2000);
-  assert.equal(settings.normalize({ boardCursorDiameterPx: 2 }).boardCursorDiameterPx, 4);
+  assert.equal(settings.defaults.boardCursorSpeedThresholdPxPerSecond, 400);
+  assert.equal(settings.normalize({ boardCursorSpeedThresholdPxPerSecond: 0 }).boardCursorSpeedThresholdPxPerSecond, 0);
+  assert.equal(settings.normalize({ boardCursorSpeedThresholdPxPerSecond: 500 }).boardCursorSpeedThresholdPxPerSecond, 400);
+  assert.equal(settings.normalize({ boardCursorDiameterPx: 0 }).boardCursorDiameterPx, 0);
+  assert.equal(settings.normalize({ boardCursorDiameterPx: 101 }).boardCursorDiameterPx, 100);
   assert.equal(settings.normalize({ boardCursorTrailTension: 120 }).boardCursorTrailTension, 100);
   assert.equal(settings.normalize({ boardCursorTrailLengthPx: -5 }).boardCursorTrailLengthPx, 0);
   assert.equal(settings.normalize({ boardCursorEnabled: 1 }).boardCursorEnabled, true);
+  assert.equal(settings.defaults.boardCursorHighlightGapsEnabled, true);
+  assert.equal(settings.defaults.boardCursorHighlightGapWidthPx, 4);
+  assert.equal(settings.normalize({ boardCursorHighlightGapsEnabled: 0 }).boardCursorHighlightGapsEnabled, false);
+  assert.equal(settings.normalize({ boardCursorHighlightGapWidthPx: 50 }).boardCursorHighlightGapWidthPx, 20);
   const cleaned = settings.normalize({ boardCursorAnticipationPercent: 22, boardCursorDiagonalPinchPercent: 42 });
   assert.equal("boardCursorAnticipationPercent" in cleaned, false);
   assert.equal("boardCursorDiagonalPinchPercent" in cleaned, false);
@@ -30,9 +37,13 @@ test("board cursor settings are normalized and exposed in the popup", () => {
   const popup = readFileSync(join(__dirname, "popup.html"), "utf8");
   for (const key of [
     "boardCursorEnabled", "boardCursorColor", "boardCursorDiameterPx", "boardCursorWidthPx",
-    "boardCursorOpacity", "boardCursorInsetPercent", "boardCursorSpeedThresholdPxPerSecond",
+    "boardCursorOpacity", "boardCursorInsetPercent", "boardCursorHighlightGapsEnabled", "boardCursorHighlightGapWidthPx",
+    "boardCursorSpeedThresholdPxPerSecond",
     "boardCursorResponseMs", "boardCursorRoundnessPercent", "boardCursorTrailTension", "boardCursorTrailLengthPx", "boardCursorGlowPercent"
   ]) assert.match(popup, new RegExp(`data-setting="${key}"`));
+  assert.match(popup, /<input type="range" min="0" max="400" step="50" data-setting="boardCursorSpeedThresholdPxPerSecond">/);
+  assert.match(popup, /<input type="range" min="0" max="100" step="1" data-setting="boardCursorDiameterPx">/);
+  assert.match(popup, /Kreisdurchmesser \(% der Feldgröße\)/);
   assert.match(popup, /data-bezier-editor="boardCursorCurve"/);
   assert.doesNotMatch(popup, /boardCursorAnticipationPercent|boardCursorDiagonalPinchPercent/);
 });
@@ -41,6 +52,7 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
   const frames = new Map();
   const documentListeners = new Map();
   let nextFrame = 0;
+  let boardSize = 800;
 
   class Element {
     constructor(name, parent = null) {
@@ -72,6 +84,14 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
         this.children.push(node);
       }
     }
+    replaceChildren(...nodes) {
+      for (const child of this.children) child.parentElement = null;
+      this.children = [];
+      this.append(...nodes);
+    }
+    querySelectorAll(selector) {
+      return selector === 'svg[data-lfs-highlight-lines] path[data-lfs-highlight-line]' ? (this.highlightPaths ?? []) : [];
+    }
     remove() {
       if (!this.parentElement) return;
       this.parentElement.children = this.parentElement.children.filter(node => node !== this);
@@ -90,7 +110,7 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
       if (value) this.attributes.set(name, "");
       else this.attributes.delete(name);
     }
-    getBoundingClientRect() { return { left: 0, top: 0, width: 800, height: 800 }; }
+    getBoundingClientRect() { return { left: 0, top: 0, width: boardSize, height: boardSize }; }
   }
 
   const board = new Element("cg-board");
@@ -118,10 +138,12 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
     boardCursorWidthPx: 2.5,
     boardCursorOpacity: 90,
     boardCursorInsetPercent: 4,
+    boardCursorHighlightGapsEnabled: true,
+    boardCursorHighlightGapWidthPx: 4,
     boardCursorResponseMs: 135,
     boardCursorCurve: [0.25, 0, 0.25, -90],
     boardCursorRoundnessPercent: 50,
-    boardCursorSpeedThresholdPxPerSecond: 500,
+    boardCursorSpeedThresholdPxPerSecond: 400,
     boardCursorTrailTension: 55,
     boardCursorTrailLengthPx: 18,
     boardCursorGlowPercent: 55,
@@ -131,6 +153,12 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
     boardRoundPercent: 50
   };
   context.LichessBoardCursor.update(cursorSettings);
+  const highlightLine = new Element("path");
+  highlightLine.setAttribute("d", "M1 1L7 7");
+  highlightLine.setAttribute("stroke-width", "0.02");
+  highlightLine.setAttribute("stroke-dasharray", "none");
+  highlightLine.setAttribute("stroke-opacity", "0.2");
+  board.highlightPaths = [highlightLine];
 
   const move = (clientX, clientY, timeStamp, target = square) => documentListeners.get("pointermove")({
     pointerType: "mouse", target, clientX, clientY, timeStamp
@@ -150,6 +178,21 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
   };
 
   move(250, 250, 16);
+  tick(16);
+  const cursor = board.children[0];
+  assert.equal(cursor.children[0].getAttribute("mask"), "url(#lfs-board-cursor-highlight-gap-mask)");
+  assert.equal(cursor.children[3].children[0].children.length, 2, "the mask contains the highlight line crossing the cursor");
+  const gap = cursor.children[3].children[0].children[1];
+  assert.equal(gap.getAttribute("stroke-width"), "8.5");
+  assert.equal(gap.getAttribute("stroke-opacity"), "1", "even a translucent highlight creates a fully transparent cursor gap");
+  assert.equal(gap.getAttribute("opacity"), "1");
+  cursorSettings.boardCursorHighlightGapsEnabled = false;
+  context.LichessBoardCursor.update(cursorSettings);
+  tick(16);
+  assert.equal(cursor.children[0].getAttribute("mask"), null, "the checkbox restores an uninterrupted outline");
+  assert.equal(cursor.children[3].children[0].children.length, 0);
+  cursorSettings.boardCursorHighlightGapsEnabled = true;
+  context.LichessBoardCursor.update(cursorSettings);
   tick(16);
   cursorSettings.boardCursorTrailLengthPx = 0;
   context.LichessBoardCursor.update(cursorSettings);
@@ -223,4 +266,17 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
     assert.equal(board.children.length, 1, "the cursor returns after the piece drag ends");
     documentListeners.get("pointerout")({ target: square, relatedTarget: new Element("body") });
   }
+
+  boardSize = 400;
+  move(200, 200, 6000);
+  tick(6000);
+  assert.match(outline(), /^M4 3\.92L4 3\.92/, "the circle diameter scales as a percentage of the field size");
+  documentListeners.get("pointerout")({ target: square, relatedTarget: new Element("body") });
+
+  cursorSettings.boardCursorSpeedThresholdPxPerSecond = 0;
+  context.LichessBoardCursor.update(cursorSettings);
+  move(200, 200, 6016);
+  tick(6016);
+  assert.doesNotMatch(outline(), /NaN|Infinity/, "a zero movement threshold keeps the cursor geometry valid");
+  documentListeners.get("pointerout")({ target: square, relatedTarget: new Element("body") });
 });

@@ -5,7 +5,12 @@
   let activeBoard;
   let cursorSvg;
   let cursorPaths;
+  let cursorGapMask;
   let cursorState;
+  let boardObserver;
+  let boardObserverObserved = false;
+  let highlightLineObserver;
+  let observedHighlightLineSvg;
   let frame = 0;
   let lastFrameTime = 0;
   let piecePointer = null;
@@ -48,17 +53,36 @@
     const glow = createSvgElement("path", "lfs-board-cursor-glow");
     const outline = createSvgElement("path", "lfs-board-cursor-outline");
     const highlight = createSvgElement("path", "lfs-board-cursor-highlight");
-    svg.append(glow, outline, highlight);
+    const defs = document.createElementNS(namespace, "defs");
+    const mask = document.createElementNS(namespace, "mask");
+    mask.setAttribute("id", "lfs-board-cursor-highlight-gap-mask");
+    mask.setAttribute("maskUnits", "userSpaceOnUse");
+    mask.setAttribute("maskContentUnits", "userSpaceOnUse");
+    mask.setAttribute("x", "0");
+    mask.setAttribute("y", "0");
+    mask.setAttribute("width", "8");
+    mask.setAttribute("height", "8");
+    mask.style.setProperty("mask-type", "luminance");
+    defs.append(mask);
+    svg.append(glow, outline, highlight, defs);
+    cursorGapMask = mask;
     board.setAttribute("data-lfs-board-cursor-board", "");
     board.append(svg);
     activeBoard = board;
     cursorSvg = svg;
     cursorPaths = [glow, outline, highlight];
     setCursorStyle();
+    observeHighlightLines(board);
   }
 
   function clearCursor() {
     if (frame) cancelAnimationFrame(frame);
+    boardObserver?.disconnect();
+    highlightLineObserver?.disconnect();
+    boardObserver = null;
+    boardObserverObserved = false;
+    highlightLineObserver = null;
+    observedHighlightLineSvg = null;
     frame = 0;
     lastFrameTime = 0;
     activeBoard?.removeAttribute("data-lfs-board-cursor-board");
@@ -66,7 +90,81 @@
     activeBoard = null;
     cursorSvg = null;
     cursorPaths = null;
+    cursorGapMask = null;
     cursorState = null;
+  }
+
+  function observeHighlightLines(board) {
+    if (typeof MutationObserver !== "function") return;
+    const lineSvg = board.querySelector('svg[data-lfs-highlight-lines]');
+    if (lineSvg !== observedHighlightLineSvg) {
+      highlightLineObserver?.disconnect();
+      observedHighlightLineSvg = lineSvg;
+      if (lineSvg) {
+        highlightLineObserver ??= new MutationObserver(() => scheduleRender(board));
+        highlightLineObserver.observe(lineSvg, {
+          attributes: true,
+          attributeFilter: ["d", "stroke-dasharray", "stroke-dashoffset", "stroke-opacity", "visibility", "stroke-width"],
+          subtree: true
+        });
+      }
+    }
+    boardObserver ??= new MutationObserver(mutations => {
+      const changed = mutations.some(mutation => {
+        if (mutation.target.closest?.('svg[data-lfs-highlight-lines]')) return true;
+        return [...mutation.addedNodes, ...mutation.removedNodes].some(node =>
+          node.matches?.('svg[data-lfs-highlight-lines]') || node.querySelector?.('svg[data-lfs-highlight-lines]'));
+      });
+      if (!changed) return;
+      observeHighlightLines(board);
+      scheduleRender(board);
+    });
+    if (!boardObserverObserved) {
+      boardObserver.observe(board, { childList: true, subtree: true });
+      boardObserverObserved = true;
+    }
+  }
+
+  function syncHighlightGapMask(rect) {
+    if (!cursorGapMask) return;
+    const enabled = Boolean(settings.boardCursorHighlightGapsEnabled);
+    for (const path of cursorPaths) {
+      if (enabled) path.setAttribute("mask", "url(#lfs-board-cursor-highlight-gap-mask)");
+      else path.removeAttribute("mask");
+    }
+    if (!cursorGapMask.replaceChildren) return;
+    if (!enabled) {
+      cursorGapMask.replaceChildren();
+      return;
+    }
+
+    const background = document.createElementNS(namespace, "rect");
+    background.setAttribute("x", "0");
+    background.setAttribute("y", "0");
+    background.setAttribute("width", "8");
+    background.setAttribute("height", "8");
+    background.setAttribute("fill", "white");
+    const lineScale = Math.min(rect.width, rect.height) / 8;
+    const gapWidth = settings.boardCursorWidthPx + settings.boardCursorHighlightGapWidthPx;
+    const cuts = typeof activeBoard.querySelectorAll === "function"
+      ? [...activeBoard.querySelectorAll('svg[data-lfs-highlight-lines] path[data-lfs-highlight-line]')].map(source => {
+        const path = document.createElementNS(namespace, "path");
+        for (const name of ["d", "stroke-dasharray", "stroke-dashoffset", "visibility", "mask"]) {
+          const value = source.getAttribute(name);
+          if (value !== null) path.setAttribute(name, value);
+        }
+        const lineWidth = Number(source.getAttribute("stroke-width")) * lineScale || 0;
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke", "black");
+        path.setAttribute("stroke-opacity", "1");
+        path.setAttribute("opacity", "1");
+        path.setAttribute("stroke-width", String(lineWidth + gapWidth));
+        path.setAttribute("stroke-linecap", "round");
+        path.setAttribute("vector-effect", "non-scaling-stroke");
+        return path;
+      })
+      : [];
+    cursorGapMask.replaceChildren(background, ...cuts);
   }
 
   function smoothstep(value) {
@@ -237,7 +335,7 @@
     lastFrameTime = timestamp;
     const speedDecaySeconds = Math.max(0.025, settings.boardCursorResponseMs / 1000 * 0.45);
     cursorState.speed *= Math.exp(-seconds / speedDecaySeconds);
-    const speedThreshold = settings.boardCursorSpeedThresholdPxPerSecond;
+    const speedThreshold = Math.max(1, settings.boardCursorSpeedThresholdPxPerSecond);
     const targetMorph = 1 - smoothstep(cursorState.speed / speedThreshold);
     const targetTrailAmount = smoothstep(cursorState.speed / speedThreshold);
     advanceSpring("morph", "vMorph", targetMorph, seconds);
@@ -258,8 +356,9 @@
     const morph = cursorState.morph;
     const centerX = mix(pointerX, cursorState.fieldX, morph);
     const centerY = mix(pointerY, cursorState.fieldY, morph);
-    const circleWidth = settings.boardCursorDiameterPx / rect.width * 8;
-    const circleHeight = settings.boardCursorDiameterPx / rect.height * 8;
+    const diameter = settings.boardCursorDiameterPx / 100 * Math.min(rect.width, rect.height) / 8;
+    const circleWidth = diameter / rect.width * 8;
+    const circleHeight = diameter / rect.height * 8;
     cursorState.circleWidth = circleWidth;
     cursorState.circleHeight = circleHeight;
     const inset = settings.boardCursorInsetPercent / 100;
@@ -267,6 +366,7 @@
     const height = mix(circleHeight, 1 - inset * 2, morph);
     const path = morphFieldPath(centerX, centerY, width, height, morph, rect);
     for (const node of cursorPaths) node.setAttribute("d", path);
+    syncHighlightGapMask(rect);
 
     const settled = cursorState.speed < 1
       && Math.abs(cursorState.morph - targetMorph) < 0.002 && Math.abs(cursorState.vMorph) < 0.01
@@ -376,12 +476,6 @@
     if (wasDragging) onPointerMove(event);
   }
 
-  function onWindowBlur() {
-    piecePointer = null;
-    pieceDragStarted = false;
-    clearCursor();
-  }
-
   document.addEventListener("pointerdown", onPointerDown, true);
   document.addEventListener("pointermove", onPointerMove, { passive: true, capture: true });
   document.addEventListener("pointerup", onPointerUp, true);
@@ -393,7 +487,7 @@
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) clearCursor();
   });
-  window.addEventListener("blur", onWindowBlur);
+  window.addEventListener("blur", clearCursor);
   window.addEventListener("resize", scheduleRender);
   window.addEventListener("scroll", scheduleRender, true);
 

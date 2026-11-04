@@ -190,7 +190,6 @@
   let normalRoundApp;
   let normalRoundSide;
   let normalRoundTable;
-  let normalRoundBoardHeight = 0;
   let normalRoundFrame;
   let normalRoundLayoutTimer;
   let zenBoardMissingTimer;
@@ -560,7 +559,6 @@
     normalRoundApp = null;
     normalRoundSide = null;
     normalRoundTable = null;
-    normalRoundBoardHeight = 0;
     normalRoundFrame = 0;
   }
 
@@ -589,8 +587,7 @@
           return;
         }
 
-        const changed = app !== normalRoundApp || side !== normalRoundSide || table !== normalRoundTable
-          || Math.abs(boardRect.height - normalRoundBoardHeight) > 1;
+        const changed = app !== normalRoundApp || side !== normalRoundSide || table !== normalRoundTable;
         if (changed && normalRoundApp) clearNormalRoundLayout();
         const appStyle = getComputedStyle(app);
         const appPadding = (parseFloat(appStyle.paddingTop) || 0) + (parseFloat(appStyle.paddingBottom) || 0);
@@ -598,7 +595,6 @@
         normalRoundApp = app;
         normalRoundSide = side;
         normalRoundTable = table;
-        normalRoundBoardHeight = boardRect.height;
         app.setAttribute("data-lfs-normal-fit", "");
         app.style.setProperty("--lfs-normal-app-height", `${boardRect.height + appPadding}px`);
         table.setAttribute("data-lfs-normal-fit", "");
@@ -2063,8 +2059,11 @@
     const hasLayoutMutation = records.some(record => {
       const changedNodes = [...record.addedNodes, ...record.removedNodes];
       const classMutation = record.type === "attributes" && record.attributeName === "class";
-      if (!changedNodes.length && !classMutation) return false;
       const target = targetElement(record);
+      if ((record.type === "childList" || classMutation) && target?.closest("[data-lfs-normal-moves]")) return false;
+      const layoutClassTarget = target?.matches(".puzzle, .analyse, .round__app, .round__app__table, .round__side, .bot-game, .study__main, main, .puzzle__board, .analyse__board, .bot-game__board, .study__board, .main-board, .cg-wrap")
+        || target?.parentElement?.matches(".round__app");
+      if (!changedNodes.length && (!classMutation || !layoutClassTarget)) return false;
       if ((changedNodes.length && changedNodes.every(isTransientOverlayNode)) || isInsideTransientOverlay(target)) return false;
       // Piece/preview updates inside the fixed-size board do not change its layout.
       if (target?.closest("cg-board")) return false;

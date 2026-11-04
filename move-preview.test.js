@@ -27,9 +27,9 @@ test("right-click move preview stays visual and restores the live board", {
   <script id="page-init-data" type="application/json">{"cfg":{"data":{"game":{"fen":"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1","variant":{"key":"standard"}}}}}</script>
   <script>window.chrome = { runtime: { getURL: path => location.origin + "/" + path } };</script>
   <script src="/colors.js"></script><script src="/settings.js"></script>
-  <script src="/board-overlay.js"></script><script src="/move-preview-board.js"></script><script src="/move-preview.js"></script>
-  <script src="/highlight-line-preview.js"></script><script src="/threat-coding.js"></script><script src="/king-movement-fields.js"></script>
-  <script src="/selected-piece-wedge.js"></script><script src="/last-move-line.js"></script>
+   <script src="/board-overlay.js"></script><script src="/move-preview-board.js"></script><script src="/move-preview.js"></script>
+   <script src="/highlight-line-preview.js"></script><script src="/threat-coding.js"></script><script src="/king-movement-fields.js"></script>
+   <script src="/selected-piece-wedge.js"></script><script src="/last-move-line.js"></script>
   </head><body data-board><div class="main-board analyse__board"><div class="is2d"><div class="cg-wrap orientation-white">
   <cg-board class="turn-white"></cg-board></div></div></div>
   <script>
