@@ -612,9 +612,12 @@
           const currentBoard = board.getBoundingClientRect();
           const currentSide = side.getBoundingClientRect();
           const offset = parseFloat(side.style.getPropertyValue("--lfs-normal-side-offset")) || 0;
-          const delta = currentBoard.top - currentSide.top;
-          if (Math.abs(delta) >= 0.01) side.style.setProperty("--lfs-normal-side-offset", `${offset + delta}px`);
-          document.dispatchEvent(new Event("scroll"));
+          const renderedOffset = Number.parseFloat(getComputedStyle(side).translate?.split(/\s+/).at(-1));
+          const targetOffset = currentBoard.top - currentSide.top + (Number.isFinite(renderedOffset) ? renderedOffset : offset);
+          if (Math.abs(targetOffset - offset) >= 0.01) {
+            side.style.setProperty("--lfs-normal-side-offset", `${targetOffset}px`);
+            document.dispatchEvent(new Event("scroll"));
+          }
           schedulePvPreviewSync();
         });
       });

@@ -2367,6 +2367,100 @@ test("board preview updates do not trigger round layout and synthetic scroll fee
   }
 });
 
+test("normal round panel alignment does not chase a transitioning offset", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const source = readFileSync(join(__dirname, "content.js"), "utf8");
+  const syncFunction = source.match(/  function syncNormalRoundLayout\(waitForReflow = false\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(syncFunction, "the normal round layout sync must remain available for regression coverage");
+
+  const frames = new Map();
+  let nextFrame = 0;
+  let boardTop = 100;
+  let displayedOffset = 0;
+  let targetOffset = 0;
+  let scrollEvents = 0;
+  const sideProperties = new Map();
+  const attributes = () => new Set();
+  const side = {
+    style: {
+      getPropertyValue: name => sideProperties.get(name) ?? "",
+      setProperty(name, value) {
+        sideProperties.set(name, value);
+        targetOffset = Number.parseFloat(value);
+      }
+    },
+    setAttribute(name) { this.attributes.add(name); },
+    removeAttribute(name) { this.attributes.delete(name); },
+    attributes: attributes(),
+    getBoundingClientRect: () => ({ left: 0, right: 90, top: displayedOffset, width: 90, height: 200 })
+  };
+  const table = { setAttribute() {}, removeAttribute() {} };
+  const round = { querySelector: () => side };
+  const app = {
+    children: [],
+    style: { setProperty() {}, removeProperty() {} },
+    closest: () => round,
+    querySelector: () => table,
+    setAttribute(name) { this.attributes.add(name); },
+    removeAttribute(name) { this.attributes.delete(name); },
+    attributes: attributes(),
+    getBoundingClientRect: () => ({ right: 600 })
+  };
+  const board = {
+    closest: selector => selector === ".round__app" ? app : null,
+    getBoundingClientRect: () => ({ left: 100, top: boardTop, right: 500, width: 400, height: 400 })
+  };
+  const context = vm.createContext({
+    document: {
+      documentElement: { hasAttribute: () => false },
+      querySelector: () => board,
+      dispatchEvent: event => { if (event.type === "scroll") scrollEvents++; }
+    },
+    Event: class { constructor(type) { this.type = type; } },
+    getComputedStyle: element => element === side
+      ? { translate: `0px ${displayedOffset}px` }
+      : { paddingTop: "0px", paddingBottom: "0px", gridArea: "" },
+    requestAnimationFrame(callback) { frames.set(++nextFrame, callback); return nextFrame; },
+    cancelAnimationFrame(id) { frames.delete(id); },
+    clearNormalRoundLayout() {},
+    schedulePvPreviewSync() {},
+    normalRoundLayoutTimer: 0
+  });
+  vm.runInContext(`let normalRoundApp, normalRoundSide, normalRoundTable, normalRoundBoardHeight = 0, normalRoundFrame = 0;\n${syncFunction}\nglobalThis.sync = syncNormalRoundLayout;`, context);
+
+  const sync = () => {
+    context.sync();
+    for (let frame = 0; frame < 2; frame++) {
+      const [id, callback] = frames.entries().next().value ?? [];
+      assert.ok(callback, "each layout sync schedules its measurement frame");
+      frames.delete(id);
+      callback();
+    }
+  };
+
+  sync();
+  assert.equal(targetOffset, 100);
+  assert.equal(scrollEvents, 1);
+
+  displayedOffset = 50;
+  sync();
+  assert.equal(targetOffset, 100, "an in-flight CSS transition must not change the target offset");
+  assert.equal(scrollEvents, 1, "a stable target must not emit another synthetic scroll");
+
+  displayedOffset = 75;
+  sync();
+  assert.equal(targetOffset, 100);
+  assert.equal(scrollEvents, 1);
+
+  boardTop = 120;
+  displayedOffset = 100;
+  sync();
+  assert.equal(targetOffset, 120, "a real board layout change must still reposition the side panel");
+  assert.equal(scrollEvents, 2);
+});
+
 test("hover previews ignore stale move keys and respect active move animations", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");
