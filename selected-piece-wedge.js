@@ -32,6 +32,7 @@
   let defenseHighlightFilterId = 0;
   let defenseHighlightLineId = 0;
   let defenseHighlightMaskId = 0;
+  let pinnedPiecePreviewFilterId = 0;
   let settingsRevision = 0;
 
 
@@ -900,6 +901,44 @@
     element.removeAttribute("data-lfs-pinned-piece");
   }
 
+  function createPinnedPieceOutlineFilter(id) {
+    const filter = document.createElementNS(svgNamespace, "filter");
+    filter.id = id;
+    filter.setAttribute("x", "-50%");
+    filter.setAttribute("y", "-50%");
+    filter.setAttribute("width", "200%");
+    filter.setAttribute("height", "200%");
+    filter.setAttribute("filterUnits", "objectBoundingBox");
+    filter.setAttribute("primitiveUnits", "userSpaceOnUse");
+    const morphology = document.createElementNS(svgNamespace, "feMorphology");
+    morphology.setAttribute("in", "SourceAlpha");
+    morphology.setAttribute("operator", "dilate");
+    morphology.setAttribute("result", "expanded");
+    const outlineAlpha = document.createElementNS(svgNamespace, "feComposite");
+    outlineAlpha.setAttribute("in", "expanded");
+    outlineAlpha.setAttribute("in2", "SourceAlpha");
+    outlineAlpha.setAttribute("operator", "out");
+    outlineAlpha.setAttribute("result", "outlineAlpha");
+    const flood = document.createElementNS(svgNamespace, "feFlood");
+    flood.setAttribute("result", "outlineColor");
+    const outline = document.createElementNS(svgNamespace, "feComposite");
+    outline.setAttribute("in", "outlineColor");
+    outline.setAttribute("in2", "outlineAlpha");
+    outline.setAttribute("operator", "in");
+    outline.setAttribute("result", "outline");
+    const blur = document.createElementNS(svgNamespace, "feGaussianBlur");
+    blur.setAttribute("in", "outline");
+    blur.setAttribute("result", "blurredOutline");
+    const merge = document.createElementNS(svgNamespace, "feMerge");
+    for (const input of ["blurredOutline", "outline", "SourceGraphic"]) {
+      const node = document.createElementNS(svgNamespace, "feMergeNode");
+      node.setAttribute("in", input);
+      merge.append(node);
+    }
+    filter.append(morphology, outlineAlpha, flood, outline, blur, merge);
+    return { filter, morphology, flood, blur };
+  }
+
   function updatePinnedPieceOutlineFilters() {
     if (!pinnedPieceOutlineFilters?.svg.isConnected) {
       const svg = document.createElementNS(svgNamespace, "svg");
@@ -910,42 +949,9 @@
       const defs = document.createElementNS(svgNamespace, "defs");
       pinnedPieceOutlineFilters = { svg, byColor: {} };
       for (const color of ["w", "b", "custom"]) {
-        const filter = document.createElementNS(svgNamespace, "filter");
-        filter.id = `lfs-pinned-piece-outline-${color}`;
-        filter.setAttribute("x", "-50%");
-        filter.setAttribute("y", "-50%");
-        filter.setAttribute("width", "200%");
-        filter.setAttribute("height", "200%");
-        filter.setAttribute("filterUnits", "objectBoundingBox");
-        filter.setAttribute("primitiveUnits", "userSpaceOnUse");
-        const morphology = document.createElementNS(svgNamespace, "feMorphology");
-        morphology.setAttribute("in", "SourceAlpha");
-        morphology.setAttribute("operator", "dilate");
-        morphology.setAttribute("result", "expanded");
-        const outlineAlpha = document.createElementNS(svgNamespace, "feComposite");
-        outlineAlpha.setAttribute("in", "expanded");
-        outlineAlpha.setAttribute("in2", "SourceAlpha");
-        outlineAlpha.setAttribute("operator", "out");
-        outlineAlpha.setAttribute("result", "outlineAlpha");
-        const flood = document.createElementNS(svgNamespace, "feFlood");
-        flood.setAttribute("result", "outlineColor");
-        const outline = document.createElementNS(svgNamespace, "feComposite");
-        outline.setAttribute("in", "outlineColor");
-        outline.setAttribute("in2", "outlineAlpha");
-        outline.setAttribute("operator", "in");
-        outline.setAttribute("result", "outline");
-        const blur = document.createElementNS(svgNamespace, "feGaussianBlur");
-        blur.setAttribute("in", "outline");
-        blur.setAttribute("result", "blurredOutline");
-        const merge = document.createElementNS(svgNamespace, "feMerge");
-        for (const input of ["blurredOutline", "outline", "SourceGraphic"]) {
-          const node = document.createElementNS(svgNamespace, "feMergeNode");
-          node.setAttribute("in", input);
-          merge.append(node);
-        }
-        filter.append(morphology, outlineAlpha, flood, outline, blur, merge);
-        defs.append(filter);
-        pinnedPieceOutlineFilters.byColor[color] = { morphology, flood, blur };
+        const outline = createPinnedPieceOutlineFilter(`lfs-pinned-piece-outline-${color}`);
+        defs.append(outline.filter);
+        pinnedPieceOutlineFilters.byColor[color] = outline;
       }
       svg.append(defs);
       document.documentElement.append(svg);
@@ -962,6 +968,69 @@
       filter.flood.setAttribute("flood-opacity", String(settings.pinnedPieceOutlineOpacity / 100));
       filter.blur.setAttribute("stdDeviation", String(settings.pinnedPieceOutlineBlurPx));
     }
+  }
+
+  function syncPinnedPiecePreviewFilters(board, entry) {
+    if (!entry.previewPinnedPieceFilters) {
+      const defs = document.createElementNS(svgNamespace, "defs");
+      defs.setAttribute("data-lfs-pinned-piece-outline-filters", "");
+      const byColor = {};
+      for (const color of ["w", "b", "custom"]) {
+        const id = `lfs-pinned-piece-outline-preview-${++pinnedPiecePreviewFilterId}-${color}`;
+        const outline = createPinnedPieceOutlineFilter(id);
+        defs.append(outline.filter);
+        byColor[color] = { ...outline, id };
+      }
+      entry.previewPieceSvg.insertBefore(defs, entry.previewPieceSvg.firstChild);
+      entry.previewPinnedPieceFilters = { defs, byColor, key: null };
+    }
+
+    const rect = board.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    const key = [rect.width, rect.height, settings.pinnedPieceOutlineWidthPx, settings.pinnedPieceOutlineBlurPx,
+      settings.pinnedPieceOutlineOpacity, settings.whitePieceColor, settings.blackPieceColor,
+      settings.pinnedPieceOutlineColor].join(":");
+    if (entry.previewPinnedPieceFilters.key === key) return entry.previewPinnedPieceFilters;
+
+    const colors = {
+      w: settings.whitePieceColor,
+      b: settings.blackPieceColor,
+      custom: settings.pinnedPieceOutlineColor
+    };
+    // The move-preview SVG uses an 8x8 viewBox; convert outline sizes from CSS pixels to its units.
+    const unitWidth = rect.width / 8;
+    const unitHeight = rect.height / 8;
+    for (const [color, filter] of Object.entries(entry.previewPinnedPieceFilters.byColor)) {
+      const radiusX = (settings.pinnedPieceOutlineWidthPx / 2 / unitWidth).toFixed(6);
+      const radiusY = (settings.pinnedPieceOutlineWidthPx / 2 / unitHeight).toFixed(6);
+      const blurX = (settings.pinnedPieceOutlineBlurPx / unitWidth).toFixed(6);
+      const blurY = (settings.pinnedPieceOutlineBlurPx / unitHeight).toFixed(6);
+      filter.morphology.setAttribute("radius", `${radiusX} ${radiusY}`);
+      filter.flood.setAttribute("flood-color", colors[color]);
+      filter.flood.setAttribute("flood-opacity", String(settings.pinnedPieceOutlineOpacity / 100));
+      filter.blur.setAttribute("stdDeviation", `${blurX} ${blurY}`);
+    }
+    entry.previewPinnedPieceFilters.key = key;
+    return entry.previewPinnedPieceFilters;
+  }
+
+  function updatePinnedPiecePreviewFilter(board, entry, pinColor, threatened) {
+    const image = entry.previewPieceImage;
+    if (!image) return;
+    if (!pinColor || document.documentElement.hasAttribute("data-lfs-disabled")
+      || !document.body.hasAttribute("data-board") || !board.closest(".is2d .cg-wrap")) {
+      image.style.removeProperty("filter");
+      return;
+    }
+
+    const filter = syncPinnedPiecePreviewFilters(board, entry)?.byColor[pinColor];
+    if (!filter) {
+      image.style.removeProperty("filter");
+      return;
+    }
+    const chain = [`url(#${filter.id})`];
+    if (threatened) chain.push("drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active))");
+    image.style.setProperty("filter", chain.join(" "), "important");
   }
 
   function updatePinnedPieceOutlines(board, position, dragPreview, pinnedPieces, enabled, blackOrientation) {
@@ -1082,6 +1151,7 @@
       const active = candidate === image;
       setPreviewAnalysisAttribute(candidate, "data-lfs-threatened-piece", active ? threatColor : null);
       setPreviewAnalysisAttribute(candidate, "data-lfs-pinned-piece", active ? pinColor : null);
+      if (candidate === previewImage) updatePinnedPiecePreviewFilter(board, entry, active ? pinColor : null, active && threatColor);
     }
   }
 
@@ -3313,6 +3383,7 @@
     entry.previewPieceGroup = null;
     entry.previewPieceImage = null;
     entry.previewDefenseFilter = null;
+    entry.previewPinnedPieceFilters = null;
   }
 
   function clearPromotionPreview(entry) {
@@ -3623,7 +3694,8 @@
     }
 
     for (const child of [...entry.previewPieceSvg.children]) {
-      if (child !== entry.previewPieceGroup && !child.matches?.("defs[data-lfs-defense-highlight-filter]")) child.remove();
+      if (child !== entry.previewPieceGroup
+        && !child.matches?.("defs[data-lfs-defense-highlight-filter], defs[data-lfs-pinned-piece-outline-filters]")) child.remove();
     }
     for (const { piece, square } of newPieces) {
       if (square.row === targetSquare.row && square.col === targetSquare.col) continue;

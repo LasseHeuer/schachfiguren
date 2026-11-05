@@ -9,6 +9,12 @@ require("./settings.js");
 test("board cursor settings are normalized and exposed in the popup", () => {
   const settings = globalThis.LichessSettings;
   assert.equal(settings.defaults.boardCursorEnabled, false);
+  assert.equal(settings.defaults.boardCursorOutlineEnabled, false);
+  assert.equal(settings.normalize({ boardCursorOutlineEnabled: 0 }).boardCursorOutlineEnabled, false);
+  assert.equal(settings.defaults.boardCursorPointerDotEnabled, false);
+  assert.equal(settings.defaults.boardCursorPointerDotSizePx, 6);
+  assert.equal(settings.normalize({ boardCursorPointerDotEnabled: 1 }).boardCursorPointerDotEnabled, true);
+  assert.equal(settings.normalize({ boardCursorPointerDotSizePx: 30 }).boardCursorPointerDotSizePx, 20);
   assert.equal(settings.defaults.boardCursorDiameterPx, 14);
   assert.equal(settings.defaults.boardCursorTrailTension, 55);
   assert.equal(settings.defaults.boardCursorResponseMs, 280);
@@ -36,13 +42,16 @@ test("board cursor settings are normalized and exposed in the popup", () => {
 
   const popup = readFileSync(join(__dirname, "popup.html"), "utf8");
   for (const key of [
-    "boardCursorEnabled", "boardCursorColor", "boardCursorDiameterPx", "boardCursorWidthPx",
+    "boardCursorEnabled", "boardCursorOutlineEnabled", "boardCursorPointerDotEnabled", "boardCursorPointerDotSizePx",
+    "boardCursorColor", "boardCursorDiameterPx", "boardCursorWidthPx",
     "boardCursorOpacity", "boardCursorInsetPercent", "boardCursorHighlightGapsEnabled", "boardCursorHighlightGapWidthPx",
     "boardCursorSpeedThresholdPxPerSecond",
     "boardCursorResponseMs", "boardCursorRoundnessPercent", "boardCursorTrailTension", "boardCursorTrailLengthPx", "boardCursorGlowPercent"
   ]) assert.match(popup, new RegExp(`data-setting="${key}"`));
   assert.match(popup, /<input type="range" min="0" max="400" step="50" data-setting="boardCursorSpeedThresholdPxPerSecond">/);
   assert.match(popup, /<input type="range" min="0" max="100" step="1" data-setting="boardCursorDiameterPx">/);
+  assert.match(popup, /<input type="range" min="1" max="20" step="1" data-setting="boardCursorPointerDotSizePx">/);
+  assert.match(popup, /<input type="checkbox" data-setting="boardCursorOutlineEnabled" role="switch">/);
   assert.match(popup, /Kreisdurchmesser \(% der Feldgröße\)/);
   assert.match(popup, /data-bezier-editor="boardCursorCurve"/);
   assert.doesNotMatch(popup, /boardCursorAnticipationPercent|boardCursorDiagonalPinchPercent/);
@@ -51,6 +60,7 @@ test("board cursor settings are normalized and exposed in the popup", () => {
 test("board cursor trails while moving, hides on piece drags and morphs into its hover field", () => {
   const frames = new Map();
   const documentListeners = new Map();
+  const mutationObservers = [];
   let nextFrame = 0;
   let boardSize = 800;
 
@@ -64,6 +74,8 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
       this.classNames = new Set();
       this.classList = { add: name => this.classNames.add(name) };
       this.id = "";
+      this.rectReads = 0;
+      this.replaceChildrenCalls = 0;
     }
     closest(selector) {
       if (selector === "piece") {
@@ -85,12 +97,16 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
       }
     }
     replaceChildren(...nodes) {
+      this.replaceChildrenCalls++;
       for (const child of this.children) child.parentElement = null;
       this.children = [];
       this.append(...nodes);
     }
     querySelectorAll(selector) {
       return selector === 'svg[data-lfs-highlight-lines] path[data-lfs-highlight-line]' ? (this.highlightPaths ?? []) : [];
+    }
+    querySelector(selector) {
+      return selector === 'svg[data-lfs-highlight-lines]' ? (this.highlightLineSvg ?? null) : null;
     }
     remove() {
       if (!this.parentElement) return;
@@ -110,12 +126,25 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
       if (value) this.attributes.set(name, "");
       else this.attributes.delete(name);
     }
-    getBoundingClientRect() { return { left: 0, top: 0, width: boardSize, height: boardSize }; }
+    getBoundingClientRect() {
+      this.rectReads++;
+      return { left: 0, top: 0, width: boardSize, height: boardSize };
+    }
   }
 
   const board = new Element("cg-board");
   const square = new Element("square", board);
   const piece = new Element("piece", board);
+  const highlightLineSvg = new Element("svg", board);
+  class MutationObserver {
+    constructor(callback) {
+      this.callback = callback;
+      this.target = null;
+      mutationObservers.push(this);
+    }
+    observe(target) { this.target = target; }
+    disconnect() { this.target = null; }
+  }
   const document = {
     hidden: false,
     documentElement: new Element("html"),
@@ -124,6 +153,7 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
   };
   const context = vm.createContext({
     Element,
+    MutationObserver,
     document,
     window: { addEventListener() {} },
     requestAnimationFrame(callback) { frames.set(++nextFrame, callback); return nextFrame; },
@@ -133,6 +163,9 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
   const cursorSettings = {
     enabled: true,
     boardCursorEnabled: true,
+    boardCursorOutlineEnabled: true,
+    boardCursorPointerDotEnabled: false,
+    boardCursorPointerDotSizePx: 6,
     boardCursorColor: "#55ddaa",
     boardCursorDiameterPx: 16,
     boardCursorWidthPx: 2.5,
@@ -158,6 +191,7 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
   highlightLine.setAttribute("stroke-width", "0.02");
   highlightLine.setAttribute("stroke-dasharray", "none");
   highlightLine.setAttribute("stroke-opacity", "0.2");
+  board.highlightLineSvg = highlightLineSvg;
   board.highlightPaths = [highlightLine];
 
   const move = (clientX, clientY, timeStamp, target = square) => documentListeners.get("pointermove")({
@@ -180,46 +214,93 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
   move(250, 250, 16);
   tick(16);
   const cursor = board.children[0];
+  const dot = cursor.children[4];
+  assert.equal(cursor.getAttribute("data-lfs-cursor-dot"), null, "the actual mouse point starts disabled");
   assert.equal(cursor.children[0].getAttribute("mask"), "url(#lfs-board-cursor-highlight-gap-mask)");
   assert.equal(cursor.children[3].children[0].children.length, 2, "the mask contains the highlight line crossing the cursor");
   const gap = cursor.children[3].children[0].children[1];
+  const mask = cursor.children[3].children[0];
+  assert.equal(board.rectReads, 1, "the board bounds are cached instead of measured in every animation frame");
   assert.equal(gap.getAttribute("stroke-width"), "8.5");
   assert.equal(gap.getAttribute("stroke-opacity"), "1", "even a translucent highlight creates a fully transparent cursor gap");
   assert.equal(gap.getAttribute("opacity"), "1");
+  cursorSettings.boardCursorHighlightGapWidthPx = 8;
+  context.LichessBoardCursor.update(cursorSettings);
+  assert.strictEqual(mask.children[1], gap, "line geometry is reused when the mask settings change");
+  assert.equal(gap.getAttribute("stroke-width"), "12.5");
+  cursorSettings.boardCursorHighlightGapWidthPx = 4;
+  context.LichessBoardCursor.update(cursorSettings);
+  assert.equal(gap.getAttribute("stroke-width"), "8.5");
+  cursorSettings.boardCursorPointerDotEnabled = true;
+  cursorSettings.boardCursorPointerDotSizePx = 8;
+  context.LichessBoardCursor.update(cursorSettings);
+  move(340, 220, 24);
+  tick(24);
+  assert.equal(cursor.getAttribute("data-lfs-cursor-dot"), "");
+  assert.equal(dot.getAttribute("cx"), "3.4", "the dot remains at the actual pointer while the outline animates");
+  assert.equal(dot.getAttribute("cy"), "2.2");
+  assert.equal(dot.getAttribute("rx"), "0.04", "the size is specified in screen pixels");
+  cursorSettings.boardCursorOutlineEnabled = false;
+  context.LichessBoardCursor.update(cursorSettings);
+  assert.equal(cursor.getAttribute("data-lfs-cursor-outline"), null, "the outline can be hidden while the point stays visible");
+  assert.equal(cursor.getAttribute("data-lfs-cursor-dot"), "");
+  tick(25);
+  assert.equal(frames.size, 0, "point-only mode does not run the outline animation");
+  cursorSettings.boardCursorOutlineEnabled = true;
+  cursorSettings.boardCursorPointerDotEnabled = false;
+  context.LichessBoardCursor.update(cursorSettings);
+  assert.equal(cursor.getAttribute("data-lfs-cursor-outline"), "");
+  assert.equal(cursor.getAttribute("data-lfs-cursor-dot"), null, "the outline can remain visible without the point");
+  tick(26);
+  cursorSettings.boardCursorPointerDotEnabled = false;
+  context.LichessBoardCursor.update(cursorSettings);
+  assert.equal(cursor.getAttribute("data-lfs-cursor-dot"), null);
   cursorSettings.boardCursorHighlightGapsEnabled = false;
   context.LichessBoardCursor.update(cursorSettings);
-  tick(16);
+  tick(32);
   assert.equal(cursor.children[0].getAttribute("mask"), null, "the checkbox restores an uninterrupted outline");
   assert.equal(cursor.children[3].children[0].children.length, 0);
   cursorSettings.boardCursorHighlightGapsEnabled = true;
   context.LichessBoardCursor.update(cursorSettings);
-  tick(16);
+  tick(48);
   cursorSettings.boardCursorTrailLengthPx = 0;
   context.LichessBoardCursor.update(cursorSettings);
-  move(400, 300, 32);
-  tick(32);
+  move(400, 300, 64);
+  tick(64);
   assert.match(outline(), /^M4 2\.92L4 2\.92/, "the moving circle stays centered under the pointer");
 
   cursorSettings.boardCursorTrailLengthPx = 18;
   context.LichessBoardCursor.update(cursorSettings);
   for (let index = 1; index <= 8; index++) {
-    const time = 32 + index * 16;
+    const time = 64 + index * 16;
     move(400 + index * 8, 300 + index * 2, time);
     tick(time + 16);
   }
   const deformedPath = outline();
   cursorSettings.boardCursorTrailTension = 100;
   context.LichessBoardCursor.update(cursorSettings);
-  tick(176);
+  tick(208);
   assert.notEqual(outline(), deformedPath, "the tension control changes the tail shape");
   cursorSettings.boardCursorTrailTension = 55;
   cursorSettings.boardCursorTrailLengthPx = 0;
   context.LichessBoardCursor.update(cursorSettings);
-  tick(176);
+  tick(224);
   assert.notEqual(outline(), deformedPath, "the length control changes the rearward bulge");
   cursorSettings.boardCursorTrailLengthPx = 18;
   context.LichessBoardCursor.update(cursorSettings);
-  for (let time = 192; time <= 1500; time += 16) tick(time);
+  const rectReadsAfterPointerMotion = board.rectReads;
+  const maskRefreshes = mask.replaceChildrenCalls;
+  for (let time = 240; time <= 1504; time += 16) tick(time);
+  assert.equal(board.rectReads, rectReadsAfterPointerMotion, "settled animation frames do not remeasure the board");
+  assert.equal(mask.replaceChildrenCalls, maskRefreshes, "cursor animation reuses the highlight mask between line changes");
+  const liveGap = mask.children[1];
+  const highlightObserver = mutationObservers.find(observer => observer.target === highlightLineSvg);
+  assert.ok(highlightObserver);
+  highlightLine.setAttribute("d", "M2 1L6 7");
+  highlightObserver.callback();
+  assert.strictEqual(mask.children[1], liveGap, "animated lines update the existing gap path");
+  assert.equal(liveGap.getAttribute("d"), "M2 1L6 7");
+  assert.equal(frames.size, 0, "line animation does not restart the settled cursor animation");
   const fieldStart = /^M([\d.-]+) ([\d.-]+)L([\d.-]+) ([\d.-]+)/.exec(outline());
   assert.ok(Math.abs(Number(fieldStart[1]) - 4.25) < 0.001);
   assert.ok(Math.abs(Number(fieldStart[2]) - 3.04) < 0.001);
@@ -228,11 +309,11 @@ test("board cursor trails while moving, hides on piece drags and morphs into its
   assert.match(roundedFieldPath, /C/, "the cursor has rounded corners independently of the board shape");
   cursorSettings.boardCursorRoundnessPercent = 100;
   context.LichessBoardCursor.update(cursorSettings);
-  tick(1500);
+  tick(1504);
   assert.notEqual(outline(), roundedFieldPath, "the cursor rounding control changes the field outline");
   cursorSettings.boardCursorRoundnessPercent = 50;
   context.LichessBoardCursor.update(cursorSettings);
-  tick(1500);
+  tick(1504);
 
   move(464, 316, 1510);
   move(520, 316, 1526);

@@ -350,11 +350,14 @@
       <section class="panel" id="panel-mehr" role="tabpanel" aria-labelledby="tab-mehr" data-panel="mehr" hidden>
         <div class="bounce-curve-panel board-cursor-panel">
           <div class="bounce-curve-heading">
-            <span><strong>Dynamischer Brettzeiger</strong><small>Der Kreis folgt der Maus und wird bei langsamem Bewegen zur gerundeten Feldkontur.</small></span>
+            <span><strong>Dynamischer Brettzeiger</strong><small>Positionspunkt und Feldkontur lassen sich getrennt anzeigen.</small></span>
             <label class="switch-setting board-cursor-toggle"><span>Aktiv</span><input type="checkbox" data-setting="boardCursorEnabled" role="switch"></label>
           </div>
           <label class="color-row board-cursor-color"><span>Konturfarbe</span><input type="color" data-setting="boardCursorColor"></label>
           <div class="range-grid board-cursor-controls" data-depends-on="boardCursorEnabled">
+            <label class="switch-setting range-wide"><span>Feldkontur anzeigen</span><input type="checkbox" data-setting="boardCursorOutlineEnabled" role="switch"></label>
+            <label class="switch-setting range-wide"><span>Tatsächliche Mausposition anzeigen</span><input type="checkbox" data-setting="boardCursorPointerDotEnabled" role="switch"></label>
+            <label class="range-setting range-wide" data-depends-on="boardCursorPointerDotEnabled"><span>Größe des Positionspunkts</span><output data-value-for="boardCursorPointerDotSizePx"></output><input type="range" min="1" max="20" step="1" data-setting="boardCursorPointerDotSizePx"></label>
             <label class="range-setting"><span>Kreisdurchmesser (% der Feldgröße)</span><output data-value-for="boardCursorDiameterPx"></output><input type="range" min="0" max="100" step="1" data-setting="boardCursorDiameterPx"></label>
             <label class="range-setting"><span>Konturdicke</span><output data-value-for="boardCursorWidthPx"></output><input type="range" min="0.5" max="8" step="0.5" data-setting="boardCursorWidthPx"></label>
             <label class="range-setting"><span>Deckkraft</span><output data-value-for="boardCursorOpacity"></output><input type="range" min="0" max="100" step="1" data-setting="boardCursorOpacity"></label>

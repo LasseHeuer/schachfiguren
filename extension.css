@@ -50,48 +50,24 @@ html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap > #lfs-move-previe
   filter: drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active)) !important;
 }
 
-html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > svg.lfs-move-preview-piece image[data-lfs-pinned-piece="w"] {
-  filter: url("#lfs-pinned-piece-outline-w") !important;
-}
-
 html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap > #lfs-move-preview-drag > piece[data-lfs-pinned-piece="w"] {
   filter: url("#lfs-pinned-piece-outline-w") !important;
-}
-
-html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > svg.lfs-move-preview-piece image[data-lfs-pinned-piece="b"] {
-  filter: url("#lfs-pinned-piece-outline-b") !important;
 }
 
 html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap > #lfs-move-preview-drag > piece[data-lfs-pinned-piece="b"] {
   filter: url("#lfs-pinned-piece-outline-b") !important;
 }
 
-html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > svg.lfs-move-preview-piece image[data-lfs-pinned-piece="custom"] {
-  filter: url("#lfs-pinned-piece-outline-custom") !important;
-}
-
 html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap > #lfs-move-preview-drag > piece[data-lfs-pinned-piece="custom"] {
   filter: url("#lfs-pinned-piece-outline-custom") !important;
-}
-
-html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > svg.lfs-move-preview-piece image[data-lfs-threatened-piece][data-lfs-pinned-piece="w"] {
-  filter: url("#lfs-pinned-piece-outline-w") drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active)) !important;
 }
 
 html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap > #lfs-move-preview-drag > piece[data-lfs-threatened-piece][data-lfs-pinned-piece="w"] {
   filter: url("#lfs-pinned-piece-outline-w") drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active)) !important;
 }
 
-html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > svg.lfs-move-preview-piece image[data-lfs-threatened-piece][data-lfs-pinned-piece="b"] {
-  filter: url("#lfs-pinned-piece-outline-b") drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active)) !important;
-}
-
 html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap > #lfs-move-preview-drag > piece[data-lfs-threatened-piece][data-lfs-pinned-piece="b"] {
   filter: url("#lfs-pinned-piece-outline-b") drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active)) !important;
-}
-
-html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > svg.lfs-move-preview-piece image[data-lfs-threatened-piece][data-lfs-pinned-piece="custom"] {
-  filter: url("#lfs-pinned-piece-outline-custom") drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active)) !important;
 }
 
 html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap > #lfs-move-preview-drag > piece[data-lfs-threatened-piece][data-lfs-pinned-piece="custom"] {
@@ -1661,6 +1637,10 @@ html:not([data-lfs-disabled]) cg-board > svg.lfs-board-cursor[data-lfs-cursor-vi
   opacity: 1;
 }
 
+html:not([data-lfs-disabled]) cg-board > svg.lfs-board-cursor:not([data-lfs-cursor-outline]) > :is(.lfs-board-cursor-glow, .lfs-board-cursor-outline, .lfs-board-cursor-highlight) {
+  display: none !important;
+}
+
 html:not([data-lfs-disabled]) .lfs-board-cursor-glow {
   stroke: var(--lfs-board-cursor-color) !important;
   stroke-width: var(--lfs-board-cursor-glow-width) !important;
@@ -1678,6 +1658,16 @@ html:not([data-lfs-disabled]) .lfs-board-cursor-highlight {
   stroke: color-mix(in srgb, white 52%, var(--lfs-board-cursor-color)) !important;
   stroke-width: 0.8px !important;
   opacity: var(--lfs-board-cursor-highlight-opacity) !important;
+}
+
+html:not([data-lfs-disabled]) cg-board > svg.lfs-board-cursor:not([data-lfs-cursor-dot]) .lfs-board-cursor-pointer-dot {
+  display: none !important;
+}
+
+html:not([data-lfs-disabled]) .lfs-board-cursor-pointer-dot {
+  fill: var(--lfs-board-cursor-color) !important;
+  stroke: color-mix(in srgb, white 80%, var(--lfs-board-cursor-color)) !important;
+  stroke-width: 1.5px !important;
 }
 
 html:not([data-lfs-disabled]) .is2d cg-board > piece[data-lfs-move-preview-origin] {
@@ -2222,6 +2212,25 @@ html:not([data-lfs-disabled]) .is2d .cg-wrap cg-board piece.king[data-lfs-king-m
   content: "";
   pointer-events: none;
   transform-origin: center;
+}
+
+/* Keep the mask below the pin filter, including before and after bounce. */
+html:not([data-lfs-disabled]):not([data-lfs-rund-comic]) body[data-board] .is2d .cg-wrap cg-board > piece[data-lfs-pinned-piece]:not([data-lfs-king-movement-fields]) {
+  background: none !important;
+  -webkit-mask: none !important;
+  mask: none !important;
+  will-change: filter;
+}
+
+html:not([data-lfs-disabled]):not([data-lfs-rund-comic]) body[data-board] .is2d .cg-wrap cg-board > piece[data-lfs-pinned-piece]:not([data-lfs-king-movement-fields])::before {
+  position: absolute;
+  inset: 0;
+  background: var(--lfs-bounce-piece-color) !important;
+  -webkit-mask: var(--lfs-bounce-piece-mask) center / contain no-repeat !important;
+  mask: var(--lfs-bounce-piece-mask) center / contain no-repeat !important;
+  content: "";
+  transform-origin: center;
+  pointer-events: none;
 }
 
 html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap #lfs-move-preview-drag piece.king[data-lfs-king-movement-fields] > span.lfs-king-movement-group::before,

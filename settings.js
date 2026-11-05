@@ -79,6 +79,9 @@
     hoverMixPercent: 50,
     hoverDesaturation: 60,
     boardCursorEnabled: false,
+    boardCursorOutlineEnabled: false,
+    boardCursorPointerDotEnabled: false,
+    boardCursorPointerDotSizePx: 6,
     boardCursorColor: "oklch(0.82 0.16 153)",
     boardCursorDiameterPx: 14,
     boardCursorWidthPx: 2.5,
@@ -273,6 +276,7 @@
     idleMixPercent: [0, 100],
     hoverMixPercent: [0, 100],
     hoverDesaturation: [0, 100],
+    boardCursorPointerDotSizePx: [1, 20],
     boardCursorDiameterPx: [0, 100],
     boardCursorWidthPx: [0.5, 8],
     boardCursorOpacity: [0, 100],
@@ -515,7 +519,7 @@
     result.engineArrowStartOffsetPercent = Math.round(result.engineArrowStartOffsetPercent);
     result.engineArrowEndOffsetPercent = Math.round(result.engineArrowEndOffsetPercent);
     result.lastMoveLineWidth = Math.round(result.lastMoveLineWidth);
-    for (const key of ["zenBackgroundTintPercent", "zenClockFontSizePx", "zenClockMarginPx", "zenClockLineThicknessPx", "zenClockLineGapPx", "zenClockWarningThresholdPercent", "zenClockActiveEndSizePercent", "zenClockActiveEndBlendPercent", "pvSliderAreaHeightPx", "boardCursorDiameterPx", "boardCursorRoundnessPercent"]) {
+    for (const key of ["zenBackgroundTintPercent", "zenClockFontSizePx", "zenClockMarginPx", "zenClockLineThicknessPx", "zenClockLineGapPx", "zenClockWarningThresholdPercent", "zenClockActiveEndSizePercent", "zenClockActiveEndBlendPercent", "pvSliderAreaHeightPx", "boardCursorPointerDotSizePx", "boardCursorDiameterPx", "boardCursorRoundnessPercent"]) {
       result[key] = Math.round(result[key]);
     }
     result.boardCursorSpeedThresholdPxPerSecond = Math.round(result.boardCursorSpeedThresholdPxPerSecond / 50) * 50;
@@ -558,6 +562,8 @@
     for (const key of [
       "enabled",
       "boardCursorEnabled",
+      "boardCursorOutlineEnabled",
+      "boardCursorPointerDotEnabled",
       "boardCursorHighlightGapsEnabled",
       "markLastMove",
       "squareMoveDots",

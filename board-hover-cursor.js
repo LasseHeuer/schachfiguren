@@ -5,12 +5,19 @@
   let activeBoard;
   let cursorSvg;
   let cursorPaths;
+  let cursorDot;
   let cursorGapMask;
+  let cursorGapMaskBackground;
+  let cursorGapMaskCuts = new Map();
+  let cursorGapMaskBaseKey;
   let cursorState;
   let boardObserver;
   let boardObserverObserved = false;
   let highlightLineObserver;
   let observedHighlightLineSvg;
+  let cursorResizeObserver;
+  let boardRect;
+  let boardRectDirty = false;
   let frame = 0;
   let lastFrameTime = 0;
   let piecePointer = null;
@@ -43,6 +50,10 @@
     cursorSvg.style.setProperty("--lfs-board-cursor-glow-width", `${settings.boardCursorWidthPx * 4}px`);
   }
 
+  function hasCursorVisual() {
+    return Boolean(settings.boardCursorOutlineEnabled || settings.boardCursorPointerDotEnabled);
+  }
+
   function createCursor(board) {
     const svg = document.createElementNS(namespace, "svg");
     svg.classList.add("lfs-board-cursor");
@@ -53,6 +64,10 @@
     const glow = createSvgElement("path", "lfs-board-cursor-glow");
     const outline = createSvgElement("path", "lfs-board-cursor-outline");
     const highlight = createSvgElement("path", "lfs-board-cursor-highlight");
+    const dot = document.createElementNS(namespace, "ellipse");
+    dot.classList.add("lfs-board-cursor-pointer-dot");
+    dot.setAttribute("fill", "currentColor");
+    dot.setAttribute("vector-effect", "non-scaling-stroke");
     const defs = document.createElementNS(namespace, "defs");
     const mask = document.createElementNS(namespace, "mask");
     mask.setAttribute("id", "lfs-board-cursor-highlight-gap-mask");
@@ -64,25 +79,35 @@
     mask.setAttribute("height", "8");
     mask.style.setProperty("mask-type", "luminance");
     defs.append(mask);
-    svg.append(glow, outline, highlight, defs);
+    svg.append(glow, outline, highlight, defs, dot);
     cursorGapMask = mask;
     board.setAttribute("data-lfs-board-cursor-board", "");
     board.append(svg);
     activeBoard = board;
     cursorSvg = svg;
     cursorPaths = [glow, outline, highlight];
+    cursorDot = dot;
     setCursorStyle();
-    observeHighlightLines(board);
+    svg.toggleAttribute("data-lfs-cursor-outline", Boolean(settings.boardCursorOutlineEnabled));
+    svg.toggleAttribute("data-lfs-cursor-dot", Boolean(settings.boardCursorPointerDotEnabled));
+    boardRect = board.getBoundingClientRect();
+    if (settings.boardCursorOutlineEnabled) {
+      syncHighlightGapMask(boardRect);
+      observeHighlightLines(board);
+    }
+    if (typeof ResizeObserver === "function") {
+      cursorResizeObserver = new ResizeObserver(refreshBoardRect);
+      cursorResizeObserver.observe(board);
+    }
   }
 
   function clearCursor() {
     if (frame) cancelAnimationFrame(frame);
-    boardObserver?.disconnect();
-    highlightLineObserver?.disconnect();
-    boardObserver = null;
-    boardObserverObserved = false;
-    highlightLineObserver = null;
-    observedHighlightLineSvg = null;
+    stopHighlightObservers();
+    cursorResizeObserver?.disconnect();
+    cursorResizeObserver = null;
+    boardRect = null;
+    boardRectDirty = false;
     frame = 0;
     lastFrameTime = 0;
     activeBoard?.removeAttribute("data-lfs-board-cursor-board");
@@ -90,8 +115,51 @@
     activeBoard = null;
     cursorSvg = null;
     cursorPaths = null;
+    cursorDot = null;
     cursorGapMask = null;
+    cursorGapMaskBackground = null;
+    cursorGapMaskCuts = new Map();
+    cursorGapMaskBaseKey = null;
     cursorState = null;
+  }
+
+  function stopHighlightObservers() {
+    boardObserver?.disconnect();
+    highlightLineObserver?.disconnect();
+    boardObserver = null;
+    boardObserverObserved = false;
+    highlightLineObserver = null;
+    observedHighlightLineSvg = null;
+  }
+
+  function disableCursorOutline() {
+    if (!boardObserver && !highlightLineObserver && !cursorGapMaskBackground
+      && !cursorGapMaskCuts.size && cursorGapMaskBaseKey == null) return;
+    stopHighlightObservers();
+    cursorGapMask?.replaceChildren();
+    cursorGapMaskBackground = null;
+    cursorGapMaskCuts.clear();
+    cursorGapMaskBaseKey = null;
+    for (const path of cursorPaths ?? []) path.removeAttribute("mask");
+  }
+
+  function measureBoardRect() {
+    if (!activeBoard) return;
+    const nextRect = activeBoard.getBoundingClientRect();
+    if (!nextRect.width || !nextRect.height) {
+      clearCursor();
+      return;
+    }
+    const dimensionsChanged = !boardRect || nextRect.width !== boardRect.width || nextRect.height !== boardRect.height;
+    boardRect = nextRect;
+    boardRectDirty = false;
+    if (dimensionsChanged && settings.boardCursorOutlineEnabled) syncHighlightGapMask(nextRect);
+    return true;
+  }
+
+  function refreshBoardRect() {
+    if (!measureBoardRect()) return;
+    scheduleRender();
   }
 
   function observeHighlightLines(board) {
@@ -101,7 +169,10 @@
       highlightLineObserver?.disconnect();
       observedHighlightLineSvg = lineSvg;
       if (lineSvg) {
-        highlightLineObserver ??= new MutationObserver(() => scheduleRender(board));
+        highlightLineObserver ??= new MutationObserver(() => {
+          if (board !== activeBoard || !settings.boardCursorOutlineEnabled) return;
+          syncHighlightGapMask(boardRect, true);
+        });
         highlightLineObserver.observe(lineSvg, {
           attributes: true,
           attributeFilter: ["d", "stroke-dasharray", "stroke-dashoffset", "stroke-opacity", "visibility", "stroke-width"],
@@ -116,8 +187,9 @@
           node.matches?.('svg[data-lfs-highlight-lines]') || node.querySelector?.('svg[data-lfs-highlight-lines]'));
       });
       if (!changed) return;
+      if (board !== activeBoard || !settings.boardCursorOutlineEnabled) return;
       observeHighlightLines(board);
-      scheduleRender(board);
+      syncHighlightGapMask(boardRect, true);
     });
     if (!boardObserverObserved) {
       boardObserver.observe(board, { childList: true, subtree: true });
@@ -125,9 +197,12 @@
     }
   }
 
-  function syncHighlightGapMask(rect) {
+  function syncHighlightGapMask(rect, force = false) {
     if (!cursorGapMask) return;
     const enabled = Boolean(settings.boardCursorHighlightGapsEnabled);
+    const baseKey = `${enabled}:${settings.boardCursorWidthPx}:${settings.boardCursorHighlightGapWidthPx}:${rect.width}:${rect.height}`;
+    if (!force && baseKey === cursorGapMaskBaseKey) return;
+    cursorGapMaskBaseKey = baseKey;
     for (const path of cursorPaths) {
       if (enabled) path.setAttribute("mask", "url(#lfs-board-cursor-highlight-gap-mask)");
       else path.removeAttribute("mask");
@@ -135,36 +210,52 @@
     if (!cursorGapMask.replaceChildren) return;
     if (!enabled) {
       cursorGapMask.replaceChildren();
+      cursorGapMaskBackground = null;
+      cursorGapMaskCuts.clear();
       return;
     }
 
-    const background = document.createElementNS(namespace, "rect");
-    background.setAttribute("x", "0");
-    background.setAttribute("y", "0");
-    background.setAttribute("width", "8");
-    background.setAttribute("height", "8");
-    background.setAttribute("fill", "white");
+    if (!cursorGapMaskBackground) {
+      cursorGapMaskBackground = document.createElementNS(namespace, "rect");
+      cursorGapMaskBackground.setAttribute("x", "0");
+      cursorGapMaskBackground.setAttribute("y", "0");
+      cursorGapMaskBackground.setAttribute("width", "8");
+      cursorGapMaskBackground.setAttribute("height", "8");
+      cursorGapMaskBackground.setAttribute("fill", "white");
+      cursorGapMask.append(cursorGapMaskBackground);
+    }
     const lineScale = Math.min(rect.width, rect.height) / 8;
     const gapWidth = settings.boardCursorWidthPx + settings.boardCursorHighlightGapWidthPx;
-    const cuts = typeof activeBoard.querySelectorAll === "function"
-      ? [...activeBoard.querySelectorAll('svg[data-lfs-highlight-lines] path[data-lfs-highlight-line]')].map(source => {
-        const path = document.createElementNS(namespace, "path");
-        for (const name of ["d", "stroke-dasharray", "stroke-dashoffset", "visibility", "mask"]) {
-          const value = source.getAttribute(name);
-          if (value !== null) path.setAttribute(name, value);
-        }
-        const lineWidth = Number(source.getAttribute("stroke-width")) * lineScale || 0;
+    const sources = typeof activeBoard.querySelectorAll === "function"
+      ? new Set(activeBoard.querySelectorAll('svg[data-lfs-highlight-lines] path[data-lfs-highlight-line]'))
+      : new Set();
+    for (const source of sources) {
+      let path = cursorGapMaskCuts.get(source);
+      if (!path) {
+        path = document.createElementNS(namespace, "path");
         path.setAttribute("fill", "none");
         path.setAttribute("stroke", "black");
         path.setAttribute("stroke-opacity", "1");
         path.setAttribute("opacity", "1");
-        path.setAttribute("stroke-width", String(lineWidth + gapWidth));
         path.setAttribute("stroke-linecap", "round");
         path.setAttribute("vector-effect", "non-scaling-stroke");
-        return path;
-      })
-      : [];
-    cursorGapMask.replaceChildren(background, ...cuts);
+        cursorGapMaskCuts.set(source, path);
+        cursorGapMask.append(path);
+      }
+      for (const name of ["d", "stroke-dasharray", "stroke-dashoffset", "visibility", "mask"]) {
+        const value = source.getAttribute(name);
+        if (value === null) path.removeAttribute(name);
+        else if (path.getAttribute(name) !== value) path.setAttribute(name, value);
+      }
+      const lineWidth = Number(source.getAttribute("stroke-width")) * lineScale || 0;
+      const strokeWidth = String(lineWidth + gapWidth);
+      if (path.getAttribute("stroke-width") !== strokeWidth) path.setAttribute("stroke-width", strokeWidth);
+    }
+    for (const [source, path] of cursorGapMaskCuts) {
+      if (sources.has(source)) continue;
+      path.remove();
+      cursorGapMaskCuts.delete(source);
+    }
   }
 
   function smoothstep(value) {
@@ -282,10 +373,11 @@
     const extension = settings.boardCursorTrailLengthPx * movement;
     const exponent = mix(1.5, 6, settings.boardCursorTrailTension / 100);
     const deform = (pointX, pointY) => {
+      if (!extension) return [pointX, pointY];
       const offsetX = (pointX - centerX) * rect.width / 8;
       const offsetY = (pointY - centerY) * rect.height / 8;
       const distance = Math.hypot(offsetX, offsetY);
-      if (!distance || !extension) return [pointX, pointY];
+      if (!distance) return [pointX, pointY];
       const unitX = offsetX / distance;
       const unitY = offsetY / distance;
       const trailing = Math.max(0, -(unitX * directionX + unitY * directionY));
@@ -316,7 +408,8 @@
   function render(timestamp) {
     frame = 0;
     if (!activeBoard || !cursorSvg || !cursorState) return;
-    const rect = activeBoard.getBoundingClientRect();
+    if (boardRectDirty && !measureBoardRect()) return;
+    const rect = boardRect;
     if (!rect.width || !rect.height) {
       clearCursor();
       return;
@@ -327,6 +420,17 @@
     const row = Math.floor(pointerY);
     if (col < 0 || col > 7 || row < 0 || row > 7) {
       clearCursor();
+      return;
+    }
+    if (!settings.boardCursorOutlineEnabled) {
+      if (settings.boardCursorPointerDotEnabled) {
+        const dotRadius = settings.boardCursorPointerDotSizePx / 2;
+        cursorDot.setAttribute("cx", String(pointerX));
+        cursorDot.setAttribute("cy", String(pointerY));
+        cursorDot.setAttribute("rx", String(dotRadius / rect.width * 8));
+        cursorDot.setAttribute("ry", String(dotRadius / rect.height * 8));
+      }
+      lastFrameTime = 0;
       return;
     }
     updateFieldTarget(col, row, timestamp);
@@ -366,8 +470,13 @@
     const height = mix(circleHeight, 1 - inset * 2, morph);
     const path = morphFieldPath(centerX, centerY, width, height, morph, rect);
     for (const node of cursorPaths) node.setAttribute("d", path);
-    syncHighlightGapMask(rect);
-
+    if (settings.boardCursorPointerDotEnabled) {
+      const dotRadius = settings.boardCursorPointerDotSizePx / 2;
+      cursorDot.setAttribute("cx", String(pointerX));
+      cursorDot.setAttribute("cy", String(pointerY));
+      cursorDot.setAttribute("rx", String(dotRadius / rect.width * 8));
+      cursorDot.setAttribute("ry", String(dotRadius / rect.height * 8));
+    }
     const settled = cursorState.speed < 1
       && Math.abs(cursorState.morph - targetMorph) < 0.002 && Math.abs(cursorState.vMorph) < 0.01
       && !cursorState.fieldTransition
@@ -417,7 +526,7 @@
   }
 
   function onPointerDown(event) {
-    if (!settings?.enabled || !settings.boardCursorEnabled || ![0, 2].includes(event.button)) return;
+    if (!settings?.enabled || !settings.boardCursorEnabled || !hasCursorVisual() || ![0, 2].includes(event.button)) return;
     const board = findBoard(event.target);
     const piece = event.target instanceof Element ? event.target.closest("piece") : null;
     if (!board || !piece || !board.contains(piece)) return;
@@ -438,7 +547,10 @@
       }
       if (pieceDragStarted) return;
     }
-    if (!settings?.enabled || !settings.boardCursorEnabled) return;
+    if (!settings?.enabled || !settings.boardCursorEnabled || !hasCursorVisual()) {
+      if (activeBoard) clearCursor();
+      return;
+    }
     const board = findBoard(event.target);
     if (!board) {
       if (activeBoard) clearCursor();
@@ -464,6 +576,7 @@
       cursorState.lastX = event.clientX;
       cursorState.lastY = event.clientY;
       cursorState.lastPointerTime = event.timeStamp;
+      boardRectDirty = true;
     }
     scheduleRender();
   }
@@ -488,8 +601,8 @@
     if (document.hidden) clearCursor();
   });
   window.addEventListener("blur", clearCursor);
-  window.addEventListener("resize", scheduleRender);
-  window.addEventListener("scroll", scheduleRender, true);
+  window.addEventListener("resize", refreshBoardRect);
+  window.addEventListener("scroll", refreshBoardRect, true);
 
   function update(nextSettings) {
     settings = nextSettings;
@@ -499,7 +612,19 @@
       clearCursor();
       return;
     }
+    if (!hasCursorVisual()) {
+      clearCursor();
+      return;
+    }
     setCursorStyle();
+    cursorSvg?.toggleAttribute("data-lfs-cursor-outline", Boolean(settings.boardCursorOutlineEnabled));
+    cursorSvg?.toggleAttribute("data-lfs-cursor-dot", Boolean(settings.boardCursorPointerDotEnabled));
+    if (activeBoard && settings.boardCursorOutlineEnabled) {
+      observeHighlightLines(activeBoard);
+      syncHighlightGapMask(boardRect);
+    } else {
+      disableCursorOutline();
+    }
     if (activeBoard) scheduleRender();
   }
 

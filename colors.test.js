@@ -2408,6 +2408,7 @@ test("normal round panel alignment does not chase a transitioning offset", () =>
   let targetOffset = 0;
   let scrollEvents = 0;
   let clearCalls = 0;
+  let gameActive = true;
   const sideProperties = new Map();
   const appProperties = new Map();
   const attributes = () => new Set();
@@ -2433,7 +2434,7 @@ test("normal round panel alignment does not chase a transitioning offset", () =>
       removeProperty(name) { appProperties.delete(name); }
     },
     closest: () => round,
-    querySelector: () => table,
+    querySelector: selector => selector === ".round__app__table" ? table : gameActive ? {} : null,
     setAttribute(name) { this.attributes.add(name); },
     removeAttribute(name) { this.attributes.delete(name); },
     attributes: attributes(),
@@ -2495,6 +2496,13 @@ test("normal round panel alignment does not chase a transitioning offset", () =>
   sync();
   assert.equal(appProperties.get("--lfs-normal-app-height"), "450px");
   assert.equal(clearCalls, 0, "a settling board size must update the fit without removing and reapplying it");
+
+  gameActive = false;
+  context.sync();
+  const [endFrameId, endFrame] = frames.entries().next().value;
+  frames.delete(endFrameId);
+  endFrame();
+  assert.equal(clearCalls, 1, "the native layout is restored when the game ends");
 
   const extensionCss = readFileSync(join(__dirname, "extension.css"), "utf8");
   assert.match(extensionCss, /\.round__side\[data-lfs-normal-fit\]\s*\{[^}]*transition:\s*none\s*!important;/s,
@@ -3924,6 +3932,15 @@ test("board SVG rendering preserves piece masks and round king fields", { skip: 
     globalThis.testing = {
       readPosition,
       observeBoard,
+      renderBoard,
+      observedBoards,
+      renderForTest(board) {
+        observeBoard(board);
+        const entry = observedBoards.get(board);
+        if (entry.frame) cancelAnimationFrame(entry.frame);
+        entry.frame = 0;
+        renderBoard(board, entry);
+      },
       renderMoveOutline,
       renderMovePreviewPiece,
       clearMovePreviewPiece,
@@ -3933,6 +3950,7 @@ test("board SVG rendering preserves piece masks and round king fields", { skip: 
       renderThreatSegmentsInto,
       renderThreatArcs,
       clearDefenseHighlights,
+      updatePinnedPieceOutlineFilters,
       configure(value) { settings = value; },
     };
     return;
@@ -3955,7 +3973,7 @@ ${marker}`);
     --lfs-piece-wp:url('/cage/cage_p.svg'); --lfs-piece-wn:url('/cage/cage_n.svg'); }</style>
   <script>window.chrome = { runtime: { getURL: path => location.origin + '/' + path } };</script>
   <script src="/colors.js"></script><script src="/settings.js"></script><script src="/king-movement-fields.js"></script>
-   <script src="/board-overlay.js"></script><script src="/highlight-line-preview.js"></script><script src="/threat-coding.js"></script><script src="/selected-piece-wedge.js"></script>
+    <script src="/board-overlay.js"></script><script src="/highlight-line-preview.js"></script><script src="/threat-coding.js"></script><script src="/board-hover-cursor.js"></script><script src="/selected-piece-wedge.js"></script>
   </body></html>`;
   const server = createServer((request, response) => {
     const path = new URL(request.url, "http://localhost").pathname;
@@ -3965,7 +3983,7 @@ ${marker}`);
       response.end(html);
       return;
     }
-    if (["/board-overlay.js", "/highlight-line-preview.js", "/colors.js", "/settings.js", "/king-movement-fields.js", "/threat-coding.js"].includes(path)) {
+    if (["/board-overlay.js", "/highlight-line-preview.js", "/colors.js", "/settings.js", "/king-movement-fields.js", "/threat-coding.js", "/board-hover-cursor.js"].includes(path)) {
       response.setHeader("Content-Type", "text/javascript; charset=utf-8");
       response.end(readFileSync(join(root, path.slice(1))));
       return;
@@ -3980,7 +3998,8 @@ ${marker}`);
       response.end(testSource);
       return;
     }
-    if (/^\/cage\/cage_[pnbrq]\.svg$/.test(path) || /^\/system_rund\/b[kqrbn]\.svg$/.test(path) || path === "/system_rund/bp_2.svg") {
+    if (/^\/cage\/cage_[pnbrq]\.svg$/.test(path) || /^\/system_rund\/b[kqrbn]\.svg$/.test(path)
+      || path === "/system_rund/bp_2.svg" || /^\/system_eckig\/[bw][kqrbnp](?:_2)?\.svg$/.test(path)) {
       requestedAssets.add(path);
       response.setHeader("Content-Type", "image/svg+xml");
       response.end(readFileSync(join(root, path.slice(1))));
@@ -4002,7 +4021,7 @@ ${marker}`);
   let socket;
   try {
     browser = spawn(chromePath, [
-      "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--no-sandbox",
+      "--headless=new", ...(process.env.LFS_TEST_GPU === "1" ? [] : ["--disable-gpu"]), "--no-first-run", "--no-default-browser-check", "--no-sandbox",
       "--remote-allow-origins=*", `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profile}`,
       "--window-size=512,512", `http://127.0.0.1:${server.address().port}/`
     ], { stdio: "ignore" });
@@ -4058,6 +4077,352 @@ ${marker}`);
       await new Promise(resolve => setTimeout(resolve, 50));
     }
     assert.equal(await evaluate("Boolean(window.testing)"), true, "the browser loaded the production renderer");
+    const capture = async (x, y, orientation, baselineData = null, assetPath = "/system_rund/bp_2.svg") => {
+      const screenshot = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+      const baselineSrc = baselineData ? `data:image/png;base64,${baselineData}` : null;
+      return evaluate(`(async () => {
+        const image = new Image(); image.src = ${JSON.stringify(`data:image/png;base64,${screenshot.data}`)}; await image.decode();
+        const canvas = document.createElement('canvas'); canvas.width = canvas.height = 560;
+        const ctx = canvas.getContext('2d'); ctx.drawImage(image,0,0);
+        const data = ctx.getImageData(0,0,560,560).data;
+        let baseline=null;
+        const baselineSrc=${JSON.stringify(baselineSrc)};
+        if(baselineSrc) {
+          const before=new Image();before.src=baselineSrc;await before.decode();
+          const beforeCanvas=document.createElement('canvas');beforeCanvas.width=beforeCanvas.height=560;
+          const beforeCtx=beforeCanvas.getContext('2d');beforeCtx.drawImage(before,0,0);
+          baseline=beforeCtx.getImageData(0,0,560,560).data;
+        }
+        const pixel = (x,y) => [...data.slice((y*560+x)*4,(y*560+x)*4+3)];
+        const border = [];
+        for (let offset=1;offset<139;offset++) {
+          border.push(pixel(${x}-35+offset,${y}-34), pixel(${x}-35+offset,${y}+104),
+            pixel(${x}-34,${y}-35+offset), pixel(${x}+104,${y}-35+offset));
+        }
+        let redPixels = 0;
+        for(let y=${y}-30;y<${y}+100;y++) for(let x=${x}-30;x<${x}+100;x++) {
+          const p=pixel(x,y); if(p[0]>p[1]+25 && p[0]>p[2]+25) redPixels++;
+        }
+        // Independent asset silhouette, covering every angle used by either bounce animation.
+        const maskCanvas=document.createElement('canvas'); maskCanvas.width=maskCanvas.height=140;
+        const maskCtx=maskCanvas.getContext('2d');
+        const asset=new Image(); asset.src=${JSON.stringify(assetPath)}; await asset.decode();
+        const baseAngle=${orientation === "white" ? 180 : 0};
+        for(let angle=baseAngle-5;angle<=baseAngle+5;angle++) {
+          maskCtx.save(); maskCtx.translate(70,70); maskCtx.rotate(angle*Math.PI/180);
+          maskCtx.drawImage(asset,-35,-35,70,70); maskCtx.restore();
+        }
+        const alpha=maskCtx.getImageData(0,0,140,140).data;
+        const allowed=new Uint8Array(140*140);
+        // 2px dilation + 3 sigma of the 2px blur + 2px rasterization tolerance.
+        for(let py=0;py<140;py++) for(let px=0;px<140;px++) if(alpha[(py*140+px)*4+3]>0) {
+          for(let dy=-10;dy<=10;dy++) for(let dx=-10;dx<=10;dx++) {
+            const ax=px+dx,ay=py+dy;
+            if(ax>=0&&ay>=0&&ax<140&&ay<140) allowed[ay*140+ax]=1;
+          }
+        }
+        let outsidePixels=0, contaminatedPixels=0, maxOutsideRedExcess=0, changedOutsidePixels=0, maxOutsideDelta=0;
+        const examples=[],changeExamples=[];
+        for(let py=0;py<140;py++) for(let px=0;px<140;px++) if(!allowed[py*140+px]) {
+          outsidePixels++;
+          const p=pixel(${x}-35+px,${y}-35+py);
+          // The selected-square background is valid; detect red tint, not its green/gray fill.
+          const excess=p[0]-Math.max(p[1],p[2]);
+          maxOutsideRedExcess=Math.max(maxOutsideRedExcess,excess);
+          if(excess>2) { contaminatedPixels++; if(examples.length<3) examples.push([px,py,...p]); }
+          if(baseline) {
+            const offset=(((${y}-35+py)*560+${x}-35+px)*4);
+            const delta=Math.max(Math.abs(p[0]-baseline[offset]),Math.abs(p[1]-baseline[offset+1]),Math.abs(p[2]-baseline[offset+2]));
+            maxOutsideDelta=Math.max(maxOutsideDelta,delta);
+            if(delta>3) { changedOutsidePixels++;if(changeExamples.length<3)changeExamples.push([px,py,delta]); }
+          }
+        }
+        return { border, redPixels, outsidePixels, contaminatedPixels, maxOutsideRedExcess, examples,
+          changedOutsidePixels,maxOutsideDelta,changeExamples };
+      })()`);
+    };
+    await t.test("selected pinned black b2 pawn renders from the complete board position", async t => {
+      try {
+        await send("Emulation.setDeviceMetricsOverride", { width:560,height:560,deviceScaleFactor:1,mobile:false });
+        await evaluate(`(() => {
+          document.body.setAttribute('data-board','blue');
+          document.body.innerHTML='<div class="is2d main-board"><div class="cg-wrap orientation-black manipulable"><cg-container><cg-board class="turn-black">'
+            + '<square class="selected" data-key="b2" style="left:75%;top:12.5%"></square>'
+            + '<piece class="black king" data-key="a1" style="left:87.5%;top:0%"></piece>'
+            + '<piece class="black pawn" data-key="b2" style="left:75%;top:12.5%"></piece>'
+            + '<piece class="white bishop" data-key="g7" style="left:12.5%;top:75%"></piece>'
+            + '</cg-board><svg class="cg-shapes"></svg><svg class="cg-custom-svgs"></svg></cg-container></div></div>';
+          const native=document.createElement('style');
+          native.textContent='.cg-wrap{position:relative}cg-container{position:absolute;inset:0;width:100%;height:100%;display:block}cg-board{position:absolute;top:0;left:0;line-height:0}cg-board square{position:absolute;top:0;left:0;width:12.5%;height:12.5%;pointer-events:none}cg-board square.selected{background-color:rgb(20 85 30 / .5)}cg-board piece{position:absolute;top:0;left:0;width:12.5%;height:12.5%;background-size:cover;z-index:2;will-change:transform;pointer-events:none;color-scheme:light only}html:not(.transp) body:not(.simple-board) cg-board piece,html:not(.transp) body:not(.simple-board) cg-board square{filter:brightness(.9025)}';
+          document.head.insertBefore(native,document.querySelector('link[href="/extension.css"]'));
+          const style=document.createElement('style');
+          style.textContent='html,body,.cg-wrap,cg-container,cg-board{width:560px!important;height:560px!important} cg-board{background:#ddd!important} piece,square{width:70px!important;height:70px!important} :root{--lfs-piece-bp:url("/system_eckig/bp_2.svg");--lfs-black-piece-color:oklch(0.3 0 0);--lfs-white-piece-color:oklch(0.9 0 0)}';
+          document.head.append(style);
+          testing.configure(LichessSettings.normalize({
+            enabled:true,pieceSet:'system_eckig',complexPawn:true,selectedPieceWedgeEnabled:true,selectedPieceWedgeOnlySelected:true,
+            moveDotsPlayerColor:true,threatenedPieceOutlineEnabled:false,defenseCirclesEnabled:false,
+            pinnedPieceOutlineEnabled:true,pinnedPieceOutlineUsePlayerColor:false,
+            pinnedPieceOutlineColor:'oklch(0.627955 0.257683 29.233885)',pinnedPieceOutlineWidthPx:4,
+            pinnedPieceOutlineOpacity:50,pinnedPieceOutlineBlurPx:2
+          }));
+          testing.updatePinnedPieceOutlineFilters();
+        })()`);
+
+        const initial = await evaluate(`(() => {
+          const board=document.querySelector('.main-board .cg-wrap.orientation-black cg-board');
+          const parsed=testing.readPosition(board);
+          const key=piece=>piece&&piece.color+piece.type;
+          return {
+            orientation:board.closest('.cg-wrap').className,blackOrientation:parsed.blackOrientation,
+            selected:parsed.selected,pieces:[key(parsed.position[0][7]),key(parsed.position[1][6]),key(parsed.position[6][1])],
+            keys:[...board.querySelectorAll(':scope > piece')].map(piece=>piece.dataset.key)
+          };
+        })()`);
+        assert.equal(initial.blackOrientation,true);
+        assert.deepEqual(initial.selected,{row:1,col:6});
+        assert.deepEqual(initial.pieces,["bking","bpawn","wbishop"]);
+        assert.deepEqual(initial.keys,["a1","b2","g7"]);
+
+        await send("Input.dispatchMouseEvent",{type:"mouseMoved",x:550,y:550});
+        for(const pinned of [true,false]) for(const selected of [true,false]) {
+          const description=`pin=${pinned}, selected=${selected}`;
+          const state=await evaluate(`(() => {
+            const board=document.querySelector('.main-board .cg-wrap.orientation-black cg-board');
+            const pawn=board.querySelector(':scope > piece.black.pawn[data-key="b2"]');
+            const bishop=board.querySelector(':scope > piece.white.bishop');
+            const square=board.querySelector(':scope > square[data-key="b2"]');
+            bishop.dataset.key=${JSON.stringify(pinned?'g7':'h7')};
+            bishop.style.left=${JSON.stringify(pinned?'12.5%':'0%')};
+            square.classList.toggle('selected',${selected});
+            testing.renderForTest(board);
+            const parsed=testing.readPosition(board);
+            return {
+              boardClass:board.className,
+              boardAttributes:Object.fromEntries([...board.attributes].map(attribute=>[attribute.name,attribute.value])),
+              orientation:board.closest('.cg-wrap').className,
+              pawnClass:pawn.className,pawnKey:pawn.dataset.key,pawnStyle:pawn.getAttribute('style'),
+              pawnPin:pawn.getAttribute('data-lfs-pinned-piece'),filter:getComputedStyle(pawn).filter,
+              mask:getComputedStyle(pawn).maskImage,pseudoMask:getComputedStyle(pawn,'::before').maskImage,
+              squareClass:square.className,squareKey:square.dataset.key,selected:parsed.selected,
+              position:[parsed.position[0][7]?.type,parsed.position[1][6]?.type,parsed.position[6][1]?.type],
+              hover:pawn.matches(':hover'),pinFilterSvg:Boolean(document.getElementById('lfs-pinned-piece-outline-filters')),
+              overlayClasses:[...board.querySelectorAll(':scope > svg')].map(svg=>svg.getAttribute('class')),
+              wedgeCount:board.querySelectorAll('svg.lfs-selected-piece-wedge path').length
+            };
+          })()`);
+          const actual=await capture(420,70,"black",null,"/system_eckig/bp_2.svg");
+          const {border,...pixelSummary}=actual;
+          t.diagnostic(`${description}: ${JSON.stringify({...state,pixels:pixelSummary})}`);
+          assert.equal(state.hover,false,`${description}: the pointer is away from b2`);
+          assert.equal(state.pawnPin,pinned?"custom":null,`${description}: production render derives the pin attribute`);
+          assert.equal(state.pinFilterSvg,true,`${description}: production pin filters are installed`);
+          assert.equal(state.boardAttributes["data-lfs-selected-piece-color"],selected?"b":undefined,
+            `${description}: production render follows the selected square`);
+          assert.deepEqual(state.selected,selected?{row:1,col:6}:null,`${description}: selected b2 is read from the real board`);
+          if(pinned) {
+             assert.match(state.filter,/lfs-pinned-piece-outline-custom/,description);
+              assert.match(state.pseudoMask,/system_eckig\/bp_2\.svg/,description);
+             assert.ok(actual.redPixels>0,`${description}: the rendered pin filter produces red pixels`);
+          } else {
+            assert.equal(actual.redPixels,0,`${description}: no pin outline is rendered`);
+          }
+        }
+
+        for(const pinned of [true,false]) for(const selected of [true,false]) {
+          await evaluate(`(() => {
+            const board=document.querySelector('.main-board .cg-wrap.orientation-black cg-board');
+            const bishop=board.querySelector(':scope > piece.white.bishop');
+            const square=board.querySelector(':scope > square[data-key="b2"]');
+            bishop.dataset.key='g7';
+            bishop.style.left='12.5%';
+            square.classList.toggle('selected',${selected});
+            const defaults=LichessSettings.normalize({pieceSet:'system_eckig',complexPawn:true,selectedPieceWedgeEnabled:true,
+              selectedPieceWedgeOnlySelected:true,moveDotsPlayerColor:true,pinnedPieceOutlineEnabled:${pinned}});
+            document.documentElement.style.setProperty('--lfs-black-piece-color',defaults.blackPieceColor);
+            document.documentElement.style.setProperty('--lfs-white-piece-color',defaults.whitePieceColor);
+            testing.configure(defaults);
+            testing.updatePinnedPieceOutlineFilters();
+            testing.renderForTest(board);
+          })()`);
+          const actual=await capture(420,70,"black",null,"/system_eckig/bp_2.svg");
+          const state=await evaluate(`(() => {
+            const pawn=document.querySelector('.main-board cg-board > piece.black.pawn[data-key="b2"]');
+            return {pin:pawn.getAttribute('data-lfs-pinned-piece'),defense:pawn.hasAttribute('data-lfs-defense-highlight'),
+              threatened:pawn.getAttribute('data-lfs-threatened-piece'),filter:getComputedStyle(pawn).filter,
+              defenseOpacity:getComputedStyle(pawn,'::after').opacity};
+          })()`);
+          t.diagnostic(`full default analysis pin=${pinned}, selected=${selected}: ${JSON.stringify({...state,...actual,border:undefined})}`);
+          assert.equal(state.pin,pinned?'w':null);
+          assert.equal(state.threatened,'b',"the underlying threat stays active in both pin states");
+        }
+
+        await evaluate(`(() => {
+          const board=document.querySelector('.main-board .cg-wrap.orientation-black cg-board');
+          const bishop=board.querySelector(':scope > piece.white.bishop');
+          const square=board.querySelector(':scope > square[data-key="b2"]');
+          bishop.dataset.key='g7';bishop.style.left='12.5%';square.classList.add('selected');
+          const defaults=LichessSettings.normalize({pieceSet:'system_eckig',complexPawn:true,selectedPieceWedgeEnabled:true,
+            selectedPieceWedgeOnlySelected:true,moveDotsPlayerColor:true,pinnedPieceOutlineEnabled:true});
+          document.documentElement.style.setProperty('--lfs-black-piece-color',defaults.blackPieceColor);
+          document.documentElement.style.setProperty('--lfs-white-piece-color',defaults.whitePieceColor);
+          testing.configure(defaults);testing.updatePinnedPieceOutlineFilters();testing.renderForTest(board);
+        })()`);
+        const filterOn=await evaluate(`getComputedStyle(document.querySelector('.main-board cg-board > piece.black.pawn')).filter`);
+        assert.match(filterOn,/lfs-pinned-piece-outline-w/);
+        const baseline=(await send("Page.captureScreenshot",{format:"png",captureBeyondViewport:false})).data;
+        await evaluate(`(() => {
+          const style=document.createElement('style');style.id='test-disable-pin-filter';
+          style.textContent='html:not([data-lfs-disabled]) body[data-board] .is2d .cg-wrap cg-board > piece[data-lfs-pinned-piece="w"]{filter:none !important}';
+          document.head.append(style);
+        })()`);
+        const filterOff=await capture(420,70,"black",baseline,"/system_eckig/bp_2.svg");
+        t.diagnostic(`pin filter A/B (${filterOn} -> none): ${JSON.stringify({...filterOff,border:undefined})}`);
+        assert.equal(filterOff.changedOutsidePixels,0,
+          `the production pin filter does not tint pixels outside the pawn: ${JSON.stringify({...filterOff,border:undefined})}`);
+        await evaluate("document.querySelector('#test-disable-pin-filter').remove()");
+
+        await evaluate(`(() => {
+          const rectangle=document.createElement('div');rectangle.id='test-selected-pin-rectangle';
+          rectangle.style.cssText='position:absolute;left:390px;top:40px;width:130px;height:130px;background:rgba(255,0,0,.02);z-index:999;pointer-events:none';
+          document.querySelector('.main-board .cg-wrap.orientation-black cg-board').append(rectangle);
+        })()`);
+        const control=await capture(420,70,"black",null,"/system_eckig/bp_2.svg");
+        assert.ok(control.contaminatedPixels>1000,
+          `the off-mask rectangle control remains detectable: ${JSON.stringify({...control,border:undefined})}`);
+        t.diagnostic(`Selected-pin inset-rectangle control: ${control.contaminatedPixels} contaminated pixels, max red excess ${control.maxOutsideRedExcess}`);
+      } finally {
+        await send("Emulation.setDeviceMetricsOverride",{width:512,height:512,deviceScaleFactor:1,mobile:false});
+        await send("Page.navigate",{url:`http://127.0.0.1:${server.address().port}/`});
+        for(let attempt=0;attempt<100;attempt++) {
+          if(await evaluate("Boolean(window.testing)"))break;
+          await new Promise(resolve=>setTimeout(resolve,50));
+        }
+      }
+    });
+    await t.test("board cursor hover does not add red outside the pinned System Rund pawn on b2", async t => {
+      try {
+        await send("Emulation.setDeviceMetricsOverride", { width:600,height:600,deviceScaleFactor:1,mobile:false });
+        await evaluate(`(() => {
+          document.body.setAttribute('data-board','blue');
+          document.body.innerHTML='<div class="is2d main-board"><div class="cg-wrap orientation-white"><cg-board><square class="selected"></square><piece class="black pawn" data-lfs-pinned-piece="custom"></piece></cg-board></div></div>';
+          const piece=document.querySelector('piece'),square=document.querySelector('square');
+          piece.style.left=square.style.left='70px';piece.style.top=square.style.top='420px';
+          const style=document.createElement('style');
+          style.textContent='html,body,.cg-wrap,cg-board{width:560px!important;height:560px!important} cg-board{background:#ddd!important} piece,square{width:70px!important;height:70px!important} :root{--lfs-piece-bp:url("/system_rund/bp_2.svg");--lfs-black-piece-color:oklch(0.3 0 0);--lfs-white-piece-color:oklch(0.9 0 0)}';
+          document.head.append(style);
+          testing.configure(LichessSettings.normalize({pieceSet:'system_rund',pinnedPieceOutlineColor:'oklch(0.627955 0.257683 29.233885)',pinnedPieceOutlineWidthPx:4,pinnedPieceOutlineOpacity:50,pinnedPieceOutlineBlurPx:2}));
+          testing.updatePinnedPieceOutlineFilters();
+        })()`);
+        t.diagnostic(await evaluate(`(() => {
+          const gl=document.createElement('canvas').getContext('webgl');
+          const info=gl?.getExtension('WEBGL_debug_renderer_info');
+          return 'GPU renderer: '+(info?gl.getParameter(info.UNMASKED_RENDERER_WEBGL):'unavailable');
+        })()`));
+        const cursorOptions={
+          enabled:true,boardCursorEnabled:true,boardCursorOutlineEnabled:true,boardCursorPointerDotEnabled:false,
+          boardCursorColor:'oklch(0.82 0.16 153)',boardCursorDiameterPx:14,boardCursorWidthPx:2.5,
+          boardCursorOpacity:90,boardCursorGlowPercent:55,boardCursorInsetPercent:4,boardCursorHighlightGapsEnabled:true
+        };
+        const cursorOn=JSON.stringify(cursorOptions);
+        const cursorOff=JSON.stringify({...cursorOptions,boardCursorEnabled:false});
+        const dispatchCursorOverB2=async x=>{
+          await send("Input.dispatchMouseEvent",{type:"mouseMoved",x,y:455});
+          await evaluate("new Promise(resolve=>setTimeout(resolve,1000))");
+          return evaluate(`(() => {
+            const board=document.querySelector('body[data-board] .main-board .cg-wrap cg-board');
+            const cursor=board?.querySelector(':scope > svg.lfs-board-cursor'),piece=document.querySelector('piece');
+            return {
+              hover:piece.matches(':hover'),attached:cursor?.parentNode===board,
+              zIndex:cursor&&getComputedStyle(cursor).zIndex,opacity:cursor&&getComputedStyle(cursor).opacity,
+              paths:[...cursor?.querySelectorAll('.lfs-board-cursor-glow,.lfs-board-cursor-outline,.lfs-board-cursor-highlight') ?? []].map(path=>path.getAttribute('d')),
+              filter:getComputedStyle(piece).filter
+            };
+          })()`);
+        };
+        const compareOutsideMask=async (before,after)=>evaluate(`(async () => {
+          const load=async source=>{const image=new Image();image.src='data:image/png;base64,'+source;await image.decode();return image;};
+          const first=await load(${JSON.stringify(before)}),second=await load(${JSON.stringify(after)});
+          const canvas=document.createElement('canvas');canvas.width=canvas.height=560;
+          const context=canvas.getContext('2d');context.drawImage(first,0,0);const firstPixels=context.getImageData(0,0,560,560).data;
+          context.clearRect(0,0,560,560);context.drawImage(second,0,0);const secondPixels=context.getImageData(0,0,560,560).data;
+          const maskCanvas=document.createElement('canvas');maskCanvas.width=maskCanvas.height=140;
+          const maskContext=maskCanvas.getContext('2d'),asset=new Image();asset.src='/system_rund/bp_2.svg';await asset.decode();
+          for(let angle=175;angle<=185;angle++){
+            maskContext.save();maskContext.translate(70,70);maskContext.rotate(angle*Math.PI/180);
+            maskContext.drawImage(asset,-35,-35,70,70);maskContext.restore();
+          }
+          const alpha=maskContext.getImageData(0,0,140,140).data,allowed=new Uint8Array(140*140);
+          for(let py=0;py<140;py++)for(let px=0;px<140;px++)if(alpha[(py*140+px)*4+3]>0){
+            for(let dy=-10;dy<=10;dy++)for(let dx=-10;dx<=10;dx++){
+              const ax=px+dx,ay=py+dy;if(ax>=0&&ay>=0&&ax<140&&ay<140)allowed[ay*140+ax]=1;
+            }
+          }
+          let changedPixels=0,maxChannelDelta=0;
+          for(let py=0;py<140;py++)for(let px=0;px<140;px++)if(!allowed[py*140+px]){
+            let delta=0;
+            for(let channel=0;channel<3;channel++){
+              const offset=((py+385)*560+px+35)*4+channel;delta=Math.max(delta,Math.abs(firstPixels[offset]-secondPixels[offset]));
+            }
+            maxChannelDelta=Math.max(maxChannelDelta,delta);if(delta>2)changedPixels++;
+          }
+          return {changedPixels,maxChannelDelta};
+        })()`);
+
+        await evaluate(`LichessBoardCursor.update(LichessSettings.normalize(${cursorOn}))`);
+        const pinAndCursorState=await dispatchCursorOverB2(105);
+        assert.equal(pinAndCursorState.hover,true,"real pointer hover on the pinned b2 pawn");
+        assert.equal(pinAndCursorState.attached,true,"production cursor SVG attached to game board");
+        assert.equal(pinAndCursorState.zIndex,"2147483646","production overlay layer");
+        assert.equal(pinAndCursorState.opacity,"1","cursor is visible");
+        assert.equal(pinAndCursorState.paths.length,3,"cursor glow, outline and highlight are present");
+        assert.ok(pinAndCursorState.paths.every(Boolean),"all three cursor paths are rendered");
+        assert.match(pinAndCursorState.filter,/lfs-pinned-piece-outline-custom/,"pin filter remains active below cursor");
+        const pinAndCursor=await capture(70,420,"white");
+        const pinAndCursorImage=(await send("Page.captureScreenshot",{format:"png",captureBeyondViewport:false})).data;
+
+        await evaluate(`LichessBoardCursor.update(LichessSettings.normalize(${cursorOff}))`);
+        assert.equal(await evaluate("Boolean(document.querySelector('svg.lfs-board-cursor'))"),false,"cursor-off removes the SVG");
+        const pinOnly=await capture(70,420,"white");
+        const pinOnlyImage=(await send("Page.captureScreenshot",{format:"png",captureBeyondViewport:false})).data;
+        await evaluate("document.querySelector('piece').removeAttribute('data-lfs-pinned-piece')");
+        const neither=await capture(70,420,"white");
+        const neitherImage=(await send("Page.captureScreenshot",{format:"png",captureBeyondViewport:false})).data;
+
+        await evaluate(`LichessBoardCursor.update(LichessSettings.normalize(${cursorOn}))`);
+        const cursorOnlyState=await dispatchCursorOverB2(106);
+        assert.equal(cursorOnlyState.hover,true,"real pointer remains over b2 without the pin");
+        assert.equal(cursorOnlyState.attached,true);
+        assert.equal(cursorOnlyState.zIndex,"2147483646");
+        const cursorOnly=await capture(70,420,"white");
+        const cursorOnlyImage=(await send("Page.captureScreenshot",{format:"png",captureBeyondViewport:false})).data;
+
+        for(const [name,pixels,pinned] of [["pin+cursor",pinAndCursor,true],["pin only",pinOnly,true],["cursor only",cursorOnly,false],["neither",neither,false]]){
+          assert.equal(pixels.contaminatedPixels,0,`${name}: no red pixels beyond the pawn silhouette and glow allowance`);
+          if(pinned)assert.ok(pixels.redPixels>0,`${name}: pin filter renders red`);
+          else assert.equal(pixels.redPixels,0,`${name}: cursor alone renders no red`);
+        }
+        const changedWithPin=await compareOutsideMask(pinOnlyImage,pinAndCursorImage);
+        const changedWithoutPin=await compareOutsideMask(neitherImage,cursorOnlyImage);
+        assert.ok(changedWithPin.changedPixels>0,`cursor pixels outside mask with pin: ${JSON.stringify(changedWithPin)}`);
+        assert.ok(changedWithoutPin.changedPixels>0,`cursor pixels outside mask without pin: ${JSON.stringify(changedWithoutPin)}`);
+        t.diagnostic(`b2 pin/cursor matrix: off-mask red pixels pin+cursor=${pinAndCursor.contaminatedPixels}, pin-only=${pinOnly.contaminatedPixels}, cursor-only=${cursorOnly.contaminatedPixels}, neither=${neither.contaminatedPixels}; cursor changed ${changedWithPin.changedPixels}/${changedWithoutPin.changedPixels} outside-mask pixels with/without pin (max channel deltas ${changedWithPin.maxChannelDelta}/${changedWithoutPin.maxChannelDelta})`);
+
+        await evaluate(`LichessBoardCursor.update(LichessSettings.normalize(${cursorOff}));
+          const rectangle=document.createElement('div');rectangle.id='test-cursor-pin-rectangle';
+          rectangle.style.cssText='position:absolute;left:40px;top:390px;width:130px;height:130px;background:rgba(255,0,0,.02);z-index:999;pointer-events:none';
+          document.querySelector('cg-board').append(rectangle);`);
+        const control=await capture(70,420,"white");
+        assert.ok(control.contaminatedPixels>1000,`off-mask rectangle sensitization control: ${JSON.stringify({...control,border:undefined})}`);
+        t.diagnostic(`Inset-rectangle control: ${control.contaminatedPixels} contaminated pixels, max red excess ${control.maxOutsideRedExcess}`);
+      } finally {
+        await send("Emulation.setDeviceMetricsOverride",{width:512,height:512,deviceScaleFactor:1,mobile:false});
+        await send("Page.navigate",{url:`http://127.0.0.1:${server.address().port}/`});
+        for(let attempt=0;attempt<100;attempt++){
+          if(await evaluate("Boolean(window.testing)"))break;
+          await new Promise(resolve=>setTimeout(resolve,50));
+        }
+      }
+    });
     await t.test("candidate sliders expose both colors to board analysis and render preview markers", async t => {
       let liveAnimationResult = null;
       const contentSource = readFileSync(join(root, "content.js"), "utf8");
