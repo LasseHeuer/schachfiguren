@@ -2897,7 +2897,11 @@ test("hover move analysis follows the virtual piece to its destination", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");
   const { join } = require("node:path");
-  const context = vm.createContext({ document: { addEventListener() {} } });
+  const context = vm.createContext({ document: {
+    addEventListener() {},
+    documentElement: { hasAttribute: () => false },
+    body: { hasAttribute: () => true }
+  } });
   vm.runInContext(readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8")
     .replace("  documentObserver = new MutationObserver", `
       globalThis.testing = {
@@ -2907,7 +2911,15 @@ test("hover move analysis follows the virtual piece to its destination", () => {
       };
       return;
       documentObserver = new MutationObserver`), context);
-  context.testing.configure({ pinnedPieceOutlineUsePlayerColor: true });
+  context.testing.configure({
+    pinnedPieceOutlineUsePlayerColor: true,
+    pinnedPieceOutlineWidthPx: 2,
+    pinnedPieceOutlineBlurPx: 1,
+    pinnedPieceOutlineOpacity: 50,
+    whitePieceColor: "#e03030",
+    blackPieceColor: "#3030e0",
+    pinnedPieceOutlineColor: "#ffffff"
+  });
 
   const basePosition = Array.from({ length: 8 }, () => Array(8).fill(""));
   basePosition[6][4] = "wP";
@@ -2926,26 +2938,44 @@ test("hover move analysis follows the virtual piece to its destination", () => {
   assert.deepEqual(Array.from(context.testing.getPreviewedSquares(preview)).sort(), ["4,4", "6,4"]);
 
   const attributes = new Map();
+  const inlineStyles = new Map();
   const image = {
     getAttribute(name) { return attributes.get(name) ?? null; },
     hasAttribute(name) { return attributes.has(name); },
     removeAttribute(name) { attributes.delete(name); },
-    setAttribute(name, value) { attributes.set(name, value); }
+    setAttribute(name, value) { attributes.set(name, value); },
+    style: {
+      setProperty(name, value) { inlineStyles.set(name, value); },
+      removeProperty(name) { inlineStyles.delete(name); }
+    }
   };
-  const board = { closest: () => null };
+  const board = {
+    closest: () => ({ querySelector: () => null }),
+    getBoundingClientRect: () => ({ width: 512, height: 512 })
+  };
   const displayedPosition = Array.from({ length: 8 }, () => Array(8).fill(null));
   displayedPosition[4][4] = { color: "w", type: "pawn" };
   const threatened = { w: new Map([["4,4", [{}]]]), b: new Map() };
   const pinnedPieces = new Map([["4,4", "b"]]);
-  context.testing.updateMovePreviewPieceAnalysis(board, { previewPieceImage: image }, preview,
+  attributes.set("filter", "url(#piece-color)");
+  const previewEntry = {
+    previewPieceImage: image,
+    previewPinnedPieceFilters: {
+      key: [512, 512, 2, 1, 50, "#e03030", "#3030e0", "#ffffff"].join(":"),
+      byColor: { b: { id: "pin-b" } }
+    }
+  };
+  context.testing.updateMovePreviewPieceAnalysis(board, previewEntry, preview,
     displayedPosition, threatened, pinnedPieces);
   assert.equal(attributes.get("data-lfs-threatened-piece"), "w");
   assert.equal(attributes.get("data-lfs-pinned-piece"), "b");
+  assert.equal(inlineStyles.get("filter"), "url(#piece-color) url(#pin-b) drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active))");
 
-  context.testing.updateMovePreviewPieceAnalysis(board, { previewPieceImage: image }, { ...preview, legal: false },
+  context.testing.updateMovePreviewPieceAnalysis(board, previewEntry, { ...preview, legal: false },
     displayedPosition, threatened, pinnedPieces);
   assert.equal(attributes.has("data-lfs-threatened-piece"), false);
   assert.equal(attributes.has("data-lfs-pinned-piece"), false);
+  assert.equal(inlineStyles.has("filter"), false);
 
   const dragAttributes = new Map();
   const dragImage = {

@@ -1017,19 +1017,22 @@
   function updatePinnedPiecePreviewFilter(board, entry, pinColor, threatened) {
     const image = entry.previewPieceImage;
     if (!image) return;
-    if (!pinColor || document.documentElement.hasAttribute("data-lfs-disabled")
-      || !document.body.hasAttribute("data-board") || !board.closest(".is2d .cg-wrap")) {
+
+    const canDecorate = !document.documentElement.hasAttribute("data-lfs-disabled")
+      && document.body.hasAttribute("data-board") && board.closest(".is2d .cg-wrap");
+    const chain = [];
+    if (pinColor && canDecorate) {
+      const filter = syncPinnedPiecePreviewFilters(board, entry)?.byColor[pinColor];
+      if (filter) chain.push(`url(#${filter.id})`);
+    }
+    if (threatened && canDecorate) chain.push("drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active))");
+    if (!chain.length) {
       image.style.removeProperty("filter");
       return;
     }
 
-    const filter = syncPinnedPiecePreviewFilters(board, entry)?.byColor[pinColor];
-    if (!filter) {
-      image.style.removeProperty("filter");
-      return;
-    }
-    const chain = [`url(#${filter.id})`];
-    if (threatened) chain.push("drop-shadow(0 0 1.5px var(--lfs-threat-pinned-outline-active))");
+    const colorFilter = image.getAttribute("filter");
+    if (colorFilter) chain.unshift(colorFilter);
     image.style.setProperty("filter", chain.join(" "), "important");
   }
 
