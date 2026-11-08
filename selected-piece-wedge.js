@@ -1210,7 +1210,7 @@
 
     const destinations = legalTargets
       ? legalTargets.map(({ row, col, square }) => ({ square: square ?? null, target: { row, col } }))
-      : [...board.querySelectorAll(":scope > square.move-dest")]
+      : [...board.querySelectorAll(":scope > square.move-dest, :scope > square.premove-dest")]
         .map(square => ({ square, target: getScreenSquare(square, board) }))
         .filter(({ target }) => target);
     const positionKey = getPositionKey(position);

@@ -573,7 +573,7 @@
         const round = app?.closest(".round");
         const side = round?.querySelector(".round__side");
         const table = app?.querySelector(".round__app__table");
-        if (!board || !app || !side || !table || !app.querySelector(".resign, .abort")) {
+        if (!board || !app || !side || !table || !app.querySelector(".resign, .abort, .act-confirm")) {
           clearNormalRoundLayout();
           return;
         }

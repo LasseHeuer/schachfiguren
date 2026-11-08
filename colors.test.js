@@ -585,6 +585,48 @@ test("king move fields do not show defense lines or wedges", () => {
   assert.deepEqual([...queenMove.targetKeys], ["3,4"]);
 });
 
+test("move-field attacks and defenses update from move to premove destinations", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const context = vm.createContext({ document: { addEventListener() {} } });
+  const source = readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8");
+  vm.runInContext(source.replace("  documentObserver = new MutationObserver", `
+    getScreenSquare = square => square;
+    globalThis.testing = { getMoveDestinationLines, configure(value) { settings = value; } };
+    return;
+    documentObserver = new MutationObserver`), context);
+  const api = context.testing;
+  const moveDestination = { row: 3, col: 4, markers: [], setAttribute(name) { this.markers.push(name); } };
+  const premoveDestination = { row: 3, col: 4, markers: [], setAttribute(name) { this.markers.push(name); } };
+  let premove = false;
+  const board = {
+    querySelectorAll(selector) {
+      if (premove) return selector.includes(".premove-dest") ? [premoveDestination] : [];
+      return selector.includes(".move-dest") ? [moveDestination] : [];
+    }
+  };
+  const position = Array.from({ length: 8 }, () => Array(8).fill(null));
+  position[4][4] = { color: "w", type: "queen" };
+  position[7][4] = { color: "w", type: "rook" };
+  position[2][3] = { color: "b", type: "pawn" };
+  api.configure(settings.normalize({
+    threatenedPieceOutlineEnabled: true,
+    defenseCirclesEnabled: true,
+    threatMoveFieldDisplayMode: "lines"
+  }));
+
+  const sourceSquare = { row: 4, col: 4 };
+  const movePreview = api.getMoveDestinationLines(board, position, sourceSquare, false);
+  premove = true;
+  const premovePreview = api.getMoveDestinationLines(board, position, sourceSquare, false);
+
+  assert.equal(premovePreview.threats.length, 1, "premove field is marked as attacked");
+  assert.equal(premovePreview.defenseSegments.length, 1, "premove field is marked as defended");
+  assert.deepEqual([...premovePreview.targetKeys], [...movePreview.targetKeys]);
+  assert.deepEqual(premoveDestination.markers, ["data-lfs-contested-move-dest"], "cached indicators are attached to the new premove field");
+});
+
 test("move-field attacks and defenses use explicit drag destinations", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");
@@ -2408,7 +2450,7 @@ test("normal round panel alignment does not chase a transitioning offset", () =>
   let targetOffset = 0;
   let scrollEvents = 0;
   let clearCalls = 0;
-  let gameActive = true;
+  let gameAction = ".resign";
   const sideProperties = new Map();
   const appProperties = new Map();
   const attributes = () => new Set();
@@ -2434,7 +2476,7 @@ test("normal round panel alignment does not chase a transitioning offset", () =>
       removeProperty(name) { appProperties.delete(name); }
     },
     closest: () => round,
-    querySelector: selector => selector === ".round__app__table" ? table : gameActive ? {} : null,
+    querySelector: selector => selector === ".round__app__table" ? table : gameAction ? {} : null,
     setAttribute(name) { this.attributes.add(name); },
     removeAttribute(name) { this.attributes.delete(name); },
     attributes: attributes(),
@@ -2497,7 +2539,11 @@ test("normal round panel alignment does not chase a transitioning offset", () =>
   assert.equal(appProperties.get("--lfs-normal-app-height"), "450px");
   assert.equal(clearCalls, 0, "a settling board size must update the fit without removing and reapplying it");
 
-  gameActive = false;
+  gameAction = ".act-confirm";
+  sync();
+  assert.equal(clearCalls, 0, "the resignation confirmation keeps the fitted layout active");
+
+  gameAction = "";
   context.sync();
   const [endFrameId, endFrame] = frames.entries().next().value;
   frames.delete(endFrameId);
