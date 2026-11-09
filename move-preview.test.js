@@ -104,7 +104,7 @@ test("right-click move preview stays visual and restores the live board", {
     const file = path.slice(1);
     if (path.endsWith(".svg")) {
       response.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
-      if (/^\/(system_rund|system_eckig|system_pixel|rund|rund_comic)\/[a-z0-9_]+\.svg$/.test(path) && existsSync(join(root, path.slice(1)))) {
+      if (/^\/(system_rund(?:_[234])?|system_eckig|system_pixel|rund|rund_comic)\/[a-z0-9_]+\.svg$/.test(path) && existsSync(join(root, path.slice(1)))) {
         response.end(readFileSync(join(root, path.slice(1))));
         return;
       }
@@ -214,7 +214,7 @@ test("right-click move preview stays visual and restores the live board", {
         document.documentElement.style.setProperty('--lfs-white-piece-color', '#e03030');
         document.documentElement.style.setProperty('--lfs-black-piece-color', '#3030e0');
       })()`);
-      for (const pieceSet of ["system_rund", "system_eckig", "system_pixel", "rund", "rund_comic"]) {
+      for (const pieceSet of ["system_rund", "system_rund_2", "system_rund_3", "system_rund_4", "system_eckig", "system_pixel", "rund", "rund_comic"]) {
         for (const shape of ["square", "bevel", "round"]) {
           for (const zen of [false, true]) {
             const label = `${pieceSet}/${shape}/${zen ? "zen" : "normal"}`;

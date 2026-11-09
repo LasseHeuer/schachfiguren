@@ -1,7 +1,7 @@
 (() => {
   const boardSelector = "body[data-board] .cg-wrap cg-board, .mini-game cg-board, cg-board#lfs-pv-preview, cg-board#lfs-move-preview";
   const svgNamespace = "http://www.w3.org/2000/svg";
-  const roundPieceSets = new Set(["system_rund", "system_rund_2"]);
+  const roundPieceSets = new Set(["system_rund", "system_rund_2", "system_rund_3", "system_rund_4"]);
   const pieceTypes = ["pawn", "knight", "bishop", "rook", "queen", "king"];
   const pieceCodes = { pawn: "P", knight: "N", bishop: "B", rook: "R", queen: "Q", king: "K" };
   const observedBoards = new Map();

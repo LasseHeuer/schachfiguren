@@ -1,7 +1,7 @@
 (() => {
   const boardSelector = ".cg-wrap cg-board, .mini-game cg-board";
   const svgNamespace = "http://www.w3.org/2000/svg";
-  const roundPieceSets = new Set(["system_rund", "system_rund_2"]);
+  const roundPieceSets = new Set(["system_rund", "system_rund_2", "system_rund_3", "system_rund_4"]);
   const pieceTypes = ["pawn", "knight", "bishop", "rook", "queen", "king"];
   const pieceValues = { pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 100 };
   const maxUnselectedPotentialMovesPerColor = 3;

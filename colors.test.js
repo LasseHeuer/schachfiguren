@@ -861,7 +861,7 @@ test("System Rund sets share SVG assets and the new set is the default", () => {
   const { join } = require("node:path");
   assert.equal(settings.defaults.pieceSet, "system_rund_2");
   assert.equal(settings.normalize({ pieceSet: "unknown" }).pieceSet, "system_rund_2");
-  for (const pieceSet of ["system_rund", "system_rund_2"]) {
+  for (const pieceSet of ["system_rund", "system_rund_2", "system_rund_3", "system_rund_4"]) {
     for (const complexPawn of [false, true]) {
       const options = settings.normalize({ pieceSet, complexPawn });
       assert.equal(options.pieceSet, pieceSet);
@@ -1004,7 +1004,7 @@ test("king movement fields stay at the preview source until animation completes"
   const king = { row: 4, col: 4, color: "w" };
   position[4][4] = "wK";
   position[3][4] = "wP";
-  for (const pieceSet of ["system_rund", "system_rund_2"]) for (const blackOrientation of [false, true]) {
+  for (const pieceSet of ["system_rund", "system_rund_2", "system_rund_3", "system_rund_4"]) for (const blackOrientation of [false, true]) {
     api.configure(settings.normalize({ pieceSet }));
     const svg = element();
     api.fillOverlay(svg, position, king, blackOrientation);
@@ -1134,7 +1134,7 @@ test("preview filters respect custom colors and both System Rund sets use circul
     return;
     documentObserver = new MutationObserver`), context);
   const api = context.testing;
-  for (const pieceSet of ["system_rund", "system_rund_2", "system_eckig", "system_pixel", "rund", "cage", "rund_comic"]) {
+  for (const pieceSet of ["system_rund", "system_rund_2", "system_rund_3", "system_rund_4", "system_eckig", "system_pixel", "rund", "cage", "rund_comic"]) {
     const options = settings.normalize({ pieceSet, whitePieceColor: "#20cc60", blackPieceColor: "#c040a0" });
     api.configure(options);
     for (const side of ["w", "b"]) {
@@ -1166,7 +1166,7 @@ test("preview filters respect custom colors and both System Rund sets use circul
       }
     }
   }
-  const roundSets = ["system_rund", "system_rund_2"];
+  const roundSets = ["system_rund", "system_rund_2", "system_rund_3", "system_rund_4"];
   const radiiBySet = [];
   for (const pieceSet of roundSets) {
     radiiBySet.push([pieceSet, api.getFigureRadii(pieceSet)]);
@@ -3430,7 +3430,7 @@ test("held SVG lines survive selection, preview waits and replacement before ret
   api.releaseHighlightLineMask(maskEntry, reusedMask);
   assert.equal(maskDefs.children.length, 0);
   assert.equal(maskEntry.highlightLineMaskCache.size, 0);
-  for (const pieceSet of ["system_rund", "system_rund_2"]) for (const blackOrientation of [false, true]) {
+  for (const pieceSet of ["system_rund", "system_rund_2", "system_rund_3", "system_rund_4"]) for (const blackOrientation of [false, true]) {
     api.configure({ ...options, pieceSet, defenseHighlightLineMaskBlurPx: 2 });
     const roundMask = api.createHighlightLineMask(maskEntry, board, maskPosition, blackOrientation);
     const reusedRoundMask = api.createHighlightLineMask(maskEntry, board, maskPosition, blackOrientation);
@@ -4084,8 +4084,8 @@ ${marker}`);
       response.end(testSource);
       return;
     }
-    if (/^\/cage\/cage_[pnbrq]\.svg$/.test(path) || /^\/system_rund\/b[kqrbn]\.svg$/.test(path)
-      || path === "/system_rund/bp_2.svg" || /^\/system_eckig\/[bw][kqrbnp](?:_2)?\.svg$/.test(path)) {
+    if (/^\/cage\/cage_[pnbrq]\.svg$/.test(path) || /^\/system_rund(?:_[234])?\/b[kqrbn]\.svg$/.test(path)
+      || /^\/system_rund(?:_[234])?\/bp_2\.svg$/.test(path) || /^\/system_eckig\/[bw][kqrbnp](?:_2)?\.svg$/.test(path)) {
       requestedAssets.add(path);
       response.setHeader("Content-Type", "image/svg+xml");
       response.end(readFileSync(join(root, path.slice(1))));

@@ -1,5 +1,5 @@
 (() => {
-  const roundPieceSets = new Set(["system_rund", "system_rund_2"]);
+  const roundPieceSets = new Set(["system_rund", "system_rund_2", "system_rund_3", "system_rund_4"]);
   const defaults = Object.freeze({
     enabled: true,
     pieceSet: "system_rund_2",
