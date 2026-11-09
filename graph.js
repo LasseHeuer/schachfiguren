@@ -2,15 +2,35 @@
   const descriptor = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, "fillStyle");
   if (!descriptor?.set || !descriptor.get) return;
 
-  const graphCanvas = canvas => canvas.matches("#acpl-chart, #movetimes-chart, canvas.study__server-eval");
+  const graphCanvas = canvas => canvas.id === "acpl-chart" || canvas.id === "movetimes-chart"
+    || canvas.matches?.("canvas.study__server-eval");
   const enabled = () => !document.documentElement?.hasAttribute("data-lfs-graph-colors-disabled");
+  let cachedRootColors = null;
+  let cachedCurveColor = null;
+  const rootColors = () => {
+    const disabled = document.documentElement?.hasAttribute("data-lfs-graph-colors-disabled");
+    if (cachedRootColors && cachedRootColors.disabled === disabled) return cachedRootColors;
+    const rootStyle = getComputedStyle(document.documentElement);
+    cachedRootColors = {
+      disabled,
+      white: rootStyle.getPropertyValue("--lfs-white-piece-color").trim() || "oklch(0.5997409301 0.1721887956 40.1845294695)",
+      black: rootStyle.getPropertyValue("--lfs-black-piece-color").trim() || "oklch(0.6742384272 0.1206555753 228.5101815779)"
+    };
+    return cachedRootColors;
+  };
   const curveColor = () => {
-    const theme = document.body?.dataset.theme;
+    const theme = document.body?.dataset.theme ?? "";
+    if (cachedCurveColor?.theme === theme) return cachedCurveColor.value;
     const isLight = theme === "system"
       ? window.matchMedia("(prefers-color-scheme: light)").matches
       : theme ? theme.includes("light") : window.matchMedia("(prefers-color-scheme: light)").matches;
-    return isLight ? "oklch(0 0 0)" : "oklch(1 0 0)";
+    cachedCurveColor = { theme, value: isLight ? "oklch(0 0 0)" : "oklch(1 0 0)" };
+    return cachedCurveColor.value;
   };
+  new MutationObserver(() => {
+    cachedRootColors = null;
+    cachedCurveColor = null;
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ["style", "class", "data-lfs-graph-colors-disabled"] });
   const prototype = CanvasRenderingContext2D.prototype;
   const strokeDescriptor = Object.getOwnPropertyDescriptor(prototype, "strokeStyle");
 
@@ -34,10 +54,8 @@
     const whiteClockFill = moveTimes && Number(red) === 153 && Number(green) === 153 && Number(blue) === 153;
     if (!isWhite && !isBlack && !whiteClockFill) return null;
 
-    const rootStyle = getComputedStyle(document.documentElement);
-    const selected = isWhite || whiteClockFill
-      ? rootStyle.getPropertyValue("--lfs-white-piece-color").trim() || "oklch(0.5997409301 0.1721887956 40.1845294695)"
-      : rootStyle.getPropertyValue("--lfs-black-piece-color").trim() || "oklch(0.6742384272 0.1206555753 228.5101815779)";
+    const colors = rootColors();
+    const selected = isWhite || whiteClockFill ? colors.white : colors.black;
     if (alpha === "1") return selected;
     const opacity = alpha.endsWith("%") ? Number(alpha.slice(0, -1)) / 100 : Number(alpha);
     const oklchMatch = /^oklch\((.*)\)$/i.exec(selected);

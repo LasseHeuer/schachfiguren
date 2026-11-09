@@ -62,6 +62,7 @@
 
   function animateHatchPatterns(timestamp) {
     hatchAnimationFrame = 0;
+    if (document.hidden) return;
     advanceHatchScroll(timestamp);
     let hasPatterns = false;
     for (const entry of observedBoards.values()) {
@@ -92,6 +93,13 @@
   }
 
   document.addEventListener("lfs-hover-preview-change", event => scheduleRender(event.detail));
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) syncHatchAnimation();
+    else if (hatchAnimationFrame) {
+      cancelAnimationFrame(hatchAnimationFrame);
+      hatchAnimationFrame = 0;
+    }
+  });
   document.addEventListener("lfs-pv-animation-position", event => {
     if (event.detail?.id === "lfs-pv-preview") scheduleRender(event.detail);
   });

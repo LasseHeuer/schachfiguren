@@ -34,8 +34,17 @@ function preloadSound(url) {
 
 function playSound(url, volume) {
   const pool = getAudioPool(url);
-  const audio = pool.find(candidate => candidate.paused) ?? createAudio(url);
+  const audio = pool.find(candidate => candidate.paused) ?? (pool.length < 4 ? createAudio(url) : null);
+  if (!audio) {
+    const busy = pool[0];
+    busy.currentTime = 0;
+    return playAudio(busy, volume);
+  }
   if (!pool.includes(audio)) pool.push(audio);
+  return playAudio(audio, volume);
+}
+
+function playAudio(audio, volume) {
   audio.volume = Math.max(0, Math.min(1, volume));
   if (audio.ended) audio.currentTime = 0;
 

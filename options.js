@@ -77,6 +77,7 @@
     output.value = `${control.value}%`;
   }
 
+  const pendingSaves = new Map();
   function saveControl(control) {
     const value = control.type === "checkbox" ? control.checked
       : control.type === "range" ? Number(control.value)
@@ -88,9 +89,14 @@
       other.value = control.value;
       updateOutput(other);
     }
-    chrome.storage.local.set({ [control.dataset.setting]: value }, () => {
-      status.textContent = "Einstellungen gespeichert";
-    });
+    const setting = control.dataset.setting;
+    clearTimeout(pendingSaves.get(setting));
+    pendingSaves.set(setting, setTimeout(() => {
+      pendingSaves.delete(setting);
+      chrome.storage.local.set({ [setting]: value }, () => {
+        status.textContent = "Einstellungen gespeichert";
+      });
+    }, 140));
   }
 
   function saveBounceCurve(curve) {
@@ -233,7 +239,15 @@
     });
   });
 
-  chrome.storage.local.get(null, values => {
+  addEventListener("pagehide", () => {
+    for (const [setting, timer] of pendingSaves) {
+      clearTimeout(timer);
+      chrome.storage.local.set({ [setting]: currentSettings[setting] });
+    }
+    pendingSaves.clear();
+  });
+
+  chrome.storage.local.get(Object.keys(defaults), values => {
     const settings = normalize(values);
     showSettings(settings);
     if (!Object.prototype.hasOwnProperty.call(values, "threatDotGap")) {

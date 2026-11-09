@@ -321,6 +321,8 @@ html[data-lfs-blunder-training="active"] :is(.analyse__moves, .analyse__controls
   grid-template-columns: minmax(0, 1fr) 7rem 4rem 2rem;
   align-items: center;
   gap: 0.75rem;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 2.75rem;
 }
 
 .lfs-playlist-list a {

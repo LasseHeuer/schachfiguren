@@ -130,15 +130,16 @@
   const findMainBoard = () => {
     let firstMatch = null;
     for (const selector of mainBoardSelectors) {
-      const boards = [...document.querySelectorAll(selector)];
-      firstMatch ??= boards[0] ?? null;
-      const visibleBoards = boards.map(board => {
+      let bestBoard = null;
+      let bestArea = 0;
+      for (const board of document.querySelectorAll(selector)) {
+        firstMatch ??= board;
         const rect = board.getBoundingClientRect();
-        const style = getComputedStyle(board);
-        return { board, area: rect.width * rect.height, visible: rect.width > 0 && rect.height > 0
-          && style.display !== "none" && style.visibility !== "hidden" };
-      }).filter(candidate => candidate.visible);
-      if (visibleBoards.length) return visibleBoards.sort((left, right) => right.area - left.area)[0].board;
+        if (rect.width <= 0 || rect.height <= 0 || rect.width * rect.height <= bestArea) continue;
+        bestArea = rect.width * rect.height;
+        bestBoard = board;
+      }
+      if (bestBoard) return bestBoard;
     }
     return firstMatch;
   };
@@ -171,6 +172,8 @@
   let zenOrientationObserver;
   let zenOrientationBoard;
   let zenResizeObserver;
+  let zenResizeFrame = 0;
+  let viewportFrame = 0;
   let zenResizeTarget;
   let zenResizeBoard;
   let zenResizeSideElements = new Set();
@@ -316,13 +319,17 @@
 
     zenResizeSideElements = new Set();
     zenResizeObserver = new ResizeObserver(() => {
-      syncBoardSizeCap();
-      scheduleBoardAnchoredElements();
-      scheduleZenClockUpdate();
-      if (document.documentElement.hasAttribute("data-lfs-zen-mode")) {
-        if (restorePlaylistZenMode) scheduleZenCenter();
-        else centerZenBoard();
-      }
+      if (zenResizeFrame) return;
+      zenResizeFrame = requestAnimationFrame(() => {
+        zenResizeFrame = 0;
+        syncBoardSizeCap();
+        scheduleBoardAnchoredElements();
+        scheduleZenClockUpdate();
+        if (document.documentElement.hasAttribute("data-lfs-zen-mode")) {
+          if (restorePlaylistZenMode) scheduleZenCenter();
+          else centerZenBoard();
+        }
+      });
     });
     zenResizeObserver.observe(container);
     if (board && board !== container) zenResizeObserver.observe(board);
@@ -794,14 +801,23 @@
     document.documentElement.append(zenClockOverlay);
   }
 
-  function clockSeconds(clock) {
-    const text = clock.querySelector(".clock")?.textContent.trim() ?? clock.textContent.trim();
-    const match = /\d+(?::\d{1,2}){1,2}(?:[.,]\d+)?|\d+(?:[.,]\d+)?/.exec(text);
+  const clockTimePattern = /\d+(?::\d{1,2}){1,2}(?:[.,]\d+)?|\d+(?:[.,]\d+)?/;
+  const clockFaceCache = new WeakMap();
+  function getClockFace(clock) {
+    const cached = clockFaceCache.get(clock);
+    if (cached?.isConnected) return cached;
+    const face = clock.matches(".clock") ? clock : clock.querySelector(".clock") ?? clock;
+    clockFaceCache.set(clock, face);
+    return face;
+  }
+
+  function clockSeconds(text) {
+    const match = clockTimePattern.exec(text);
     if (!match) return null;
     return match[0].replace(",", ".").split(":").reduce((total, part) => total * 60 + Number(part), 0);
   }
 
-  function rememberZenClockMaximum(source, remaining = clockSeconds(source)) {
+  function rememberZenClockMaximum(source, remaining = null) {
     if (remaining === null) return null;
     const maximum = Math.max(zenClockMaxTimes.get(source) ?? remaining, remaining);
     zenClockMaxTimes.set(source, maximum);
@@ -818,11 +834,12 @@
       return false;
     }
 
-    const face = source.matches(".clock") ? source : source.querySelector(".clock") ?? source;
-    const reading = clockSeconds(source);
-    const clockTime = rememberZenClockMaximum(source, reading);
-    const running = face.matches(".running") || source.matches(".running") || Boolean(source.querySelector(".running"));
+    const face = getClockFace(source);
     const nextText = face.textContent.trim();
+    const reading = clockSeconds(nextText);
+    const clockTime = rememberZenClockMaximum(source, reading);
+    const running = face.matches(".running") || source.matches(".running")
+      || (face !== source && Boolean(source.querySelector(".running")));
     let progress = zenClockProgress.get(source);
     if (reading !== null && (!progress || progress.reading !== reading || progress.running !== running)) {
       let remaining = reading;
@@ -854,6 +871,8 @@
 
   function updateZenClockStroke(clockRow) {
     const { fill, warning, end, gradient, length, progress = 100 } = clockRow;
+    if (Math.abs((clockRow.lastStrokeProgress ?? -1) - progress) < 0.01) return;
+    clockRow.lastStrokeProgress = progress;
     fill.setAttribute("stroke-dasharray", `${progress} 100`);
     warning.setAttribute("stroke-dasharray", `${progress} 100`);
     if (!length) return;
@@ -886,6 +905,7 @@
     const clockRow = zenClockRows[side];
     const { row, bar, fill, warning, end, gradient } = clockRow;
     if (row.hidden) return;
+    const rowHeight = row.getBoundingClientRect().height;
     row.style.left = `${boardRect.left}px`;
     row.style.width = `${boardRect.width}px`;
     const scale = Number.parseFloat(document.documentElement.style.getPropertyValue("--lfs-board-ui-scale")) || 1;
@@ -928,9 +948,10 @@
       clockRow.length = fill.getTotalLength();
     }
     gradient.children[1].setAttribute("offset", `${100 - settings.zenClockActiveEndBlendPercent}%`);
+    clockRow.lastStrokeProgress = -1;
     updateZenClockStroke(clockRow);
     const top = side === "top"
-      ? boardRect.top - padding - settings.zenClockLineGapPx * scale - row.getBoundingClientRect().height
+      ? boardRect.top - padding - settings.zenClockLineGapPx * scale - rowHeight
       : boardRect.bottom + padding + settings.zenClockLineGapPx * scale;
     row.style.top = `${top}px`;
   }
@@ -1924,9 +1945,16 @@
     scheduleZenClockUpdate();
   }
 
-  window.addEventListener("resize", handleViewportChange);
-  window.visualViewport?.addEventListener("resize", handleViewportChange);
-  document.addEventListener("fullscreenchange", handleViewportChange);
+  const scheduleViewportChange = () => {
+    if (viewportFrame) return;
+    viewportFrame = requestAnimationFrame(() => {
+      viewportFrame = 0;
+      handleViewportChange();
+    });
+  };
+  window.addEventListener("resize", scheduleViewportChange);
+  window.visualViewport?.addEventListener("resize", scheduleViewportChange);
+  document.addEventListener("fullscreenchange", scheduleViewportChange);
 
   const refreshZenClock = () => {
     if (document.hidden) {

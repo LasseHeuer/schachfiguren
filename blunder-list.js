@@ -268,8 +268,9 @@
     renderPage();
     try {
       const recent = await recentGameIds();
+      const itemsById = new Map(ownItems().map(entry => [entry.id, entry]));
       const queue = ids.filter(id => {
-        const item = ownItems().find(entry => entry.id === id);
+        const item = itemsById.get(id);
         return item && !recent.has(item.gameId);
       });
       if (!queue.length) {
@@ -352,6 +353,7 @@
     list.className = "lfs-playlist-list";
     list.tabIndex = 0;
     list.setAttribute("aria-label", "Gespeicherte Blunder-Stellungen");
+    const now = Date.now();
     for (const item of items) {
       const row = document.createElement("li");
       const link = document.createElement("a");
@@ -362,8 +364,8 @@
       link.title = link.textContent;
       const status = document.createElement("small");
       status.className = "lfs-playlist-item-status";
-      status.textContent = item.state === "new" ? "Neu" : item.dueAt <= Date.now() ? "Fällig" : `in ${intervalLabel(item.dueAt - Date.now())}`;
-      status.dataset.ready = String(item.state === "new" || item.dueAt <= Date.now());
+      status.textContent = item.state === "new" ? "Neu" : item.dueAt <= now ? "Fällig" : `in ${intervalLabel(item.dueAt - now)}`;
+      status.dataset.ready = String(item.state === "new" || item.dueAt <= now);
       const score = document.createElement("span");
       score.className = "lfs-playlist-item-score";
       score.textContent = `${item.reps} / ${item.attempts}`;

@@ -23,16 +23,17 @@
     const blackAtBottom = board?.querySelector(".cg-wrap")?.classList.contains("orientation-black")
       ?? board?.classList.contains("orientation-black") ?? false;
     const advantage = materialAdvantage(top?.textContent, bottom?.textContent, blackAtBottom);
-    if (!advantage || !settings.zenBackgroundTintPercent) {
-      background.style.backgroundColor = "transparent";
-      return;
-    }
-    const playerColor = advantage > 0
-      ? blackAtBottom ? settings.blackPieceColor : settings.whitePieceColor
-      : blackAtBottom ? settings.whitePieceColor : settings.blackPieceColor;
-    const ratio = Math.min(1, Math.abs(advantage) / 4);
-    const mix = settings.zenBackgroundTintPercent * ratio;
-    background.style.backgroundColor = `color-mix(in srgb, var(--c-bg-page, var(--c-bg, #fff)) ${100 - mix}%, ${playerColor} ${mix}%)`;
+    const nextColor = !advantage || !settings.zenBackgroundTintPercent
+      ? "transparent"
+      : (() => {
+        const playerColor = advantage > 0
+          ? blackAtBottom ? settings.blackPieceColor : settings.whitePieceColor
+          : blackAtBottom ? settings.whitePieceColor : settings.blackPieceColor;
+        const ratio = Math.min(1, Math.abs(advantage) / 4);
+        const mix = settings.zenBackgroundTintPercent * ratio;
+        return `color-mix(in srgb, var(--c-bg-page, var(--c-bg, #fff)) ${100 - mix}%, ${playerColor} ${mix}%)`;
+      })();
+    if (background.style.backgroundColor !== nextColor) background.style.backgroundColor = nextColor;
   }
 
   function sync() {

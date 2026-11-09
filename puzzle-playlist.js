@@ -139,17 +139,18 @@
     });
   }
 
+  const intervalNumberFormat = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 });
   function formatInterval(milliseconds) {
     const minutes = Math.max(1, Math.round(milliseconds / 60000));
     if (minutes < 60) return `${minutes} Min.`;
     const hours = minutes / 60;
-    if (hours < 24) return `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 }).format(hours)} Std.`;
+    if (hours < 24) return `${intervalNumberFormat.format(hours)} Std.`;
     const days = hours / 24;
-    if (days < 30) return `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 }).format(days)} ${days < 1.5 ? "Tag" : "Tage"}`;
+    if (days < 30) return `${intervalNumberFormat.format(days)} ${days < 1.5 ? "Tag" : "Tage"}`;
     const months = days / 30.4375;
-    if (months < 12) return `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 }).format(months)} ${months < 1.5 ? "Monat" : "Monate"}`;
+    if (months < 12) return `${intervalNumberFormat.format(months)} ${months < 1.5 ? "Monat" : "Monate"}`;
     const years = months / 12;
-    return `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 }).format(years)} ${years < 1.5 ? "Jahr" : "Jahre"}`;
+    return `${intervalNumberFormat.format(years)} ${years < 1.5 ? "Jahr" : "Jahre"}`;
   }
 
   function dueLabel(item, now = Date.now()) {
