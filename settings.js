@@ -1,7 +1,8 @@
 (() => {
+  const roundPieceSets = new Set(["system_rund", "system_rund_2"]);
   const defaults = Object.freeze({
     enabled: true,
-    pieceSet: "system_eckig",
+    pieceSet: "system_rund_2",
     complexPawn: true,
     boardLightLight: "oklch(0.8950392819 0.0167676465 301.1914565362)",
     boardGapLight: "oklch(0.845 0 0)",
@@ -453,7 +454,7 @@
       result.pieceBounceWiggleCurve = values.pieceBounceCurve ?? defaults.pieceBounceWiggleCurve;
     }
 
-    if (!["system_pixel", "system_eckig", "system_rund", "rund", "rund_comic", "cage"].includes(result.pieceSet)) {
+    if (!["system_pixel", "system_eckig", ...roundPieceSets, "rund", "rund_comic", "cage"].includes(result.pieceSet)) {
       result.pieceSet = defaults.pieceSet;
     }
     if (!["bevel", "round"].includes(result.boardFieldShape)) {
@@ -673,7 +674,7 @@
     const { pieceSet, complexPawn } = settings;
     if (pieceSet === "cage") return `cage/cage_${letter}.svg`;
     // System Rund shares one shape per piece between both colors.
-    if (pieceSet === "system_rund") return `${pieceSet}/b${letter}${letter === "p" ? "_2" : ""}.svg`;
+    if (roundPieceSets.has(pieceSet)) return `${pieceSet}/b${letter}${letter === "p" ? "_2" : ""}.svg`;
     const suffix = letter === "p" && complexPawn && ["system_pixel", "system_eckig"].includes(pieceSet) ? "_2" : "";
     return `${pieceSet}/${color}${letter}${suffix}.svg`;
   }

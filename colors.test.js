@@ -856,18 +856,22 @@ test("segment highlight endpoints stay on rendered geometry across directions, l
   assert.ok(clampedEndpoints > 0, "asymmetric outer lanes exercise endpoint clamping");
 });
 
-test("System Rund shares existing SVG assets for both piece colors", () => {
+test("System Rund sets share SVG assets and the new set is the default", () => {
   const { existsSync } = require("node:fs");
   const { join } = require("node:path");
-  for (const complexPawn of [false, true]) {
-    const options = settings.normalize({ pieceSet: "system_rund", complexPawn });
-    assert.equal(options.pieceSet, "system_rund");
-    for (const letter of ["p", "n", "b", "r", "q", "k"]) {
-      const asset = settings.getPieceAsset(options, "w", letter);
-      assert.equal(asset, settings.getPieceAsset(options, "b", letter));
-      assert.ok(existsSync(join(__dirname, asset)), asset);
+  assert.equal(settings.defaults.pieceSet, "system_rund_2");
+  assert.equal(settings.normalize({ pieceSet: "unknown" }).pieceSet, "system_rund_2");
+  for (const pieceSet of ["system_rund", "system_rund_2"]) {
+    for (const complexPawn of [false, true]) {
+      const options = settings.normalize({ pieceSet, complexPawn });
+      assert.equal(options.pieceSet, pieceSet);
+      for (const letter of ["p", "n", "b", "r", "q", "k"]) {
+        const asset = settings.getPieceAsset(options, "w", letter);
+        assert.equal(asset, settings.getPieceAsset(options, "b", letter));
+        assert.ok(existsSync(join(__dirname, asset)), asset);
+      }
+      assert.equal(settings.getPieceAsset(options, "w", "p"), `${pieceSet}/bp_2.svg`);
     }
-    assert.equal(settings.getPieceAsset(options, "w", "p"), "system_rund/bp_2.svg");
   }
   for (const pieceSet of ["system_pixel", "system_eckig", "rund", "rund_comic", "cage"]) {
     for (const color of ["w", "b"]) for (const complexPawn of [false, true]) {
@@ -1000,8 +1004,8 @@ test("king movement fields stay at the preview source until animation completes"
   const king = { row: 4, col: 4, color: "w" };
   position[4][4] = "wK";
   position[3][4] = "wP";
-  for (const blackOrientation of [false, true]) {
-    api.configure(settings.normalize({ pieceSet: "system_rund" }));
+  for (const pieceSet of ["system_rund", "system_rund_2"]) for (const blackOrientation of [false, true]) {
+    api.configure(settings.normalize({ pieceSet }));
     const svg = element();
     api.fillOverlay(svg, position, king, blackOrientation);
     const path = svg.children[0].attributes;
@@ -1101,7 +1105,7 @@ test("king movement fields stay at the preview source until animation completes"
   }
 });
 
-test("preview filters respect custom piece colors and System Rund uses a circular inner cage", async () => {
+test("preview filters respect custom colors and both System Rund sets use circular geometry", async () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");
   const { join } = require("node:path");
@@ -1130,7 +1134,7 @@ test("preview filters respect custom piece colors and System Rund uses a circula
     return;
     documentObserver = new MutationObserver`), context);
   const api = context.testing;
-  for (const pieceSet of ["system_rund", "system_eckig", "system_pixel", "rund", "cage", "rund_comic"]) {
+  for (const pieceSet of ["system_rund", "system_rund_2", "system_eckig", "system_pixel", "rund", "cage", "rund_comic"]) {
     const options = settings.normalize({ pieceSet, whitePieceColor: "#20cc60", blackPieceColor: "#c040a0" });
     api.configure(options);
     for (const side of ["w", "b"]) {
@@ -1162,23 +1166,29 @@ test("preview filters respect custom piece colors and System Rund uses a circula
       }
     }
   }
-  const radii = api.getFigureRadii("system_rund");
-  await new Promise(resolve => setImmediate(resolve));
-  assert.deepEqual(assets, ["system_rund/bp_2.svg"]);
-  for (const type of ["knight", "bishop", "rook", "queen", "king"]) {
-    assert.equal(radii.get(type).length, 720);
-    assert.ok(radii.get(type).every(radius => radius === 5 / 14));
-    const clearance = api.getLineFigureClearance(radii.get(type), 0, 0, 0, 0);
-    assert.equal(api.getLineFigureClearance(radii.get(type), Math.PI / 4, 0, 0, 0), clearance);
+  const roundSets = ["system_rund", "system_rund_2"];
+  const radiiBySet = [];
+  for (const pieceSet of roundSets) {
+    radiiBySet.push([pieceSet, api.getFigureRadii(pieceSet)]);
+    await new Promise(resolve => setImmediate(resolve));
   }
-  assert.ok(radii.get("pawn").every(radius => radius === 0.2));
-  api.configure(settings.normalize({ pieceSet: "system_rund" }));
-  context.cageBounds.length = 0;
-  api.renderLineSet(element(), ["queen", "knight"].map((type, index) => ({
-    type, target: { row: index * 3, col: index * 3 }, angle: Math.PI / 4, color: "#20cc60"
-  })), radii);
-  assert.ok(context.cageBounds.length > 0);
-  assert.ok(context.cageBounds.every(bound => bound === undefined), "queens and knights must not use square clearance for System Rund");
+  assert.deepEqual(assets, roundSets.map(pieceSet => `${pieceSet}/bp_2.svg`));
+  for (const [pieceSet, radii] of radiiBySet) {
+    for (const type of ["knight", "bishop", "rook", "queen", "king"]) {
+      assert.equal(radii.get(type).length, 720);
+      assert.ok(radii.get(type).every(radius => radius === 5 / 14));
+      const clearance = api.getLineFigureClearance(radii.get(type), 0, 0, 0, 0);
+      assert.equal(api.getLineFigureClearance(radii.get(type), Math.PI / 4, 0, 0, 0), clearance);
+    }
+    assert.ok(radii.get("pawn").every(radius => radius === 0.2));
+    api.configure(settings.normalize({ pieceSet }));
+    context.cageBounds.length = 0;
+    api.renderLineSet(element(), ["queen", "knight"].map((type, index) => ({
+      type, target: { row: index * 3, col: index * 3 }, angle: Math.PI / 4, color: "#20cc60"
+    })), radii);
+    assert.ok(context.cageBounds.length > 0);
+    assert.ok(context.cageBounds.every(bound => bound === undefined), `${pieceSet} queens and knights must not use square clearance`);
+  }
 });
 
 test("move outlines keep rounded joins and share formatting with last-move previews", () => {
@@ -3420,14 +3430,14 @@ test("held SVG lines survive selection, preview waits and replacement before ret
   api.releaseHighlightLineMask(maskEntry, reusedMask);
   assert.equal(maskDefs.children.length, 0);
   assert.equal(maskEntry.highlightLineMaskCache.size, 0);
-  api.configure({ ...options, pieceSet: "system_rund", defenseHighlightLineMaskBlurPx: 2 });
-  for (const blackOrientation of [false, true]) {
+  for (const pieceSet of ["system_rund", "system_rund_2"]) for (const blackOrientation of [false, true]) {
+    api.configure({ ...options, pieceSet, defenseHighlightLineMaskBlurPx: 2 });
     const roundMask = api.createHighlightLineMask(maskEntry, board, maskPosition, blackOrientation);
     const reusedRoundMask = api.createHighlightLineMask(maskEntry, board, maskPosition, blackOrientation);
     assert.equal(roundMask, reusedRoundMask);
     assert.equal(roundMask.blur.attributes.stdDeviation, "0.025 0.025");
     const circles = roundMask.mask.children[1].children;
-    assert.equal(circles.length, 5, "System Rund masks every figure including the king, but not the pawn");
+    assert.equal(circles.length, 5, `${pieceSet} masks every figure including the king, but not the pawn`);
     for (const [row, col] of [[2, 4], [3, 2], [4, 4], [6, 2], [7, 4]]) {
       const circle = circles.find(shape => shape.attributes.cx === String(col + 0.5)
         && shape.attributes.cy === String(row + 0.5));
@@ -3442,7 +3452,7 @@ test("held SVG lines survive selection, preview waits and replacement before ret
     api.releaseHighlightLineMask(maskEntry, cageMask);
     api.releaseHighlightLineMask(maskEntry, roundMask);
     api.releaseHighlightLineMask(maskEntry, reusedRoundMask);
-    api.configure({ ...options, pieceSet: "system_rund", defenseHighlightLineMaskBlurPx: 2 });
+    api.configure({ ...options, pieceSet, defenseHighlightLineMaskBlurPx: 2 });
   }
   assert.equal(maskDefs.children.length, 0);
   assert.equal(maskEntry.highlightLineMaskCache.size, 0);

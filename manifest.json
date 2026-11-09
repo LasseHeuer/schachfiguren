@@ -37,6 +37,7 @@
         "system_pixel/*.svg",
         "system_eckig/*.svg",
         "system_rund/*.svg",
+        "system_rund_2/*.svg",
         "rund/*.svg",
         "rund_comic/*.svg",
         "cage/*.svg",

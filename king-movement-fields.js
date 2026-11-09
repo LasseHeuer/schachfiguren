@@ -1,6 +1,7 @@
 (() => {
   const boardSelector = "body[data-board] .cg-wrap cg-board, .mini-game cg-board, cg-board#lfs-pv-preview, cg-board#lfs-move-preview";
   const svgNamespace = "http://www.w3.org/2000/svg";
+  const roundPieceSets = new Set(["system_rund", "system_rund_2"]);
   const pieceTypes = ["pawn", "knight", "bishop", "rook", "queen", "king"];
   const pieceCodes = { pawn: "P", knight: "N", bishop: "B", rook: "R", queen: "Q", king: "K" };
   const observedBoards = new Map();
@@ -220,7 +221,7 @@
 
   function appendCell(paths, rowOffset, colOffset, state) {
     if (state === "open") return;
-    if (settings.pieceSet === "system_rund") {
+    if (roundPieceSets.has(settings.pieceSet)) {
       // The SVG ring's inner radius is 5/14 of the piece width.
       const radius = 5 / 14;
       const angle = Math.atan2(rowOffset, colOffset);
@@ -267,7 +268,7 @@
         "stroke-width": "0.02",
         "stroke-linejoin": "miter",
         "fill-rule": "nonzero",
-        "shape-rendering": settings.pieceSet === "system_rund" ? "geometricPrecision" : "crispEdges"
+        "shape-rendering": roundPieceSets.has(settings.pieceSet) ? "geometricPrecision" : "crispEdges"
       };
       if (!path) {
         path = createSvgElement("path");

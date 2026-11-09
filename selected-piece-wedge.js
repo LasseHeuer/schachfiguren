@@ -1,6 +1,7 @@
 (() => {
   const boardSelector = ".cg-wrap cg-board, .mini-game cg-board";
   const svgNamespace = "http://www.w3.org/2000/svg";
+  const roundPieceSets = new Set(["system_rund", "system_rund_2"]);
   const pieceTypes = ["pawn", "knight", "bishop", "rook", "queen", "king"];
   const pieceValues = { pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 100 };
   const maxUnselectedPotentialMovesPerColor = 3;
@@ -1646,9 +1647,9 @@
       const radii = new Map();
       figureRadiiCache.set(pieceSet, radii);
       const figures = Object.entries(figureAssetLetters).filter(([type]) => pieceSet !== "cage" || type !== "king");
-      const colors = ["cage", "system_rund"].includes(pieceSet) ? ["w"] : ["w", "b"];
+      const colors = pieceSet === "cage" || roundPieceSets.has(pieceSet) ? ["w"] : ["w", "b"];
       Promise.all(figures.flatMap(([type, letter]) => colors.map(async color => {
-        if (pieceSet === "system_rund" && type !== "pawn") {
+        if (roundPieceSets.has(pieceSet) && type !== "pawn") {
           radii.set(type, Array(720).fill(roundKingInnerRadius));
           return;
         }
@@ -2261,7 +2262,7 @@
     function updateLineRadii(line) {
       const radius = line.moveFieldRadius ?? settings.threatLineRadius;
       const configuredRadius = Math.sqrt(Math.max(0, radius ** 2 - line.offset ** 2));
-      const usesBoundingSquare = settings.pieceSet !== "system_rund"
+      const usesBoundingSquare = !roundPieceSets.has(settings.pieceSet)
         && (line.type === "queen" || (line.type === "knight" && settings.pieceSet !== "cage"));
       if (usesBoundingSquare && !boundingSquareHalfSizes.has(line.type)) {
         boundingSquareHalfSizes.set(line.type, getFigureBoundingSquareHalfSize(line.outline));
@@ -2686,7 +2687,7 @@
   }
 
   function createHighlightLineMask(entry, board, position, blackOrientation) {
-    if (!["cage", "system_rund"].includes(settings.pieceSet)) return null;
+    if (settings.pieceSet !== "cage" && !roundPieceSets.has(settings.pieceSet)) return null;
     const positionKey = position.map(rank => rank.map(piece => piece ? `${piece.color}${piece.type}` : "-").join(",")).join(";");
     const key = `${settings.pieceSet}:${blackOrientation}:${positionKey}`;
     entry.highlightLineMaskCache ??= new Map();
@@ -2735,7 +2736,7 @@
       for (let col = 0; col < position[row].length; col++) {
         const piece = position[row][col];
         const letter = piece && figureAssetLetters[piece.type];
-        if (settings.pieceSet === "system_rund") {
+        if (roundPieceSets.has(settings.pieceSet)) {
           if (!letter || piece.type === "pawn") continue;
           const circle = document.createElementNS(svgNamespace, "circle");
           circle.setAttribute("cx", String(col + 0.5));
