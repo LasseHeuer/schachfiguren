@@ -1740,6 +1740,7 @@
       "--lfs-hover-mix-percent": `${settings.hoverMixPercent}%`,
       "--lfs-hover-desaturation-setting": `${settings.hoverDesaturation}%`,
       "--lfs-board-top-gap": `${settings.boardTopGapPercent}vh`,
+      "--lfs-material-scale": settings.zenMaterialScalePercent / 100,
       "--lfs-primary-button-color": settings.primaryButtonColor,
       "--lfs-online-indicator-light": settings.onlineIndicatorLight,
       "--lfs-online-indicator-dark": settings.onlineIndicatorDark,

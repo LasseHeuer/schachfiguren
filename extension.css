@@ -948,7 +948,7 @@ html[data-lfs-zen-mode] body .material[data-lfs-zen-side] {
   flex-wrap: nowrap !important;
   align-items: center !important;
   column-gap: calc(2px * var(--lfs-board-ui-scale, 1)) !important;
-  font-size: calc(1em * var(--lfs-board-ui-scale, 1)) !important;
+  font-size: calc(1em * var(--lfs-board-ui-scale, 1) * var(--lfs-material-scale, 1)) !important;
 }
 
 html[data-lfs-zen-mode] .analyse__player_strip:has(> .material[data-lfs-zen-side]) {
@@ -1804,7 +1804,7 @@ html:not([data-lfs-disabled]) #acpl-chart-container {
 }
 
 html:not([data-lfs-disabled]) .material {
-  --lfs-material-size: calc(20px * var(--lfs-board-ui-scale, 1));
+  --lfs-material-size: calc(20px * var(--lfs-board-ui-scale, 1) * var(--lfs-material-scale, 1));
   position: relative !important;
   z-index: 2147483646 !important;
   display: flex !important;
@@ -1821,21 +1821,21 @@ html:not([data-lfs-disabled]):not([data-lfs-zen-mode]) .material {
 
 html:not([data-lfs-disabled]) .material > div {
   display: inline-block !important;
-  margin-inline-start: calc(6.25px * var(--lfs-board-ui-scale, 1)) !important;
+  margin-inline-start: calc(6.25px * var(--lfs-board-ui-scale, 1) * var(--lfs-material-scale, 1)) !important;
   white-space: nowrap !important;
 }
 
 html:not([data-lfs-disabled]) .material mpiece {
   width: var(--lfs-material-size) !important;
   height: var(--lfs-material-size) !important;
-  margin-inline-start: calc(-6.25px * var(--lfs-board-ui-scale, 1)) !important;
+  margin-inline-start: calc(-6.25px * var(--lfs-board-ui-scale, 1) * var(--lfs-material-scale, 1)) !important;
   opacity: 1 !important;
   filter: none !important;
   background: var(--lfs-captured-piece-color) !important;
 }
 
 html:not([data-lfs-disabled]) .material mpiece.pawn {
-  margin-inline-start: calc(-9.375px * var(--lfs-board-ui-scale, 1)) !important;
+  margin-inline-start: calc(-9.375px * var(--lfs-board-ui-scale, 1) * var(--lfs-material-scale, 1)) !important;
 }
 
 html:not([data-lfs-disabled]) #promotion-choice square[data-lfs-promotion-tone="light"] {

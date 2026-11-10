@@ -17,6 +17,7 @@
     boardVerticalOffset: 0,
     boardTopGapPercent: 8,
     zenBoardUpPercent: 4,
+    zenMaterialScalePercent: 100,
     zenBackgroundEnabled: true,
     zenBackgroundTintPercent: 12,
     zenClockFontSizePx: 27,
@@ -265,6 +266,7 @@
     boardRoundPercent: [0, 100],
     boardTopGapPercent: [0, 30],
     zenBoardUpPercent: [0, 30],
+    zenMaterialScalePercent: [50, 300],
     zenBackgroundTintPercent: [0, 40],
     zenClockFontSizePx: [16, 80],
     zenClockMarginPx: [0, 48],
@@ -520,7 +522,7 @@
     result.engineArrowStartOffsetPercent = Math.round(result.engineArrowStartOffsetPercent);
     result.engineArrowEndOffsetPercent = Math.round(result.engineArrowEndOffsetPercent);
     result.lastMoveLineWidth = Math.round(result.lastMoveLineWidth);
-    for (const key of ["zenBackgroundTintPercent", "zenClockFontSizePx", "zenClockMarginPx", "zenClockLineThicknessPx", "zenClockLineGapPx", "zenClockWarningThresholdPercent", "zenClockActiveEndSizePercent", "zenClockActiveEndBlendPercent", "pvSliderAreaHeightPx", "boardCursorPointerDotSizePx", "boardCursorDiameterPx", "boardCursorRoundnessPercent"]) {
+    for (const key of ["zenBackgroundTintPercent", "zenClockFontSizePx", "zenClockMarginPx", "zenClockLineThicknessPx", "zenClockLineGapPx", "zenClockWarningThresholdPercent", "zenClockActiveEndSizePercent", "zenClockActiveEndBlendPercent", "zenMaterialScalePercent", "pvSliderAreaHeightPx", "boardCursorPointerDotSizePx", "boardCursorDiameterPx", "boardCursorRoundnessPercent"]) {
       result[key] = Math.round(result[key]);
     }
     result.boardCursorSpeedThresholdPxPerSecond = Math.round(result.boardCursorSpeedThresholdPxPerSecond / 50) * 50;
