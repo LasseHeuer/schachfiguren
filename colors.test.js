@@ -4816,6 +4816,29 @@ ${clockMarker}`));
       })()`);
       assert.deepEqual(analysisResult, [{ color: "white", line: "25 100", hidden: true },
         { color: "black", line: "75 100", hidden: true }, { topHidden: true, bottomHidden: false, line: "0 100" }]);
+      const flipResult = await evaluate(`(() => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'cg-wrap orientation-white';
+        wrapper.append(document.createElement('cg-board')); document.body.append(wrapper);
+        clockTesting.setBoard(wrapper);
+        const makeClock = text => {
+          const element = document.createElement('div');
+          element.className = 'clock'; element.textContent = text; return element;
+        };
+        const bottomBefore = makeClock('5:00');
+        clockTesting.updateZenClock('bottom', bottomBefore, 0);
+        bottomBefore.textContent = '2:30';
+        clockTesting.updateZenClock('bottom', bottomBefore, 1000);
+        const before = clockTesting.rows.bottom.fill.getAttribute('stroke-dasharray');
+        wrapper.className = 'cg-wrap orientation-black';
+        const topAfter = makeClock('2:30');
+        clockTesting.updateZenClock('top', topAfter, 2000);
+        const after = clockTesting.rows.top.fill.getAttribute('stroke-dasharray');
+        wrapper.remove();
+        return { before, after };
+      })()`);
+      assert.equal(flipResult.before, "50 100", "the timeline shows half the maximum before flipping");
+      assert.equal(flipResult.after, "50 100", "flipping the board keeps the player's timeline ratio instead of refilling it");
       await evaluate("document.documentElement.removeAttribute('data-lfs-zen-mode')");
       await send("Emulation.setDeviceMetricsOverride", { width: 512, height: 512, deviceScaleFactor: 1, mobile: false });
       assert.deepEqual(runtimeErrors, []);

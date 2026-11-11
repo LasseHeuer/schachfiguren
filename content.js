@@ -188,8 +188,8 @@
   let zenClockRows;
   let zenClockSources = { top: null, bottom: null };
   let analysisClocks = null;
-  const zenClockMaxTimes = new WeakMap();
-  const zenClockProgress = new WeakMap();
+  const zenClockMaxTimes = new Map();
+  const zenClockProgress = new Map();
   let normalRoundApp;
   let normalRoundSide;
   let normalRoundTable;
@@ -817,10 +817,16 @@
     return match[0].replace(",", ".").split(":").reduce((total, part) => total * 60 + Number(part), 0);
   }
 
-  function rememberZenClockMaximum(source, remaining = null) {
+  function zenClockColorForSide(side) {
+    const board = zenBoard?.querySelector("cg-board");
+    const blackOrientation = board?.closest(".cg-wrap")?.classList.contains("orientation-black") ?? false;
+    return side === "top" ? (blackOrientation ? "white" : "black") : (blackOrientation ? "black" : "white");
+  }
+
+  function rememberZenClockMaximum(color, remaining = null) {
     if (remaining === null) return null;
-    const maximum = Math.max(zenClockMaxTimes.get(source) ?? remaining, remaining);
-    zenClockMaxTimes.set(source, maximum);
+    const maximum = Math.max(zenClockMaxTimes.get(color) ?? remaining, remaining);
+    zenClockMaxTimes.set(color, maximum);
     return { remaining, maximum };
   }
 
@@ -837,10 +843,14 @@
     const face = getClockFace(source);
     const nextText = face.textContent.trim();
     const reading = clockSeconds(nextText);
-    const clockTime = rememberZenClockMaximum(source, reading);
+    // Key by player colour, not by DOM element: flipping the board (F) swaps or
+    // recreates the clock elements, but the colour's maximum and sub-second
+    // estimate must follow the player so the timeline keeps its ratio.
+    const color = zenClockColorForSide(side);
+    const clockTime = rememberZenClockMaximum(color, reading);
     const running = face.matches(".running") || source.matches(".running")
       || (face !== source && Boolean(source.querySelector(".running")));
-    let progress = zenClockProgress.get(source);
+    let progress = zenClockProgress.get(color);
     if (reading !== null && (!progress || progress.reading !== reading || progress.running !== running)) {
       let remaining = reading;
       if (running && progress?.running && reading <= progress.reading) {
@@ -849,7 +859,7 @@
         if (predicted >= reading && predicted - reading <= 1.1) remaining = predicted;
       }
       progress = { reading, remaining, timestamp: now, running };
-      zenClockProgress.set(source, progress);
+      zenClockProgress.set(color, progress);
     }
     const remaining = reading === null ? null : running
       ? Math.max(0, progress.remaining - (now - progress.timestamp) / 1000)
@@ -958,10 +968,8 @@
 
   function setZenClockPlayerColors() {
     if (!zenClockRows || !zenBoard) return;
-    const board = zenBoard.querySelector("cg-board");
-    const blackOrientation = board?.closest(".cg-wrap")?.classList.contains("orientation-black") ?? false;
-    const topColor = blackOrientation ? "white" : "black";
-    const bottomColor = blackOrientation ? "black" : "white";
+    const topColor = zenClockColorForSide("top");
+    const bottomColor = zenClockColorForSide("bottom");
     if (zenClockRows.top.row.dataset.playerColor !== topColor) zenClockRows.top.row.dataset.playerColor = topColor;
     if (zenClockRows.bottom.row.dataset.playerColor !== bottomColor) zenClockRows.bottom.row.dataset.playerColor = bottomColor;
   }
@@ -2060,23 +2068,6 @@
         || node.nodeType === Node.ELEMENT_NODE && (node.id === "lfs-zen-clock-overlay" || node.closest("#lfs-zen-clock-overlay"))
         || node.parentElement?.closest("#lfs-zen-clock-overlay"));
     };
-    const clockSources = new Set();
-    const addClockSource = element => {
-      if (element?.nodeType !== Node.ELEMENT_NODE) return;
-      const source = element.closest(".rclock") ?? element.closest(".clock");
-      if (source) clockSources.add(source);
-    };
-    for (const record of records) {
-      addClockSource(targetElement(record));
-      for (const node of record.addedNodes) {
-        addClockSource(node);
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          node.querySelectorAll(".rclock, .clock").forEach(addClockSource);
-        }
-      }
-    }
-    for (const source of clockSources) rememberZenClockMaximum(source);
-
     const zenMode = document.documentElement.hasAttribute("data-lfs-zen-mode");
     const hasPreviewMutation = records.some(record => {
       const target = targetElement(record);
