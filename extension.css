@@ -1032,6 +1032,18 @@ html:not([data-lfs-zen-mode]) #lfs-zen-clock-overlay .lfs-zen-clock-time {
   --lfs-zen-clock-player-color: var(--lfs-black-piece-color, oklch(0.674238427247811 0.120655575344413 228.510181577896));
 }
 
+#lfs-zen-clock-overlay .lfs-zen-puzzle-outline-path {
+  stroke: var(--lfs-zen-clock-player-color, var(--lfs-white-piece-color, oklch(0.599740930068773 0.172188795606971 40.184529469491))) !important;
+}
+
+#lfs-zen-clock-overlay .lfs-zen-puzzle-outline[data-player-color="black"] {
+  --lfs-zen-clock-player-color: var(--lfs-black-piece-color, oklch(0.674238427247811 0.120655575344413 228.510181577896));
+}
+
+#lfs-zen-clock-overlay .lfs-zen-puzzle-outline[hidden] {
+  display: none !important;
+}
+
 #lfs-zen-clock-overlay .lfs-zen-clock-warning,
 #lfs-zen-clock-overlay .lfs-zen-clock-active-end {
   display: none !important;

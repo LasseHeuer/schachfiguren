@@ -186,6 +186,8 @@
   let zenSideElements = [];
   let zenClockOverlay;
   let zenClockRows;
+  let zenPuzzleOutline;
+  let zenPuzzleOutlinePath;
   let zenClockSources = { top: null, bottom: null };
   let analysisClocks = null;
   const zenClockMaxTimes = new Map();
@@ -798,6 +800,15 @@
       zenClockOverlay.append(row);
       zenClockRows[side] = { row, time, bar, fill, warning, end, gradient };
     }
+    const svgNamespace = "http://www.w3.org/2000/svg";
+    zenPuzzleOutline = document.createElementNS(svgNamespace, "svg");
+    zenPuzzleOutline.setAttribute("class", "lfs-zen-clock-bar lfs-zen-puzzle-outline");
+    zenPuzzleOutline.setAttribute("aria-hidden", "true");
+    zenPuzzleOutlinePath = document.createElementNS(svgNamespace, "path");
+    zenPuzzleOutlinePath.setAttribute("class", "lfs-zen-puzzle-outline-path");
+    zenPuzzleOutline.append(zenPuzzleOutlinePath);
+    zenPuzzleOutline.hidden = true;
+    zenClockOverlay.append(zenPuzzleOutline);
     document.documentElement.append(zenClockOverlay);
   }
 
@@ -984,11 +995,63 @@
     return clocks;
   }
 
+  function zenPuzzlePlayerColor() {
+    if (document.querySelector(".puzzle__feedback.after")) return null;
+    const pageData = document.querySelector("#page-init-data")?.textContent;
+    if (pageData) {
+      try {
+        const color = JSON.parse(pageData)?.data?.puzzle?.color;
+        if (color === "white" || color === "black") return color;
+      } catch {
+        // Fall through to the board orientation below.
+      }
+    }
+    return zenClockColorForSide("bottom");
+  }
+
+  function positionZenPuzzleOutline(boardRect) {
+    if (!zenPuzzleOutline || zenPuzzleOutline.hidden) return;
+    const scale = Number.parseFloat(document.documentElement.style.getPropertyValue("--lfs-board-ui-scale")) || 1;
+    const margin = settings.zenClockMarginPx * scale;
+    const thickness = Number.parseFloat(zenClockOverlay.style.getPropertyValue("--lfs-zen-clock-line-thickness"));
+    const pixelRatio = window.devicePixelRatio || 1;
+    const overlap = 0.5 / pixelRatio;
+    const distance = margin + thickness / 2 - overlap;
+    const barLeft = Math.ceil((boardRect.left - margin + overlap) * pixelRatio) / pixelRatio - thickness;
+    const barTop = Math.ceil((boardRect.top - margin + overlap) * pixelRatio) / pixelRatio - thickness;
+    const barRight = Math.floor((boardRect.left + boardRect.width + margin - overlap) * pixelRatio) / pixelRatio + thickness;
+    const barBottom = Math.floor((boardRect.top + boardRect.height + margin - overlap) * pixelRatio) / pixelRatio + thickness;
+    const width = barRight - barLeft;
+    const height = barBottom - barTop;
+    zenPuzzleOutline.style.left = `${barLeft}px`;
+    zenPuzzleOutline.style.top = `${barTop}px`;
+    zenPuzzleOutline.style.width = `${width}px`;
+    zenPuzzleOutline.style.height = `${height}px`;
+    zenPuzzleOutline.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    const shapePercent = settings.boardFieldShape === "round" ? settings.boardRoundPercent : settings.boardBevelPercent;
+    const corner = settings.boardBevelEnabled ? boardRect.width * shapePercent / 1600 : 0;
+    const rounded = corner > 0 && settings.boardFieldShape === "round";
+    const radius = corner > 0 ? corner + distance * (rounded ? 1 : 2 - Math.SQRT2) : 0;
+    const left = thickness / 2;
+    const top = thickness / 2;
+    const right = width - left;
+    const bottom = height - left;
+    const path = radius === 0
+      ? `M ${left} ${top} H ${right} V ${bottom} H ${left} Z`
+      : rounded
+        ? `M ${left + radius} ${top} H ${right - radius} A ${radius} ${radius} 0 0 1 ${right} ${top + radius} V ${bottom - radius} A ${radius} ${radius} 0 0 1 ${right - radius} ${bottom} H ${left + radius} A ${radius} ${radius} 0 0 1 ${left} ${bottom - radius} V ${top + radius} A ${radius} ${radius} 0 0 1 ${left + radius} ${top} Z`
+        : `M ${left + radius} ${top} L ${right - radius} ${top} L ${right} ${top + radius} L ${right} ${bottom - radius} L ${right - radius} ${bottom} L ${left + radius} ${bottom} L ${left} ${bottom - radius} L ${left} ${top + radius} Z`;
+    if (zenPuzzleOutlinePath.getAttribute("d") !== path) zenPuzzleOutlinePath.setAttribute("d", path);
+  }
+
   function syncZenClockOverlay(clocks, boardRect, analysis = null) {
-    if (!boardRect?.width || !boardRect.height || !clocks.length && !analysis) {
+    const isPuzzle = !analysis && !clocks.length && Boolean(zenBoard?.closest(".puzzle"));
+    const zenMode = document.documentElement.hasAttribute("data-lfs-zen-mode");
+    if (!boardRect?.width || !boardRect.height || (!clocks.length && !analysis && !(isPuzzle && zenMode))) {
       if (zenClockOverlay) {
         zenClockOverlay.removeAttribute("data-active");
         for (const side of ["top", "bottom"]) zenClockRows[side].row.hidden = true;
+        if (zenPuzzleOutline) zenPuzzleOutline.hidden = true;
       }
       zenClockSources = { top: null, bottom: null };
       cancelAnimationFrame(zenClockProgressFrame);
@@ -1003,6 +1066,24 @@
     const lineThickness = Math.max(1, Math.round(settings.zenClockLineThicknessPx * devicePixelRatio)) / devicePixelRatio;
     zenClockOverlay.style.setProperty("--lfs-zen-clock-line-thickness", `${lineThickness}px`);
     zenClockOverlay.style.setProperty("--lfs-zen-clock-line-gap", `${settings.zenClockLineGapPx * scale}px`);
+
+    if (isPuzzle) {
+      zenClockSources = { top: null, bottom: null };
+      for (const side of ["top", "bottom"]) {
+        const clockRow = zenClockRows[side];
+        clockRow.row.hidden = true;
+        clockRow.row.removeAttribute("data-running");
+        clockRow.row.removeAttribute("data-critical");
+      }
+      const color = zenPuzzlePlayerColor();
+      zenPuzzleOutline.hidden = !color;
+      if (color) {
+        if (zenPuzzleOutline.dataset.playerColor !== color) zenPuzzleOutline.dataset.playerColor = color;
+        positionZenPuzzleOutline(boardRect);
+      }
+      return false;
+    }
+    zenPuzzleOutline.hidden = true;
 
     if (!analysis) {
       clocks.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
