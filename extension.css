@@ -906,8 +906,18 @@ html[data-lfs-zen-mode][data-lfs-zen-restore-pending] [data-lfs-zen-board] .cg-w
 html[data-lfs-zen-mode][data-lfs-zen-restore-pending] [data-lfs-zen-board].cg-wrap,
 html[data-lfs-zen-mode][data-lfs-zen-restore-pending] [data-lfs-zen-board].cg-wrap *,
 html[data-lfs-zen-mode][data-lfs-zen-restore-pending] #lfs-puzzle-playlist-toolbar,
-html[data-lfs-zen-mode][data-lfs-zen-restore-pending] #lfs-puzzle-playlist-toolbar * {
+html[data-lfs-zen-mode][data-lfs-zen-restore-pending] #lfs-puzzle-playlist-toolbar *,
+html[data-lfs-zen-mode][data-lfs-zen-restore-pending] .material,
+html[data-lfs-zen-mode][data-lfs-zen-restore-pending] .material *,
+html[data-lfs-zen-mode][data-lfs-zen-restore-pending] #promotion-choice,
+html[data-lfs-zen-mode][data-lfs-zen-restore-pending] #promotion-choice *,
+html[data-lfs-zen-mode][data-lfs-zen-restore-pending] #lfs-zen-clock-overlay,
+html[data-lfs-zen-mode][data-lfs-zen-restore-pending] #lfs-zen-clock-overlay * {
   visibility: hidden !important;
+}
+
+html[data-lfs-zen-mode][data-lfs-zen-restore-pending] #lfs-zen-clock-overlay {
+  display: none !important;
 }
 
 html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar:not([data-lfs-zen-toolbar-positioned]),

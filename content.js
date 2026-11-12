@@ -2,6 +2,7 @@
   const playlistZenModeStorageKey = "lfsPuzzlePlaylistZenMode";
   const boardSizeCapStorageKey = "lfsPuzzleBoardSizeCap";
   const fullscreenBoardSizeCapStorageKey = "lfsFullscreenBoardSizeCap";
+  const zenOffsetStorageKey = "lfsPuzzleZenOffset";
   const playlistZenWasPending = globalThis.sessionStorage?.getItem(playlistZenModeStorageKey) === "true";
   let restorePlaylistZenMode = false;
   let zenRestorePageLoaded = document.readyState === "complete";
@@ -74,11 +75,33 @@
     globalThis.sessionStorage?.removeItem(staleStorageKey);
   }
 
+  function loadSavedZenOffset() {
+    const saved = globalThis.sessionStorage?.getItem(zenOffsetStorageKey);
+    if (!saved) return null;
+    const [x, y] = saved.split(",").map(Number);
+    if (Number.isFinite(x) && Number.isFinite(y)) return { x, y };
+    globalThis.sessionStorage?.removeItem(zenOffsetStorageKey);
+    return null;
+  }
+
+  function persistZenOffset() {
+    const zenMode = document.documentElement?.hasAttribute("data-lfs-zen-mode");
+    if (!zenMode || !zenBoard) {
+      globalThis.sessionStorage?.removeItem(zenOffsetStorageKey);
+      return;
+    }
+    const x = zenBoard.style.getPropertyValue("--lfs-zen-offset-x");
+    const y = zenBoard.style.getPropertyValue("--lfs-zen-offset-y");
+    if (x && y) globalThis.sessionStorage?.setItem(zenOffsetStorageKey, `${parseFloat(x)},${parseFloat(y)}`);
+  }
+
   preparePlaylistZenRestore(document.documentElement);
   const restoreZenBoardSizeCap = playlistZenWasPending
     || document.documentElement?.hasAttribute("data-lfs-zen-mode")
     || document.documentElement?.hasAttribute("data-lfs-zen-restore-pending");
   if (!restoreZenBoardSizeCap) globalThis.sessionStorage?.removeItem(boardSizeCapStorageKey);
+  if (!restoreZenBoardSizeCap) globalThis.sessionStorage?.removeItem(zenOffsetStorageKey);
+  const restoredZenOffset = restoreZenBoardSizeCap ? loadSavedZenOffset() : null;
   const activeBoardSizeCapStorageKey = restoreZenBoardSizeCap ? boardSizeCapStorageKey : fullscreenBoardSizeCapStorageKey;
   const restoredBoardSizeCap = loadSavedBoardSizeCap(activeBoardSizeCapStorageKey);
   let discardRestoredBoardSizeCap = !isFullscreenWindow() && !restoreZenBoardSizeCap
@@ -310,7 +333,10 @@
     }
   }
 
-  window.addEventListener("pagehide", persistBoardSizeCap);
+  window.addEventListener("pagehide", () => {
+    persistBoardSizeCap();
+    persistZenOffset();
+  });
 
   function observeZenBoardSize(container, board) {
     if (container === zenResizeTarget && board === zenResizeBoard) return;
@@ -493,6 +519,9 @@
     if (zenBoardChanged && zenBoard && previousZenOffset && document.documentElement.hasAttribute("data-lfs-zen-mode")) {
       if (previousZenOffset[0]) zenBoard.style.setProperty("--lfs-zen-offset-x", previousZenOffset[0]);
       if (previousZenOffset[1]) zenBoard.style.setProperty("--lfs-zen-offset-y", previousZenOffset[1]);
+    } else if (restorePlaylistZenMode && zenBoard && restoredZenOffset && document.documentElement.hasAttribute("data-lfs-zen-mode")) {
+      zenBoard.style.setProperty("--lfs-zen-offset-x", `${restoredZenOffset.x}px`);
+      zenBoard.style.setProperty("--lfs-zen-offset-y", `${restoredZenOffset.y}px`);
     }
     if (zenToggle) {
       zenToggle.hidden = !zenBoard;
@@ -534,6 +563,7 @@
     root.removeAttribute("data-lfs-zen-restore-pending");
     syncBoardSizeCap();
     persistBoardSizeCap();
+    globalThis.sessionStorage?.removeItem(zenOffsetStorageKey);
     clearZenOffset(zenBoard);
     syncBoardAnchoredElements();
     syncNormalRoundLayout();
@@ -659,6 +689,7 @@
     if (Math.abs(deltaX) >= 0.01 || Math.abs(deltaY) >= 0.01) {
       zenBoard.style.setProperty("--lfs-zen-offset-x", `${offsetX + deltaX}px`);
       zenBoard.style.setProperty("--lfs-zen-offset-y", `${offsetY + deltaY}px`);
+      globalThis.sessionStorage?.setItem(zenOffsetStorageKey, `${offsetX + deltaX},${offsetY + deltaY}`);
       // Chessground clears its cached pointer bounds on scroll, not on CSS translation.
       document.dispatchEvent(new Event("scroll"));
     }
