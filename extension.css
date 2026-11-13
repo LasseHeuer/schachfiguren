@@ -979,7 +979,9 @@ html[data-lfs-zen-mode] .analyse__player_strip:has(> .material[data-lfs-zen-side
 html[data-lfs-zen-mode] #lfs-zen-clock-overlay {
   position: fixed !important;
   inset: 0 !important;
-  z-index: 2147483647 !important;
+  /* Unter dem Brett (.cg-wrap: 2147483646) halten, damit die Endspiel-Abzeichen
+     auf dem König (.cg-custom-svgs) immer über den Zeitlinien liegen. */
+  z-index: 2147483645 !important;
   display: block !important;
   pointer-events: none !important;
 }
@@ -1594,6 +1596,7 @@ html:not([data-lfs-disabled])[data-lfs-board-bevel] body[data-board] .is2d .cg-w
   overflow: visible !important;
 }
 
+/* Endspiel-Abzeichen (Matt/Aufgabe/Zeit/Remis) auf dem König: immer ganz oben. */
 html:not([data-lfs-disabled]) .cg-wrap > cg-container > .cg-custom-svgs {
   z-index: 2147483647 !important;
   overflow: visible !important;

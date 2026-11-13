@@ -1363,6 +1363,19 @@ test("move outlines keep rounded joins and share formatting with last-move previ
   assert.match(extensionCss, /\.cg-wrap > cg-container > \.cg-custom-svgs\s*\{\s*z-index:\s*2147483647\s*!important;/);
 });
 
+test("endgame badges stay above the zen clock timelines", () => {
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const css = readFileSync(join(__dirname, "extension.css"), "utf8");
+  const layer = pattern => Number(css.match(pattern)?.[1]);
+  const overlay = layer(/#lfs-zen-clock-overlay\[data-active\][\s\S]*?z-index:\s*(\d+)\s*!important;/);
+  const board = layer(/body \.cg-wrap\s*\{\s*position:\s*relative;\s*z-index:\s*(\d+)\s*!important;/);
+  const badges = layer(/\.cg-wrap > cg-container > \.cg-custom-svgs\s*\{\s*z-index:\s*(\d+)\s*!important;/);
+  assert.ok(Number.isFinite(overlay) && Number.isFinite(board) && Number.isFinite(badges));
+  assert.ok(overlay < board, "the timelines must stay below the board so the badges on the king remain on top");
+  assert.equal(badges, 2147483647, "the endgame badges keep the highest layer inside the board");
+});
+
 test("last-move outlines redraw after viewport and fullscreen changes", () => {
   const vm = require("node:vm");
   const { readFileSync } = require("node:fs");
