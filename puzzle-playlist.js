@@ -24,6 +24,7 @@
   let puzzleObserver;
   let observedPuzzle;
   let renderedPlaylistKey;
+  let pluginEnabled = true;
   let scheduled = false;
   let zenToolbarFrame;
   let dueRefreshTimer;
@@ -580,7 +581,22 @@
     savePlaylist({ ...playlist, items });
   }
 
+  function teardown() {
+    puzzleObserver?.disconnect();
+    observedPuzzle = null;
+    puzzleToolbar?.remove();
+    puzzleToolbar = null;
+    puzzleMenuSaveButton?.remove();
+    puzzleMenuSaveButton = null;
+    restoreHomeSide();
+    restorePlaylistPage();
+  }
+
   function render() {
+    if (!pluginEnabled) {
+      teardown();
+      return;
+    }
     observePuzzleState();
     syncHomePanel();
     ensureHomeClickHandler();
@@ -647,7 +663,8 @@
     });
   }
 
-  chrome.storage.local.get([storageKey, ratingMaxPositionSetting], stored => {
+  chrome.storage.local.get([storageKey, ratingMaxPositionSetting, "enabled"], stored => {
+    pluginEnabled = stored.enabled !== false;
     ratingMaxPosition = settings.normalize({ [ratingMaxPositionSetting]: stored[ratingMaxPositionSetting] })[ratingMaxPositionSetting];
     const storedPlaylist = stored[storageKey];
     playlist = normalizePlaylist(storedPlaylist);
@@ -660,6 +677,10 @@
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     let changed = false;
+    if (Object.hasOwn(changes, "enabled")) {
+      pluginEnabled = changes.enabled.newValue !== false;
+      changed = true;
+    }
     if (Object.hasOwn(changes, storageKey)) {
       playlist = normalizePlaylist(changes[storageKey].newValue);
       changed = true;

@@ -168,7 +168,7 @@ html:not([data-lfs-disabled])[data-lfs-board-hover]::after {
   backdrop-filter: saturate(calc(100% - var(--lfs-hover-desaturation)));
 }
 
-html[data-lfs-zen-mode]:has(#lfs-zen-background:not([hidden]))::after {
+html:not([data-lfs-disabled])[data-lfs-zen-mode]:has(#lfs-zen-background:not([hidden]))::after {
   background-color: transparent !important;
   backdrop-filter: none !important;
   transition: none !important;
@@ -236,7 +236,7 @@ html:not([data-lfs-disabled]) [data-lfs-blunder-hidden] {
   display: none !important;
 }
 
-html[data-lfs-blunder-training="active"] :is(.analyse__moves, .analyse__controls, .analyse__fork, .analyse__acpl, .analyse__underboard, .analyse__tools > :not(.lfs-blunder-toolbar), .eval-gauge, .cg-shapes, .cg-shapes-below) {
+html:not([data-lfs-disabled])[data-lfs-blunder-training="active"] :is(.analyse__moves, .analyse__controls, .analyse__fork, .analyse__acpl, .analyse__underboard, .analyse__tools > :not(.lfs-blunder-toolbar), .eval-gauge, .cg-shapes, .cg-shapes-below) {
   visibility: hidden !important;
   pointer-events: none !important;
 }
@@ -665,12 +665,12 @@ main.lobby:has(> .lfs-playlist-page) {
   font-size: 0.75rem;
 }
 
-html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar,
-html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar * {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar * {
   visibility: visible !important;
 }
 
-html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar {
   position: fixed !important;
   top: var(--lfs-zen-toolbar-top, auto) !important;
   right: auto !important;
@@ -690,11 +690,11 @@ html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar {
   translate: none !important;
 }
 
-html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar:not([data-solved="true"]) {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar:not([data-solved="true"]) {
   display: none !important;
 }
 
-html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-button {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-button {
   display: flex !important;
   flex: 1 1 0 !important;
   align-items: center !important;
@@ -715,18 +715,18 @@ html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-button {
   -webkit-tap-highlight-color: transparent !important;
 }
 
-html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-toolbar-remove {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-toolbar-remove {
   margin: 0 !important;
 }
 
-html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-review-ratings {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-review-ratings {
   display: grid !important;
   flex: 1 1 100% !important;
   min-width: 0 !important;
 }
 
-html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-button:focus,
-html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-button:focus-visible {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-button:focus,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-button:focus-visible {
   outline: 1px solid var(--c-font, oklch(0.321092509068037 0.000000011968401 89.875562741511)) !important;
   outline-offset: -1px !important;
 }
@@ -781,7 +781,7 @@ html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar .lfs-playlist-button:focus-
 }
 
 
-[data-lfs-board-layout] {
+html:not([data-lfs-disabled]) [data-lfs-board-layout] {
   padding-block-start: var(--lfs-board-top-gap) !important;
 }
 
@@ -873,75 +873,75 @@ html:not([data-lfs-disabled]) body .main-board .cg-wrap[data-lfs-board-size-cap]
   pointer-events: none !important;
 }
 
-html[data-lfs-zen-mode] body {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] body {
   overflow: hidden !important;
 }
 
-html[data-lfs-zen-mode] body * {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] body * {
   visibility: hidden !important;
 }
 
-html[data-lfs-zen-mode] [data-lfs-zen-board],
-html[data-lfs-zen-mode] [data-lfs-zen-board] .cg-wrap,
-html[data-lfs-zen-mode] [data-lfs-zen-board] .cg-wrap *,
-html[data-lfs-zen-mode] [data-lfs-zen-board].cg-wrap,
-html[data-lfs-zen-mode] [data-lfs-zen-board].cg-wrap *,
-html[data-lfs-zen-mode] [data-lfs-zen-board] cg-board,
-html[data-lfs-zen-mode] [data-lfs-zen-board] cg-board *,
-html[data-lfs-zen-mode] [data-lfs-zen-side],
-html[data-lfs-zen-mode] [data-lfs-zen-side] *,
-html[data-lfs-zen-mode] #promotion-choice,
-html[data-lfs-zen-mode] #promotion-choice *,
-html[data-lfs-zen-mode] .material,
-html[data-lfs-zen-mode] .material * {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] [data-lfs-zen-board],
+html:not([data-lfs-disabled])[data-lfs-zen-mode] [data-lfs-zen-board] .cg-wrap,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] [data-lfs-zen-board] .cg-wrap *,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] [data-lfs-zen-board].cg-wrap,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] [data-lfs-zen-board].cg-wrap *,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] [data-lfs-zen-board] cg-board,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] [data-lfs-zen-board] cg-board *,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] [data-lfs-zen-side],
+html:not([data-lfs-disabled])[data-lfs-zen-mode] [data-lfs-zen-side] *,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] #promotion-choice,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] #promotion-choice *,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] .material,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] .material * {
   visibility: visible !important;
 }
 
-html[data-lfs-zen-mode][data-lfs-zen-restore-pending] body * {
+html:not([data-lfs-disabled])[data-lfs-zen-mode][data-lfs-zen-restore-pending] body * {
   visibility: hidden !important;
 }
 
-html[data-lfs-zen-mode][data-lfs-zen-restore-pending] [data-lfs-zen-board] .cg-wrap,
-html[data-lfs-zen-mode][data-lfs-zen-restore-pending] [data-lfs-zen-board] .cg-wrap *,
-html[data-lfs-zen-mode][data-lfs-zen-restore-pending] [data-lfs-zen-board].cg-wrap,
-html[data-lfs-zen-mode][data-lfs-zen-restore-pending] [data-lfs-zen-board].cg-wrap *,
-html[data-lfs-zen-mode][data-lfs-zen-restore-pending] #lfs-puzzle-playlist-toolbar,
-html[data-lfs-zen-mode][data-lfs-zen-restore-pending] #lfs-puzzle-playlist-toolbar *,
-html[data-lfs-zen-mode][data-lfs-zen-restore-pending] .material,
-html[data-lfs-zen-mode][data-lfs-zen-restore-pending] .material *,
-html[data-lfs-zen-mode][data-lfs-zen-restore-pending] #promotion-choice,
-html[data-lfs-zen-mode][data-lfs-zen-restore-pending] #promotion-choice *,
-html[data-lfs-zen-mode][data-lfs-zen-restore-pending] #lfs-zen-clock-overlay,
-html[data-lfs-zen-mode][data-lfs-zen-restore-pending] #lfs-zen-clock-overlay * {
+html:not([data-lfs-disabled])[data-lfs-zen-mode][data-lfs-zen-restore-pending] [data-lfs-zen-board] .cg-wrap,
+html:not([data-lfs-disabled])[data-lfs-zen-mode][data-lfs-zen-restore-pending] [data-lfs-zen-board] .cg-wrap *,
+html:not([data-lfs-disabled])[data-lfs-zen-mode][data-lfs-zen-restore-pending] [data-lfs-zen-board].cg-wrap,
+html:not([data-lfs-disabled])[data-lfs-zen-mode][data-lfs-zen-restore-pending] [data-lfs-zen-board].cg-wrap *,
+html:not([data-lfs-disabled])[data-lfs-zen-mode][data-lfs-zen-restore-pending] #lfs-puzzle-playlist-toolbar,
+html:not([data-lfs-disabled])[data-lfs-zen-mode][data-lfs-zen-restore-pending] #lfs-puzzle-playlist-toolbar *,
+html:not([data-lfs-disabled])[data-lfs-zen-mode][data-lfs-zen-restore-pending] .material,
+html:not([data-lfs-disabled])[data-lfs-zen-mode][data-lfs-zen-restore-pending] .material *,
+html:not([data-lfs-disabled])[data-lfs-zen-mode][data-lfs-zen-restore-pending] #promotion-choice,
+html:not([data-lfs-disabled])[data-lfs-zen-mode][data-lfs-zen-restore-pending] #promotion-choice *,
+html:not([data-lfs-disabled])[data-lfs-zen-mode][data-lfs-zen-restore-pending] #lfs-zen-clock-overlay,
+html:not([data-lfs-disabled])[data-lfs-zen-mode][data-lfs-zen-restore-pending] #lfs-zen-clock-overlay * {
   visibility: hidden !important;
 }
 
-html[data-lfs-zen-mode][data-lfs-zen-restore-pending] #lfs-zen-clock-overlay {
+html:not([data-lfs-disabled])[data-lfs-zen-mode][data-lfs-zen-restore-pending] #lfs-zen-clock-overlay {
   display: none !important;
 }
 
-html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar:not([data-lfs-zen-toolbar-positioned]),
-html[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar:not([data-lfs-zen-toolbar-positioned]) * {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar:not([data-lfs-zen-toolbar-positioned]),
+html:not([data-lfs-disabled])[data-lfs-zen-mode] #lfs-puzzle-playlist-toolbar:not([data-lfs-zen-toolbar-positioned]) * {
   visibility: hidden !important;
 }
 
-html[data-lfs-zen-mode] [data-lfs-zen-board] {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] [data-lfs-zen-board] {
   translate: var(--lfs-zen-offset-x, 0px) var(--lfs-zen-offset-y, 0px) !important;
   opacity: 1;
   transition: opacity 120ms ease-out;
 }
 
-html[data-lfs-zen-mode][data-lfs-zen-restore-pending] [data-lfs-zen-board] {
+html:not([data-lfs-disabled])[data-lfs-zen-mode][data-lfs-zen-restore-pending] [data-lfs-zen-board] {
   opacity: 0 !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html[data-lfs-zen-mode] [data-lfs-zen-board] {
+  html:not([data-lfs-disabled])[data-lfs-zen-mode] [data-lfs-zen-board] {
     transition: none;
   }
 }
 
-html[data-lfs-zen-mode] body .material[data-lfs-zen-side] {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] body .material[data-lfs-zen-side] {
   position: fixed !important;
   top: var(--lfs-zen-side-top) !important;
   right: auto !important;
@@ -953,7 +953,7 @@ html[data-lfs-zen-mode] body .material[data-lfs-zen-side] {
   translate: none !important;
 }
 
-html[data-lfs-zen-mode] body .material[data-lfs-zen-side] {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] body .material[data-lfs-zen-side] {
   display: flex !important;
   flex-wrap: nowrap !important;
   align-items: center !important;
@@ -961,7 +961,7 @@ html[data-lfs-zen-mode] body .material[data-lfs-zen-side] {
   font-size: calc(1em * var(--lfs-board-ui-scale, 1) * var(--lfs-material-scale, 1)) !important;
 }
 
-html[data-lfs-zen-mode] .analyse__player_strip:has(> .material[data-lfs-zen-side]) {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] .analyse__player_strip:has(> .material[data-lfs-zen-side]) {
   display: flex !important;
 }
 
@@ -976,7 +976,7 @@ html[data-lfs-zen-mode] .analyse__player_strip:has(> .material[data-lfs-zen-side
 }
 
 #lfs-zen-clock-overlay[data-active],
-html[data-lfs-zen-mode] #lfs-zen-clock-overlay {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] #lfs-zen-clock-overlay {
   position: fixed !important;
   inset: 0 !important;
   /* Unter dem Brett (.cg-wrap: 2147483646) halten, damit die Endspiel-Abzeichen
@@ -1475,14 +1475,14 @@ html:not([data-lfs-disabled]) .cg-wrap:has(cg-board[data-lfs-move-preview-active
   opacity: 0 !important;
 }
 
-html[data-lfs-zen-mode] body #lfs-pv-preview,
-html[data-lfs-zen-mode] body #lfs-pv-preview *,
-html[data-lfs-zen-mode] body #lfs-move-preview,
-html[data-lfs-zen-mode] body #lfs-move-preview *,
-html[data-lfs-zen-mode] body #lfs-move-preview-drag,
-html[data-lfs-zen-mode] body #lfs-move-preview-drag *,
-html[data-lfs-zen-mode] body #lfs-move-promotion-choice,
-html[data-lfs-zen-mode] body #lfs-move-promotion-choice * {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] body #lfs-pv-preview,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] body #lfs-pv-preview *,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] body #lfs-move-preview,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] body #lfs-move-preview *,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] body #lfs-move-preview-drag,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] body #lfs-move-preview-drag *,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] body #lfs-move-promotion-choice,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] body #lfs-move-promotion-choice * {
   visibility: visible !important;
 }
 
@@ -1508,7 +1508,7 @@ html:not([data-lfs-disabled]) #lfs-pv-preview > piece.lfs-pv-piece {
 }
 
 /* Translation creates a stacking context; keep it above the page mix layer. */
-html[data-lfs-zen-mode] body [data-lfs-zen-board] {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] body [data-lfs-zen-board] {
   z-index: 2147483647 !important;
 }
 
@@ -1526,8 +1526,8 @@ html:not([data-lfs-disabled]) #promotion-choice[data-lfs-board-promotion-anchor]
   translate: none !important;
 }
 
-html[data-lfs-zen-mode] body :is(button, a[href], input, select, textarea, [role="button"]),
-html[data-lfs-zen-mode] [data-lfs-zen-board] :is(button, a[href], input, select, textarea, [role="button"]) {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] body :is(button, a[href], input, select, textarea, [role="button"]),
+html:not([data-lfs-disabled])[data-lfs-zen-mode] [data-lfs-zen-board] :is(button, a[href], input, select, textarea, [role="button"]) {
   visibility: hidden !important;
 }
 
@@ -2310,13 +2310,13 @@ html:not([data-lfs-disabled])[data-lfs-rund-comic] .is2d .cg-wrap cg-board piece
   color: oklch(0.999999993473546 0.000000037273996 89.875563095902) !important;
 }
 
-html[data-lfs-zen-mode] #lfs-analysis-toolbar,
-html[data-lfs-zen-mode] #lfs-zen-toggle {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] #lfs-analysis-toolbar,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] #lfs-zen-toggle {
   opacity: 0.25 !important;
 }
 
-html[data-lfs-zen-mode] #lfs-analysis-toolbar:hover,
-html[data-lfs-zen-mode] #lfs-zen-toggle:hover {
+html:not([data-lfs-disabled])[data-lfs-zen-mode] #lfs-analysis-toolbar:hover,
+html:not([data-lfs-disabled])[data-lfs-zen-mode] #lfs-zen-toggle:hover {
   opacity: 1 !important;
 }
 
@@ -2624,3 +2624,45 @@ html:not(.light) #lfs-analysis-toolbar input[type="checkbox"][role="switch"]:foc
 .lfs-favorite-star:focus-visible { outline: 2px solid var(--c-primary, oklch(0.621819458576841 0.155684874547398 131.916927625873)); outline-offset: 1px; }
 .lfs-favorites-matrix { }
 .lfs-favorites-matrix.is-dragging { }
+
+/* Deaktiviert: Lichess komplett vanilla, alle Plugin-Elemente ausblenden. */
+html[data-lfs-disabled] #lfs-analysis-toolbar,
+html[data-lfs-disabled] #lfs-zen-toggle,
+html[data-lfs-disabled] #lfs-zen-background,
+html[data-lfs-disabled] #lfs-zen-clock-overlay,
+html[data-lfs-disabled] #lfs-pv-preview,
+html[data-lfs-disabled] #lfs-pv-preview *,
+html[data-lfs-disabled] #lfs-move-preview,
+html[data-lfs-disabled] #lfs-move-preview *,
+html[data-lfs-disabled] #lfs-move-preview-drag,
+html[data-lfs-disabled] #lfs-move-preview-drag *,
+html[data-lfs-disabled] #lfs-move-preview-mix,
+html[data-lfs-disabled] #lfs-move-preview-mix *,
+html[data-lfs-disabled] #lfs-move-promotion-choice,
+html[data-lfs-disabled] #lfs-puzzle-playlist-toolbar,
+html[data-lfs-disabled] #lfs-puzzle-playlist-toolbar *,
+html[data-lfs-disabled] .lfs-playlist-card,
+html[data-lfs-disabled] .lfs-playlist-page,
+html[data-lfs-disabled] #lfs-puzzle-favorites-panel,
+html[data-lfs-disabled] .lfs-favorites-card,
+html[data-lfs-disabled] #lfs-blunder-page,
+html[data-lfs-disabled] .lfs-blunder-toolbar,
+html[data-lfs-disabled] .lfs-favorites-context-menu,
+html[data-lfs-disabled] .lfs-favorites-tooltip,
+html[data-lfs-disabled] .lfs-drag-ghost,
+html[data-lfs-disabled] .lfs-drag-placeholder,
+html[data-lfs-disabled] [data-lfs-favorite-star] {
+  display: none !important;
+}
+
+html[data-lfs-disabled] [data-lfs-board-layout] {
+  padding-block-start: 0 !important;
+}
+
+html[data-lfs-disabled] .round__app[data-lfs-normal-fit] {
+  height: auto !important;
+}
+
+html[data-lfs-disabled] .round__side[data-lfs-normal-fit] {
+  translate: none !important;
+}

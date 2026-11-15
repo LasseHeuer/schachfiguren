@@ -4,11 +4,11 @@
 
   const graphCanvas = canvas => canvas.id === "acpl-chart" || canvas.id === "movetimes-chart"
     || canvas.matches?.("canvas.study__server-eval");
-  const enabled = () => !document.documentElement?.hasAttribute("data-lfs-graph-colors-disabled");
+  const enabled = () => !document.documentElement?.hasAttribute("data-lfs-disabled") && !document.documentElement?.hasAttribute("data-lfs-graph-colors-disabled");
   let cachedRootColors = null;
   let cachedCurveColor = null;
   const rootColors = () => {
-    const disabled = document.documentElement?.hasAttribute("data-lfs-graph-colors-disabled");
+    const disabled = document.documentElement?.hasAttribute("data-lfs-disabled") || document.documentElement?.hasAttribute("data-lfs-graph-colors-disabled");
     if (cachedRootColors && cachedRootColors.disabled === disabled) return cachedRootColors;
     const rootStyle = getComputedStyle(document.documentElement);
     cachedRootColors = {

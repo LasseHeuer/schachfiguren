@@ -22,6 +22,7 @@
   let autoSyncStarted = false;
   let message = "";
   let scheduled = false;
+  let pluginEnabled = true;
   let exerciseState = "loading";
   let refreshTimer;
 
@@ -507,7 +508,25 @@
       ? scheduler.scheduleEase(entry, rating, Date.now(), ratingMaxPosition) : entry) }));
   }
 
+  function teardown() {
+    lobby?.querySelectorAll("[data-lfs-blunder-hidden]").forEach(element => element.removeAttribute("data-lfs-blunder-hidden"));
+    page?.remove();
+    page = null;
+    lobby = null;
+    toolbar?.remove();
+    toolbar = null;
+    clearTimeout(refreshTimer);
+    refreshTimer = null;
+    if (location.hash === "#blunder-list") history.replaceState(null, "", location.pathname + location.search);
+    [document.documentElement].forEach(root => root.removeAttribute("data-lfs-blunder-training"));
+    document.querySelectorAll("[data-lfs-blunder-training]").forEach(element => element.removeAttribute("data-lfs-blunder-training"));
+  }
+
   function render() {
+    if (!pluginEnabled) {
+      teardown();
+      return;
+    }
     const nextLobby = location.pathname === "/" && location.hash === "#blunder-list" ? document.querySelector("main.lobby") : null;
     if (lobby && lobby !== nextLobby) {
       lobby.querySelectorAll("[data-lfs-blunder-hidden]").forEach(element => element.removeAttribute("data-lfs-blunder-hidden"));
@@ -556,7 +575,8 @@
     renderToolbar();
   });
   document.addEventListener("lfs-blunder-open", openBlunders);
-  chrome.storage.local.get([storageKey, ratingMaxPositionSetting], stored => {
+  chrome.storage.local.get([storageKey, ratingMaxPositionSetting, "enabled"], stored => {
+    pluginEnabled = stored.enabled !== false;
     ratingMaxPosition = settings.normalize({ [ratingMaxPositionSetting]: stored[ratingMaxPositionSetting] })[ratingMaxPositionSetting];
     const storedData = stored[storageKey];
     data = normalize(storedData);
@@ -573,6 +593,10 @@
   });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
+    if (Object.hasOwn(changes, "enabled")) {
+      pluginEnabled = changes.enabled.newValue !== false;
+      render();
+    }
     const dataChanged = Object.hasOwn(changes, storageKey);
     const ratingSettingChanged = Object.hasOwn(changes, ratingMaxPositionSetting);
     if (!dataChanged && !ratingSettingChanged) return;

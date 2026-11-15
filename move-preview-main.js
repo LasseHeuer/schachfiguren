@@ -5,6 +5,7 @@
   const mayHaveAnalysis = /^\/(?:analysis(?:\/|$)|(?:game\/)?[a-zA-Z0-9]{8}(?:\/|$))/.test(location.pathname);
 
   function publish() {
+    if (document.documentElement?.hasAttribute("data-lfs-disabled")) return;
     const analysis = window.site?.analysis;
     const fen = analysis?.node?.fen;
     if (!analysis?.asyncReady || !analysis.chessground || typeof fen !== "string") return;

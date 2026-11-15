@@ -6,6 +6,7 @@
   let playbackId = 0;
 
   const pageTransitionSounds = ["genericNotify"];
+  let pluginEnabled = true;
 
   function absoluteSoundUrl(url) {
     if (!url || /^(?:data:|chrome-extension:)/i.test(url)) return url;
@@ -124,6 +125,7 @@
     const originalMove = sound.move;
 
     sound.play = async function (name, volume = 1) {
+      if (!pluginEnabled || document.documentElement?.hasAttribute("data-lfs-disabled")) return originalPlay.call(this, name, volume);
       const setting = soundSettings[String(name).toLowerCase()];
       const multiplier = Math.max(0, Math.min(1, Number(setting?.volume ?? 100) / 100));
       const source = setting?.source || "website";
@@ -166,6 +168,7 @@
 
     if (typeof originalMove === "function") {
       sound.move = function (options) {
+        if (!pluginEnabled || document.documentElement?.hasAttribute("data-lfs-disabled")) return originalMove.call(this, options);
         if (this.theme !== "music" || options?.filter === "game") return originalMove.call(this, options);
         const eventNames = options?.name
           ? [options.name]
@@ -225,6 +228,7 @@
   window.addEventListener("message", event => {
     if (event.source !== window || event.origin !== location.origin) return;
     if (event.data?.channel === channel) {
+      pluginEnabled = event.data.enabled !== false;
       soundSettings = event.data.settings && typeof event.data.settings === "object" ? event.data.settings : {};
       customFiles = { ...customFiles, ...(event.data.files && typeof event.data.files === "object" ? event.data.files : {}) };
       if (window.site?.sound) preloadPageTransitionSounds(window.site.sound);

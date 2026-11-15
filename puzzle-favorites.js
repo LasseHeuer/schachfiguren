@@ -18,6 +18,7 @@
   let dragGhost = null;
   let dragOffset = { x: 0, y: 0 };
   let dragCleanup = null;
+  let pluginEnabled = true;
   let placeholderRaf = 0;
   let latestPointer = null;
   let lastDragPointer = null;
@@ -532,7 +533,22 @@
     favoritesPanel.replaceChildren(matrix);
   }
 
+  function teardown() {
+    clearDragState(false);
+    restoreHomePanel();
+    closeContextMenu();
+    contextMenu?.remove();
+    contextMenu = null;
+    tooltip?.remove();
+    tooltip = null;
+    document.querySelectorAll("[data-lfs-favorite-star]").forEach((star) => star.remove());
+  }
+
   function render() {
+    if (!pluginEnabled) {
+      teardown();
+      return;
+    }
     syncHomeFavoritesPanel();
     renderThemesStars();
   }
@@ -566,12 +582,18 @@
     });
   }
 
-  chrome.storage.local.get([storageKey], (stored) => {
+  chrome.storage.local.get([storageKey, "enabled"], (stored) => {
+    pluginEnabled = stored?.enabled !== false;
     favorites = normalizeFavorites(stored?.[storageKey]);
     render();
   });
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== "local" || !Object.hasOwn(changes, storageKey)) return;
+    if (area !== "local") return;
+    if (Object.hasOwn(changes, "enabled")) {
+      pluginEnabled = changes.enabled.newValue !== false;
+      render();
+    }
+    if (!Object.hasOwn(changes, storageKey)) return;
     favorites = normalizeFavorites(changes[storageKey].newValue);
     render();
   });

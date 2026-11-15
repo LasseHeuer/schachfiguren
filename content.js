@@ -124,6 +124,7 @@
     if (event.source !== window || event.origin !== location.origin) return;
     const message = event.data;
     if (!message || !["lfs-audio-play", "lfs-audio-preload"].includes(message.channel) || !isAllowedSoundUrl(message.url)) return;
+    if (document.documentElement?.hasAttribute("data-lfs-disabled")) return;
     if (message.channel === "lfs-audio-preload") {
       chrome.runtime.sendMessage({ type: "lfs-audio-preload", url: message.url }, () => void chrome.runtime.lastError);
       return;
@@ -377,7 +378,21 @@
     zenResizeSideElements = nextElements;
   }
 
+  function removeAnalysisToolbar() {
+    analysisToolbar?.remove();
+    zenToggle?.remove();
+    analysisToolbar = null;
+    zenToggle = null;
+    analysisEnabledInput = null;
+    analysisInputs.clear();
+    analysisRows.clear();
+  }
+
   function syncAnalysisToolbar() {
+    if (!settings.enabled) {
+      removeAnalysisToolbar();
+      return;
+    }
     if (!analysisToolbar) {
       analysisToolbar = document.createElement("aside");
       analysisToolbar.id = "lfs-analysis-toolbar";
@@ -467,6 +482,41 @@
   }
 
   function syncBoardLayout() {
+    if (!settings.enabled) {
+      document.documentElement.removeAttribute("data-lfs-zen-mode");
+      document.documentElement.removeAttribute("data-lfs-zen-restore-pending");
+      restorePlaylistZenMode = false;
+      zenRestoreLayoutSnapshot = undefined;
+      zenRestoreStableFrames = 0;
+      boardLayout?.removeAttribute("data-lfs-board-layout");
+      boardLayout = null;
+      if (zenBoard) {
+        zenBoard.removeAttribute("data-lfs-zen-board");
+        clearZenOffset(zenBoard);
+        zenBoard = null;
+      }
+      clearBoardSizeCap();
+      boardSizeCapBoard = null;
+      boardSizeCap = null;
+      zenOrientationObserver?.disconnect();
+      zenOrientationObserver = null;
+      zenOrientationBoard = null;
+      zenResizeObserver?.disconnect();
+      zenResizeObserver = null;
+      zenResizeTarget = null;
+      zenResizeBoard = null;
+      clearTimeout(zenBoardMissingTimer);
+      zenBoardMissingTimer = null;
+      cancelAnimationFrame(zenCenterFrame);
+      zenCenterFrame = 0;
+      cancelAnimationFrame(zenSideFrame);
+      zenSideFrame = 0;
+      document.documentElement.style.removeProperty("--lfs-board-ui-scale");
+      const rootChoice = document.querySelector("#promotion-choice");
+      clearBoardAnchoredPromotion(rootChoice);
+      boardAnchoredElementsRect = null;
+      return;
+    }
     const board = findMainBoard();
     const layout = board?.closest(".puzzle, .analyse, .round__app, .bot-game, .study__main, main") ?? null;
     const nextZenBoard = [
@@ -544,6 +594,7 @@
   }
 
   function setZenMode(enabled) {
+    if (!settings.enabled) return;
     if (!zenBoard) return;
     if (enabled) syncBoardSizeCap();
     const root = document.documentElement;
@@ -571,6 +622,7 @@
   }
 
   function handleZenShortcut(event) {
+    if (!settings.enabled) return;
     if (event.key?.toLowerCase() !== "z" || event.altKey || event.ctrlKey || event.metaKey) return;
     const target = event.target;
     if (target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName) || !zenBoard) return;
@@ -602,6 +654,12 @@
   }
 
   function syncNormalRoundLayout(waitForReflow = false) {
+    if (!settings.enabled) {
+      clearNormalRoundLayout();
+      clearTimeout(normalRoundLayoutTimer);
+      normalRoundLayoutTimer = null;
+      return;
+    }
     if (document.documentElement.hasAttribute("data-lfs-zen-mode") || normalRoundLayoutTimer) return;
     cancelAnimationFrame(normalRoundFrame);
     const measureAfterFrame = () => {
@@ -1076,6 +1134,16 @@
   }
 
   function syncZenClockOverlay(clocks, boardRect, analysis = null) {
+    if (!settings.enabled) {
+      if (zenClockOverlay) {
+        zenClockOverlay.removeAttribute("data-active");
+        for (const side of ["top", "bottom"]) zenClockRows?.[side]?.row && (zenClockRows[side].row.hidden = true);
+        if (zenPuzzleOutline) zenPuzzleOutline.hidden = true;
+      }
+      zenClockSources = { top: null, bottom: null };
+      cancelAnimationFrame(zenClockProgressFrame);
+      return false;
+    }
     const isPuzzle = !analysis && !clocks.length && Boolean(zenBoard?.closest(".puzzle"));
     const zenMode = document.documentElement.hasAttribute("data-lfs-zen-mode");
     if (!boardRect?.width || !boardRect.height || (!clocks.length && !analysis && !(isPuzzle && zenMode))) {
@@ -1173,7 +1241,7 @@
   }
 
   function syncZenSideElements() {
-    if (!zenBoard || !document.documentElement.hasAttribute("data-lfs-zen-mode")) return;
+    if (!settings.enabled || !zenBoard || !document.documentElement.hasAttribute("data-lfs-zen-mode")) return;
     const board = zenBoard.querySelector("cg-board");
     if (!board) return;
     const root = zenBoard.closest(".round__app, .analyse__board, .analyse, .bot-game, .puzzle, .study__main, .study, main") ?? zenBoard.parentElement;
@@ -1793,6 +1861,28 @@
     if (!root) return;
 
     root.toggleAttribute("data-lfs-disabled", !settings.enabled);
+    if (!settings.enabled) {
+      root.removeAttribute("data-lfs-zen-mode");
+      root.removeAttribute("data-lfs-zen-restore-pending");
+      restorePlaylistZenMode = false;
+      syncSoundSettings();
+      globalThis.LichessLastMoveLine?.update(settings);
+      globalThis.LichessBoardCursor?.update(settings);
+      globalThis.LichessThreatCoding?.update({ ...settings, threatColoringEnabled: false, selectedPieceWedgeEnabled: false, threatenedPieceOutlineEnabled: false, pinnedPieceOutlineEnabled: false, kingMovementFieldsEnabled: false, defenseCirclesEnabled: false, highlightCascadesEnabled: false, threatCenterOutlineEnabled: false });
+      globalThis.LichessKingMovementFields?.update({ ...settings, kingMovementFieldsEnabled: false });
+      globalThis.LichessPieceBounce?.update(settings);
+      globalThis.LichessMoveAnimation?.update(settings);
+      globalThis.LichessSelectedPieceWedge?.update({ ...settings, selectedPieceWedgeEnabled: false });
+      globalThis.LichessMovePreview?.update(settings);
+      root.toggleAttribute("data-lfs-ready", true);
+      syncAnalysisToolbar();
+      syncBoardLayout();
+      syncNormalRoundLayout();
+      schedulePvPreviewSync();
+      queuePlayTimeUpdate();
+      scheduleZenClockUpdate();
+      return;
+    }
     root.toggleAttribute("data-lfs-square-move-dots", settings.squareMoveDots);
     root.toggleAttribute("data-lfs-move-outline-mode", settings.moveIndicatorMode === "outline");
     root.toggleAttribute("data-lfs-graph-colors-disabled", !settings.analysisGraphColors);
@@ -2108,6 +2198,7 @@
       const fileKeys = pendingNames.map(name => `lfsCustomSound:${name}`);
       const sendSettings = files => window.postMessage({
         channel: "lfs-sound-settings",
+        enabled: settings.enabled,
         settings: soundSettings,
         files: Object.fromEntries(pendingNames.flatMap(name => {
           const fileKey = `lfsCustomSound:${name}`;

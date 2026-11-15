@@ -26,6 +26,11 @@
 
   function prepare() {
     if (ctrl || !item) return;
+    if (document.documentElement?.hasAttribute("data-lfs-disabled")) {
+      report("error");
+      observer.disconnect();
+      return;
+    }
     const analysis = window.site?.analysis;
     if (!analysis?.asyncReady || !analysis.chessground) return;
     if (analysis.ongoing || analysis.data.game.id !== gameId) {
