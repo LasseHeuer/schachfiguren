@@ -29,6 +29,12 @@
   let zenToolbarFrame;
   let dueRefreshTimer;
   let dueRefreshAt;
+  let homeTickTimer;
+  let pieceSettings = settings.normalize({});
+  const timelinePieceElements = new Map();
+  const timelineStartPx = 40;
+  let timelineWindowHours = 6;
+  let timelineZoomFrame = 0;
 
   function normalizePlaylist(value) {
     const items = [];
@@ -177,10 +183,23 @@
     return button;
   }
 
+  function clearHomeTick() {
+    if (homeTickTimer !== null) {
+      clearInterval(homeTickTimer);
+      homeTickTimer = null;
+    }
+    if (timelineZoomFrame !== 0) {
+      cancelAnimationFrame(timelineZoomFrame);
+      timelineZoomFrame = 0;
+    }
+    timelinePieceElements.clear();
+  }
+
   function restoreHomeSide() {
     clearTimeout(dueRefreshTimer);
     dueRefreshTimer = null;
     dueRefreshAt = null;
+    clearHomeTick();
     homePanel?.remove();
     homePanel = null;
     homeSide?.querySelectorAll("[data-lfs-playlist-hidden]").forEach(element => {
@@ -252,21 +271,197 @@
     renderPlaylistPage();
   }
 
+  function timelineLetter(item) {
+    if (item.state === "learning") return "b";
+    if (item.state === "review" && item.reps < 3) return "r";
+    if (item.state === "review") return "q";
+    return "b";
+  }
+
+  function pieceAssetUrl(item) {
+    return chrome.runtime.getURL(settings.getPieceAsset(pieceSettings, "w", timelineLetter(item)));
+  }
+
+  function nextDueProgress(now) {
+    const future = playlist.items
+      .filter(item => item.state !== "new" && item.dueAt > now)
+      .sort((a, b) => a.dueAt - b.dueAt);
+    const next = future[0];
+    if (!next) return 1;
+    const last = next.lastReviewedAt;
+    if (!Number.isFinite(last) || last >= next.dueAt) return 1;
+    return Math.max(0, Math.min(1, (next.dueAt - now) / (next.dueAt - last)));
+  }
+
+  function formatWindow(hours) {
+    const minutes = Math.round(hours * 60);
+    if (minutes < 60) return `${minutes} Min.`;
+    return `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 }).format(hours)} Std.`;
+  }
+
+  function updateHomeTimeline(now) {
+    const wrapper = homePanel?.querySelector(".lfs-playlist-primary-wrap");
+    const timeline = homePanel?.querySelector(".lfs-playlist-timeline");
+    if (!wrapper || !timeline) return;
+    const label = `Rätsel-Playlist (${dueItems(now).length})`;
+    timeline.setAttribute("aria-label", label);
+    const due = dueItems(now).length > 0;
+    wrapper.dataset.due = String(due);
+    const ring = due ? 1 : nextDueProgress(now);
+    wrapper.style.setProperty("--lfs-home-ring", `${Math.round(ring * 100)}%`);
+    const dueLeft = playlist.items
+      .filter(item => item.state === "new" || item.dueAt <= now)
+      .sort((a, b) => a.dueAt - b.dueAt);
+    const dueCount = dueLeft.length;
+    const dueCountElement = timeline.querySelector(".lfs-playlist-timeline-due-count");
+    if (dueCountElement && dueCountElement.textContent !== String(dueCount)) {
+      dueCountElement.textContent = String(dueCount);
+    }
+    timeline.dataset.windowHours = String(timelineWindowHours);
+    timeline.setAttribute("aria-label", `${label}, Rad zoomen, Zeitfenster ${formatWindow(timelineWindowHours)}`);
+    const legend = homePanel.querySelector(".lfs-playlist-timeline-legend");
+    if (legend) {
+      const legendEnd = legend.querySelector(".lfs-playlist-timeline-legend-end");
+      if (legendEnd) legendEnd.textContent = `+${formatWindow(timelineWindowHours)}`;
+      const tickKey = String(timelineWindowHours);
+      if (legend.dataset.tickWindow !== tickKey) {
+        legend.dataset.tickWindow = tickKey;
+        const ticks = legend.querySelector(".lfs-playlist-timeline-ticks");
+        if (ticks) {
+          ticks.replaceChildren();
+          const stepHours = timelineWindowHours <= 2 ? 1 / 6 : 1;
+          for (let hours = 0; hours <= timelineWindowHours + 0.001; hours += stepHours) {
+            const tick = document.createElement("span");
+            const isHour = Math.abs(hours - Math.round(hours)) < 0.001;
+            const isStart = hours < 0.001;
+            tick.className = isStart ? "lfs-playlist-timeline-tick lfs-playlist-timeline-tick-hour lfs-playlist-timeline-tick-start"
+              : isHour ? "lfs-playlist-timeline-tick lfs-playlist-timeline-tick-hour" : "lfs-playlist-timeline-tick";
+            tick.style.left = `${Math.min((hours / timelineWindowHours) * 100, 100)}%`;
+            ticks.append(tick);
+          }
+        }
+      }
+    }
+    const windowMs = timelineWindowHours * 60 * 60 * 1000;
+    const future = playlist.items
+      .filter(item => item.state !== "new" && item.dueAt > now && item.dueAt <= now + windowMs)
+      .sort((a, b) => a.dueAt - b.dueAt);
+    const desiredIds = new Set(future.map(item => item.id));
+    for (const [id, element] of [...timelinePieceElements.entries()]) {
+      if (desiredIds.has(id)) continue;
+      element.remove();
+      timelinePieceElements.delete(id);
+    }
+    const width = timeline.clientWidth || 240;
+    const baseSize = 18;
+    const trackHeight = 30;
+    const minSize = 6;
+    const clusterGap = (baseSize / Math.max(width, 1)) * 100;
+    const clusters = [];
+    for (const item of future) {
+      const xPx = timelineStartPx + ((item.dueAt - now) / windowMs) * Math.max(width - timelineStartPx, 1);
+      const xPercent = (xPx / Math.max(width, 1)) * 100;
+      const last = clusters.at(-1);
+      if (last && Math.abs(xPercent - last.xPercent) < clusterGap) {
+        last.items.push({ item, xPercent });
+        last.xPercent = last.items.reduce((sum, entry) => sum + entry.xPercent, 0) / last.items.length;
+      } else {
+        clusters.push({ xPercent, items: [{ item, xPercent }] });
+      }
+    }
+    const renderedIds = new Set();
+    for (const cluster of clusters) {
+      const count = cluster.items.length;
+      const fitSize = Math.floor(trackHeight / count);
+      let size = Math.min(baseSize, fitSize);
+      if (size < minSize) size = minSize;
+      const visible = Math.min(count, Math.floor(trackHeight / size));
+      cluster.items.slice(0, visible).forEach((entry, index) => {
+        renderedIds.add(entry.item.id);
+        let element = timelinePieceElements.get(entry.item.id);
+        if (!element) {
+          element = document.createElement("img");
+          element.className = "lfs-playlist-timeline-piece";
+          element.dataset.id = entry.item.id;
+          element.alt = "";
+          element.setAttribute("aria-hidden", "true");
+          timeline.append(element);
+          timelinePieceElements.set(entry.item.id, element);
+        }
+        element.style.left = `${cluster.xPercent}%`;
+        element.style.bottom = `${index * size}px`;
+        element.style.width = `${size}px`;
+        element.style.height = `${size}px`;
+        const url = pieceAssetUrl(entry.item);
+        if (element.dataset.asset !== url) {
+          element.src = url;
+          element.dataset.asset = url;
+        }
+      });
+    }
+    for (const [id, element] of [...timelinePieceElements.entries()]) {
+      if (renderedIds.has(id)) continue;
+      element.remove();
+      timelinePieceElements.delete(id);
+    }
+  }
+
+  function startHomeTick() {
+    if (homeTickTimer !== null) return;
+    homeTickTimer = window.setInterval(() => {
+      if (!homePanel) return;
+      updateHomeTimeline(Date.now());
+    }, 1000);
+  }
+
   function renderHomePanel() {
     if (!homePanel) return;
     const now = Date.now();
     scheduleDueRefresh(now);
     const label = `Rätsel-Playlist (${dueItems(now).length})`;
     if (homePanel.dataset.rendered) {
-      const openButton = homePanel.querySelector('[data-action="open"]');
-      if (openButton) openButton.textContent = label;
+      updateHomeTimeline(now);
+      startHomeTick();
       return;
     }
     homePanel.dataset.rendered = "true";
+    const wrapper = document.createElement("div");
+    wrapper.className = "lfs-playlist-primary-wrap";
+    const timeline = makeButton(label, "open", "lfs-playlist-primary lfs-playlist-timeline");
+    timeline.textContent = "";
+    timeline.setAttribute("aria-label", label);
+    const dueCountElement = document.createElement("span");
+    dueCountElement.className = "lfs-playlist-timeline-due-count";
+    dueCountElement.setAttribute("aria-hidden", "true");
+    timeline.append(dueCountElement);
+    timeline.addEventListener("wheel", event => {
+      event.preventDefault();
+      const deltaPx = event.deltaMode === 1 ? event.deltaY * 33
+        : event.deltaMode === 2 ? event.deltaY * window.innerHeight
+          : event.deltaY;
+      const factor = Math.exp(deltaPx * 0.0012);
+      timelineWindowHours = Math.min(48, Math.max(0.5, timelineWindowHours * factor));
+      if (timelineZoomFrame !== 0) return;
+      timelineZoomFrame = window.requestAnimationFrame(() => {
+        timelineZoomFrame = 0;
+        updateHomeTimeline(Date.now());
+      });
+    }, { passive: false });
+    wrapper.append(timeline);
+    const legend = document.createElement("div");
+    legend.className = "lfs-playlist-timeline-legend";
+    legend.setAttribute("aria-hidden", "true");
+    const ticks = document.createElement("span");
+    ticks.className = "lfs-playlist-timeline-ticks";
+    const end = document.createElement("span");
+    end.className = "lfs-playlist-timeline-legend-end";
+    legend.append(ticks, end);
     homePanel.replaceChildren(
-      makeButton(label, "open", "lfs-playlist-primary"),
-      makeButton("Blunder-Liste", "blunders"),
+      wrapper,
+      legend,
     );
+    updateHomeTimeline(now);
+    startHomeTick();
   }
 
   function renderPlaylistPage() {
@@ -370,8 +565,6 @@
         const ready = dueItems();
         if (ready.length) startQueue(ready.map(item => item.id));
         else location.hash = "puzzle-playlist";
-      } else if (control?.dataset.action === "blunders") {
-        document.dispatchEvent(new CustomEvent("lfs-blunder-open"));
       }
     });
   }
@@ -663,8 +856,16 @@
     });
   }
 
-  chrome.storage.local.get([storageKey, ratingMaxPositionSetting, "enabled"], stored => {
+  function normalizePieceSettings(values) {
+    const partial = {};
+    if (values?.pieceSet !== undefined) partial.pieceSet = values.pieceSet;
+    if (values?.complexPawn !== undefined) partial.complexPawn = values.complexPawn;
+    return settings.normalize(partial);
+  }
+
+  chrome.storage.local.get([storageKey, ratingMaxPositionSetting, "enabled", "pieceSet", "complexPawn"], stored => {
     pluginEnabled = stored.enabled !== false;
+    pieceSettings = normalizePieceSettings(stored);
     ratingMaxPosition = settings.normalize({ [ratingMaxPositionSetting]: stored[ratingMaxPositionSetting] })[ratingMaxPositionSetting];
     const storedPlaylist = stored[storageKey];
     playlist = normalizePlaylist(storedPlaylist);
@@ -689,6 +890,14 @@
       ratingMaxPosition = settings.normalize({ [ratingMaxPositionSetting]: changes[ratingMaxPositionSetting].newValue })[ratingMaxPositionSetting];
       changed = true;
     }
+    if (Object.hasOwn(changes, "pieceSet") || Object.hasOwn(changes, "complexPawn")) {
+      pieceSettings = normalizePieceSettings({
+        pieceSet: changes.pieceSet?.newValue,
+        complexPawn: changes.complexPawn?.newValue,
+      });
+      for (const element of timelinePieceElements.values()) delete element.dataset.asset;
+      changed = true;
+    }
     if (!changed) return;
     render();
   });
@@ -705,4 +914,10 @@
   document.addEventListener("scroll", scheduleZenToolbarPosition, true);
   document.addEventListener("lfs-board-layout", scheduleZenToolbarPosition);
   document.addEventListener("click", handleNativePuzzleContinue, true);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && homePanel) updateHomeTimeline(Date.now());
+  });
+  window.addEventListener("focus", () => {
+    if (homePanel) updateHomeTimeline(Date.now());
+  });
 })();
