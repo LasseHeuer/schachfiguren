@@ -154,6 +154,7 @@
     moveAnimationCurve: [0.2514824867248535, -17.537492682009336, 0.7542110624767485, -85.1984053942622],
     selectedPieceWedgeEnabled: false,
     selectedPieceWedgeOnlySelected: false,
+    wedgeShowAllForksEnabled: false,
     wedgeBasePiecePreviewEnabled: true,
     kingMovementFieldsEnabled: true,
     defenseCirclesEnabled: true,
@@ -591,6 +592,7 @@
       "pieceBounceLoop",
       "selectedPieceWedgeEnabled",
       "selectedPieceWedgeOnlySelected",
+      "wedgeShowAllForksEnabled",
       "wedgeBasePiecePreviewEnabled",
       "kingMovementFieldsEnabled",
 

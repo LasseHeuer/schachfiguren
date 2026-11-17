@@ -1420,6 +1420,7 @@
       if (!attacks.length) continue;
       const officers = attacks.filter(target => pieceValues[simulated[target.row][target.col].type] >= 3);
       const fork = officers.length >= 2;
+      if (options.forkOnly && !fork) continue;
       const givesCheckAfterCapture = Boolean(destinationPiece)
         && attacks.some(target => simulated[target.row][target.col].type === "king");
       if (!fork && attacks.some(target => currentTargets.has(`${target.row},${target.col}`))) continue;
@@ -1447,9 +1448,10 @@
         }
       }
       if (kingInCheck) continue;
-      if (!givesCheckAfterCapture
+      // Beim reinen Gabel-Modus zählt jedes Feld mit zwei Angriffen, auch wenn das Zielfeld angegriffen wird.
+      if (!options.forkOnly && !givesCheckAfterCapture
         && ((attackers > 0 && attackerValue >= minAttackerValue) || attackers > defenders)) continue;
-      if (piece.type !== "king"
+      if (!options.forkOnly && piece.type !== "king"
         && getBestExchangeGain(simulated, destination, piece.color === "w" ? "b" : "w", blackOrientation) > 0) continue;
       candidates.push({
         source: destination,
@@ -1463,9 +1465,13 @@
     // Prefer forks, then valuable targets and shorter moves, as in the visualization.
     candidates.sort((a, b) => Number(b.fork) - Number(a.fork) || b.bestValue - a.bestValue || a.distance - b.distance);
     const picked = [];
+    const perPieceCount = options.forkOnly ? candidates.length : (options.wedgePotentialPerPieceCount ?? 1);
     for (const candidate of candidates) {
-      if (picked.length >= (options.wedgePotentialPerPieceCount ?? 1)) break;
+      if (picked.length >= perPieceCount) break;
       picked.push(candidate);
+    }
+    if (options.forkOnly) {
+      return picked.flatMap(candidate => candidate.targets.map(target => ({ source: candidate.source, target, type: piece.type })));
     }
     const targetClass = value => value >= 100 ? 4 : value >= 9 ? 3 : value >= 5 ? 2 : 1;
     const highestClass = Math.max(0, ...picked.map(candidate => targetClass(candidate.bestValue)));
@@ -1496,6 +1502,28 @@
       }
     }
     return [...wedgesByColor.w, ...wedgesByColor.b];
+  }
+
+  // Alle Gabeln aller Figuren beider Seiten: Zielfelder, von denen die Figur nach dem Zug zwei Figuren ab Wert 3 angreift.
+  function getAllForkWedges(position, blackOrientation) {
+    const wedges = [];
+    const seen = new Set();
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const piece = position[row][col];
+        if (!piece) continue;
+        const source = { row, col };
+        const destinations = getCandidateMoves(position, source, piece, blackOrientation);
+        const forks = getPotentialWedges(position, source, destinations, blackOrientation, { forkOnly: true });
+        for (const wedge of forks) {
+          const key = `${wedge.source.row},${wedge.source.col}:${wedge.target.row},${wedge.target.col}:${piece.color}:${wedge.type}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          wedges.push({ ...wedge, color: piece.color });
+        }
+      }
+    }
+    return wedges;
   }
 
   // Shifts both wedge ends along the wedge direction, measured as a percentage of the field width.
@@ -4185,43 +4213,49 @@
       ? readDragPreview({ ...dragPreview, position: dragPreview.basePosition, legal: false })
       : parsed;
     const wedgeSelectedPiece = wedgeParsed.selected && wedgeParsed.position[wedgeParsed.selected.row]?.[wedgeParsed.selected.col];
-    const sources = !settings.selectedPieceWedgeEnabled
-      ? []
-      : settings.selectedPieceWedgeOnlySelected
-        ? wedgeSelectedPiece ? [wedgeParsed.selected] : []
-        : wedgeParsed.position.flatMap((row, rowIndex) => row.flatMap((piece, colIndex) => piece ? [{ row: rowIndex, col: colIndex }] : []));
-    const showUnselectedPotentials = settings.selectedPieceWedgeEnabled
-      && !settings.selectedPieceWedgeOnlySelected
-      && !wedgeParsed.selected;
     const wedges = [];
-    let legalDestinations = null;
-    for (const source of sources) {
-      const piece = wedgeParsed.position[source.row][source.col];
-      const directTargets = getAttackedPieces(wedgeParsed.position, source, wedgeParsed.blackOrientation)
-        .filter(target => {
-          const targetPiece = wedgeParsed.position[target.row][target.col];
-          if (!targetPiece || targetPiece.color === piece.color) return false;
-          if (targetPiece.type === "king") {
-            return pieceValues[targetPiece.type] > pieceValues[piece.type]
-              && getBestExchangeGain(wedgeParsed.position, source, piece.color === "w" ? "b" : "w", wedgeParsed.blackOrientation) === 0;
-          }
-          return getCaptureGain(wedgeParsed.position, source, target, wedgeParsed.blackOrientation) > 0;
-        });
-      wedges.push(...directTargets.map(target => ({ source, target, color: piece.color, type: piece.type })));
+    // Alle Gabeln: nur Gabeln aller Figuren, ohne Begrenzung, ohne Rücksicht auf „Nur ausgewählte Figur“.
+    const showAllForks = settings.selectedPieceWedgeEnabled && settings.wedgeShowAllForksEnabled;
+    if (showAllForks) {
+      wedges.push(...getAllForkWedges(wedgeParsed.position, wedgeParsed.blackOrientation));
+    } else {
+      const sources = !settings.selectedPieceWedgeEnabled
+        ? []
+        : settings.selectedPieceWedgeOnlySelected
+          ? wedgeSelectedPiece ? [wedgeParsed.selected] : []
+          : wedgeParsed.position.flatMap((row, rowIndex) => row.flatMap((piece, colIndex) => piece ? [{ row: rowIndex, col: colIndex }] : []));
+      const showUnselectedPotentials = settings.selectedPieceWedgeEnabled
+        && !settings.selectedPieceWedgeOnlySelected
+        && !wedgeParsed.selected;
+      let legalDestinations = null;
+      for (const source of sources) {
+        const piece = wedgeParsed.position[source.row][source.col];
+        const directTargets = getAttackedPieces(wedgeParsed.position, source, wedgeParsed.blackOrientation)
+          .filter(target => {
+            const targetPiece = wedgeParsed.position[target.row][target.col];
+            if (!targetPiece || targetPiece.color === piece.color) return false;
+            if (targetPiece.type === "king") {
+              return pieceValues[targetPiece.type] > pieceValues[piece.type]
+                && getBestExchangeGain(wedgeParsed.position, source, piece.color === "w" ? "b" : "w", wedgeParsed.blackOrientation) === 0;
+            }
+            return getCaptureGain(wedgeParsed.position, source, target, wedgeParsed.blackOrientation) > 0;
+          });
+        wedges.push(...directTargets.map(target => ({ source, target, color: piece.color, type: piece.type })));
 
-      if (showUnselectedPotentials) continue;
-      // Legal destinations from the board; while dragging on a board without them (setup mode), free fields are used.
-      legalDestinations ??= [...board.querySelectorAll(":scope > square.move-dest")]
-        .map(square => getScreenSquare(square, board)).filter(Boolean);
-      const canReuseLegalDestinations = settings.selectedPieceWedgeOnlySelected && (legalDestinations.length || !dragPreview);
-      const destinations = canReuseLegalDestinations
-        ? legalDestinations
-        : getCandidateMoves(wedgeParsed.position, source, piece, wedgeParsed.blackOrientation);
-      wedges.push(...getPotentialWedges(wedgeParsed.position, source, destinations, wedgeParsed.blackOrientation, settings)
-        .map(wedge => ({ ...wedge, color: piece.color })));
-    }
-    if (showUnselectedPotentials) {
-      wedges.push(...getUnselectedPotentialWedges(wedgeParsed.position, wedgeParsed.blackOrientation, settings));
+        if (showUnselectedPotentials) continue;
+        // Legal destinations from the board; while dragging on a board without them (setup mode), free fields are used.
+        legalDestinations ??= [...board.querySelectorAll(":scope > square.move-dest")]
+          .map(square => getScreenSquare(square, board)).filter(Boolean);
+        const canReuseLegalDestinations = settings.selectedPieceWedgeOnlySelected && (legalDestinations.length || !dragPreview);
+        const destinations = canReuseLegalDestinations
+          ? legalDestinations
+          : getCandidateMoves(wedgeParsed.position, source, piece, wedgeParsed.blackOrientation);
+        wedges.push(...getPotentialWedges(wedgeParsed.position, source, destinations, wedgeParsed.blackOrientation, settings)
+          .map(wedge => ({ ...wedge, color: piece.color })));
+      }
+      if (showUnselectedPotentials) {
+        wedges.push(...getUnselectedPotentialWedges(wedgeParsed.position, wedgeParsed.blackOrientation, settings));
+      }
     }
     // Suppress connections at animated destinations, but keep drag previews fully dynamic.
     const animatedSquares = new Set();

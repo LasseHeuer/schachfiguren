@@ -158,6 +158,7 @@
           <summary>Keile</summary>
           <label class="switch-setting"><span><strong>Keildarstellung aktivieren</strong><small>Angriffs- und Potenzial-Keile gemeinsam anzeigen.</small></span><input type="checkbox" data-setting="selectedPieceWedgeEnabled" role="switch"></label>
         <label class="switch-setting"><span><strong>Nur ausgewählte Figur</strong><small>Wenn aus, Keile aller Figuren; ohne Auswahl höchstens 3 Potenzial-Keile je Spieler.</small></span><input type="checkbox" data-setting="selectedPieceWedgeOnlySelected" role="switch"></label>
+          <label class="switch-setting" data-depends-on="selectedPieceWedgeEnabled"><span><strong>Alle Gabeln anzeigen</strong><small>Zeigt nur Gabeln aller Figuren: Zielfelder mit zwei Keilen auf Figuren ab Wert 3, ohne Begrenzung. Überstimmt „Nur ausgewählte Figur“.</small></span><input type="checkbox" data-setting="wedgeShowAllForksEnabled" role="switch"></label>
           <label class="switch-setting" data-depends-on="selectedPieceWedgeEnabled"><span><strong>Figur an Keilbasis</strong><small>Zeigt die Figur am Keilursprung in der Farbe ihrer Spielerseite.</small></span><input type="checkbox" data-setting="wedgeBasePiecePreviewEnabled" role="switch"></label>
           <div class="range-grid">
             <label class="range-setting" data-depends-on="selectedPieceWedgeEnabled"><span>Basisbreite (% der Feldbreite)</span><output data-value-for="wedgeBaseWidthPercent"></output><input type="range" min="1" max="50" step="0.1" data-setting="wedgeBaseWidthPercent"></label>

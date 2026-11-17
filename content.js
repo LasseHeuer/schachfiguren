@@ -172,6 +172,7 @@
     ["threatColoringEnabled", "Bedrohungsfarben"],
     ["selectedPieceWedgeEnabled", "Kandidatenzüge"],
     ["selectedPieceWedgeOnlySelected", "Keile nur für Auswahl", "selectedPieceWedgeEnabled"],
+    ["wedgeShowAllForksEnabled", "Alle Gabeln anzeigen", "selectedPieceWedgeEnabled"],
     ["wedgeBasePiecePreviewEnabled", "Figur an Keilbasis", "selectedPieceWedgeEnabled"],
     ["highlightCascadesEnabled", "Highlights"],
     ["attackHighlightEnabled", "Angriffs-Highlight", "highlightCascadesEnabled"],
