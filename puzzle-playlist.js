@@ -224,7 +224,7 @@
       homeSide.append(homePanel);
     }
     for (const child of homeSide.children) {
-      if (child.id !== homePanelId && child.id !== "lfs-puzzle-favorites-panel" && !child.hasAttribute("data-lfs-playlist-hidden")) {
+      if (child.id !== homePanelId && child.id !== "lfs-puzzle-favorites-panel" && child.id !== "lfs-study-favorites-panel" && !child.hasAttribute("data-lfs-playlist-hidden")) {
         child.dataset.lfsPlaylistHidden = "";
       }
     }
