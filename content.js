@@ -476,8 +476,14 @@
       document.documentElement.append(zenToggle, analysisToolbar);
     }
 
-    analysisEnabledInput.checked = settings.analysisEnabled;
-    for (const [key, input] of analysisInputs) input.checked = settings[key];
+    const autoDisabled = isAnalysisAutoDisabled();
+    analysisEnabledInput.checked = settings.analysisEnabled && !autoDisabled;
+    analysisEnabledInput.disabled = autoDisabled;
+    analysisEnabledInput.title = autoDisabled ? "Automatisch deaktiviert (Spiel gegen anderen Spieler)" : "";
+    for (const [key, input] of analysisInputs) {
+      input.checked = settings[key];
+      input.disabled = autoDisabled;
+    }
 
     for (const [key, { label, parentKey }] of analysisRows) label.hidden = Boolean(parentKey) && !settings[parentKey];
   }
@@ -1329,6 +1335,24 @@
     return false;
   }
 
+  function isHumanGame() {
+    if (typeof document.querySelector !== "function" || typeof document.querySelectorAll !== "function") return false;
+    if (document.querySelector(".bot-game, .bot-game__board")) return false;
+    if (!document.querySelector(".round__app")) return false;
+    // Beendetes Spiel: Ergebnis oder Rematch aktivieren die Analyse wieder.
+    if (document.querySelector(".rcontrols .rematch, .game__meta__result, .round__app .game-over")) return false;
+    // Nur laufende Spiele zeigen Aufgeben/Abbrechen-Steuerung.
+    if (!document.querySelector(".round__app .resign, .round__app .abort, .round__app .act-confirm")) return false;
+    return ![...document.querySelectorAll(".round__app .player")].some(player =>
+      player.classList.contains("bot") || player.querySelector(".bot, [data-bot]"));
+  }
+
+  function isAnalysisAutoDisabled() {
+    return Boolean(settings.analysisAutoDisableVsHumans && isHumanGame());
+  }
+
+  let lastAnalysisAutoDisabled = false;
+
   function hasPvAnimationAnalysis() {
     return settings.enabled && settings.analysisEnabled && (
       settings.kingMovementFieldsEnabled || settings.selectedPieceWedgeEnabled
@@ -1904,7 +1928,8 @@
     const boardShapePercent = settings.boardFieldShape === "round" ? settings.boardRoundPercent : settings.boardBevelPercent;
     root.toggleAttribute("data-lfs-board-bevel", settings.boardBevelEnabled && boardShapePercent > 0);
     root.toggleAttribute("data-lfs-rund-comic", settings.pieceSet === "rund_comic");
-    const analysisSettings = settings.analysisEnabled ? settings : {
+    lastAnalysisAutoDisabled = isAnalysisAutoDisabled();
+    const analysisSettings = settings.analysisEnabled && !lastAnalysisAutoDisabled ? settings : {
       ...settings,
       threatColoringEnabled: false,
       selectedPieceWedgeEnabled: false,
@@ -2300,6 +2325,7 @@
       if (zenMode) scheduleZenCenter();
       else syncNormalRoundLayout();
       scheduleZenClockUpdate();
+      if (isAnalysisAutoDisabled() !== lastAnalysisAutoDisabled) apply(document.documentElement);
     }
     if (records.some(isZenClockMutation)) scheduleZenClockUpdate();
     if (zenMode) {

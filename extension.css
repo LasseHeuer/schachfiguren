@@ -2611,6 +2611,11 @@ html:not([data-lfs-disabled])[data-lfs-zen-mode] #lfs-zen-toggle:hover {
   transform: translateX(12px);
 }
 
+#lfs-analysis-toolbar input[type="checkbox"][role="switch"]:disabled {
+  cursor: not-allowed !important;
+  opacity: 0.45 !important;
+}
+
 #lfs-analysis-toolbar input[type="checkbox"][role="switch"]:focus-visible {
   outline: 2px solid oklch(0.609000216706680 0.030232122404753 145.192036797732) !important;
   outline-offset: 2px !important;
@@ -2826,9 +2831,13 @@ html:not(.light) #lfs-analysis-toolbar input[type="checkbox"][role="switch"]:foc
 .lfs-game-favorites-list {
   display: grid;
   gap: 6px;
+  max-height: min(52dvh, 28rem);
   margin: 0;
   padding: 0;
   list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 .lfs-game-favorite-item {
   box-sizing: border-box;
@@ -2888,6 +2897,10 @@ html:not(.light) #lfs-analysis-toolbar input[type="checkbox"][role="switch"]:foc
 /* Lobby: Donate + Swag entfernen */
 html:not([data-lfs-disabled]) .lobby__support,
 html:not([data-lfs-disabled]) .lobby__support-link { display: none !important; }
+
+/* Lobby: Favoriten-Partien dürfen aus der Seitenleiste herausragen, sonst schneidet
+   Lichess' overflow:hidden der .lobby__side die letzte Karte unten ab. */
+html:not([data-lfs-disabled]) .lobby__side:has(.lfs-game-favorites-card) { overflow: visible !important; }
 
 /* Lobby: aktuelle Partie + Tagesrätsel in selber Spalte (unter den Start-Buttons) */
 .lfs-lobby-tvpuzzle {

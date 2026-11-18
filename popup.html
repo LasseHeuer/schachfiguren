@@ -142,6 +142,7 @@
       </section>
 
       <section class="panel threat-panel" id="panel-bedrohungen" role="tabpanel" aria-labelledby="tab-bedrohungen" data-panel="bedrohungen" hidden>
+        <label class="switch-setting threat-toggle"><span><strong>Automatisch deaktivieren</strong><small>Alle Analyseanzeigen aus bei Spielen gegen andere Spieler (nicht Computer), wieder an bei Spielende.</small></span><input type="checkbox" data-setting="analysisAutoDisableVsHumans" role="switch"></label>
         <label class="switch-setting threat-toggle"><span><strong>Bedrohungsfarben aktivieren</strong><small>Mischt Spielerfarbe in die bestehenden Brettfarben ein.</small></span><input type="checkbox" data-setting="threatColoringEnabled" role="switch"></label>
         <label class="select-setting" data-depends-on="threatColoringEnabled"><span>Mischmodus</span><select data-setting="threatBlendMode"><option value="oklab">Wahrnehmungsnah (Oklab)</option><option value="normal">Normal</option><option value="multiply">Multiplizieren</option><option value="screen">Negativ multiplizieren</option><option value="overlay">Overlay</option><option value="soft-light">Weiches Licht</option><option value="hard-light">Hartes Licht</option><option value="darken">Abdunkeln</option><option value="lighten">Aufhellen</option><option value="difference">Differenz</option></select></label>
         <div class="range-grid threat-range-grid" data-depends-on="threatColoringEnabled">
