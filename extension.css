@@ -2821,6 +2821,131 @@ html:not(.light) #lfs-analysis-toolbar input[type="checkbox"][role="switch"]:foc
 }
 .study__metadata .lfs-study-favorite-star { margin-left: 6px; }
 
+/* Favoriten Partien (gleiche Formatierung wie Favoriten Studien) */
+.lfs-game-favorites-card { }
+.lfs-game-favorites-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lfs-game-favorite-item {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  min-height: 2.4rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--c-bg-high, oklch(0.949119254399155 0.000000035377467 89.875562714212));
+  color: var(--c-font, oklch(0.321092509068037 0.000000011968401 89.875562741511));
+  cursor: grab;
+  touch-action: pan-y;
+}
+.lfs-game-favorite-item:active { cursor: grabbing; }
+.lfs-game-favorite-item:hover { filter: brightness(1.06); }
+.lfs-game-favorite-item.is-drag-source { display: none; }
+.lfs-game-favorite-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  line-height: 1.3;
+  color: var(--c-font, oklch(0.321092509068037 0.000000011968401 89.875562741511));
+  text-decoration: none;
+  cursor: pointer;
+}
+.lfs-game-favorite-link:hover { text-decoration: none; }
+.lfs-game-favorite-placeholder {
+  width: auto;
+  height: 2.4rem;
+}
+.lfs-game-favorite-ghost {
+  padding: 4px 8px !important;
+  font: 13px/1.4 system-ui, sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lfs-game-favorite-item:focus-visible,
+.lfs-game-favorite-link:focus-visible { outline: 2px solid var(--c-primary, oklch(0.621819458576841 0.155684874547398 131.916927625873)); outline-offset: 2px; }
+.now-playing .lfs-game-favorite-star,
+.game__meta .lfs-game-favorite-star,
+.relay-game .lfs-game-favorite-star,
+.relay-tour__header .lfs-game-favorite-star {
+  flex: none;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.game__meta .lfs-game-favorite-star { margin-left: 6px; }
+.relay-game .lfs-game-favorite-star { margin-left: auto; }
+.relay-tour__header .lfs-game-favorite-star { margin-left: 6px; }
+
+/* Lobby: Donate + Swag entfernen */
+html:not([data-lfs-disabled]) .lobby__support,
+html:not([data-lfs-disabled]) .lobby__support-link { display: none !important; }
+
+/* Lobby: aktuelle Partie + Tagesrätsel in selber Spalte (unter den Start-Buttons) */
+.lfs-lobby-tvpuzzle {
+  grid-area: puzzle;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+  min-height: 0;
+}
+.lfs-lobby-tvpuzzle > .lobby__tv,
+.lfs-lobby-tvpuzzle > .lobby__puzzle {
+  grid-area: auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Lobby: Spieleranzeige mit Abstand + Start-Buttons mit Abstand */
+.lobby__start {
+  gap: 0.5em;
+  flex-wrap: wrap;
+}
+.lobby__tv .mini-game {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lobby__tv .mini-game__player {
+  margin-block: 2px;
+  padding-inline: 6px;
+}
+.now-playing > a {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding-block: 4px;
+}
+.now-playing .meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-inline: 4px;
+}
+/* Multiboard-Bretter (Broadcast-Übersicht) nicht per Flex zerlegen */
+.study__multiboard .now-playing > a {
+  display: block;
+  gap: 0;
+  padding-block: 0;
+}
+.study__multiboard .now-playing .meta {
+  flex: none;
+  padding-inline: 0;
+}
+.game__meta__players {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 /* Studien: Chatfenster ausblenden */
 html:not([data-lfs-disabled]) .study__side section.mchat,
 html:not([data-lfs-disabled]) .study__side section.mchat + .vertical-resize,
@@ -2846,7 +2971,9 @@ html[data-lfs-disabled] .lfs-playlist-card,
 html[data-lfs-disabled] .lfs-playlist-page,
 html[data-lfs-disabled] #lfs-puzzle-favorites-panel,
 html[data-lfs-disabled] #lfs-study-favorites-panel,
+html[data-lfs-disabled] #lfs-game-favorites-panel,
 html[data-lfs-disabled] .lfs-study-favorites-card,
+html[data-lfs-disabled] .lfs-game-favorites-card,
 html[data-lfs-disabled] .lfs-favorites-card,
 html[data-lfs-disabled] #lfs-blunder-page,
 html[data-lfs-disabled] .lfs-blunder-toolbar,
@@ -2855,8 +2982,13 @@ html[data-lfs-disabled] .lfs-favorites-tooltip,
 html[data-lfs-disabled] .lfs-drag-ghost,
 html[data-lfs-disabled] .lfs-drag-placeholder,
 html[data-lfs-disabled] [data-lfs-favorite-star],
-html[data-lfs-disabled] [data-lfs-study-favorite-star] {
+html[data-lfs-disabled] [data-lfs-study-favorite-star],
+html[data-lfs-disabled] [data-lfs-game-favorite-star] {
   display: none !important;
+}
+
+html[data-lfs-disabled] .lfs-lobby-tvpuzzle {
+  display: contents !important;
 }
 
 html[data-lfs-disabled] [data-lfs-board-layout] {
