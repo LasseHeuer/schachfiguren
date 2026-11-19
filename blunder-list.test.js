@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const { readFileSync } = require("node:fs");
 const { join } = require("node:path");
 const vm = require("node:vm");
+require("./colors.js");
 require("./settings.js");
 
 function loadList(file, exports, extra = {}) {
@@ -568,6 +569,44 @@ test("playlist continuation preserves zen mode when moving to the next puzzle", 
   assert.equal(assigned.at(-1), "/training/Def34");
   assert.equal(context.testSession.get("lfsPuzzlePlaylistZenMode"), "true");
   assert.equal(api.getPlaylist().activeIndex, 1);
+});
+
+test("puzzles that become due during a session are appended once", () => {
+  const { api } = loadList("puzzle-playlist.js", `
+    appendNewlyDueToSession,
+    setup: value => { playlist = normalizePlaylist(value); render = () => {}; },
+    getPlaylist: () => playlist
+  `);
+  api.setup({
+    items: [
+      { id: "Abc12", state: "review", dueAt: 1 },
+      { id: "Def34", state: "review", dueAt: 1000 },
+      { id: "Ghi56", state: "review", dueAt: 9999 },
+      { id: "Jkl78", state: "review", dueAt: 900 },
+      { id: "Mno90", state: "new", dueAt: 0 },
+    ],
+    activeQueue: ["Abc12"], activeIndex: 0, activeStartedAt: 500,
+  });
+  assert.equal(api.appendNewlyDueToSession(1000), true);
+  assert.deepEqual(Array.from(api.getPlaylist().activeQueue), ["Abc12", "Jkl78", "Def34"]);
+  assert.equal(api.appendNewlyDueToSession(1000), false);
+  assert.deepEqual(Array.from(api.getPlaylist().activeQueue), ["Abc12", "Jkl78", "Def34"]);
+  assert.equal(api.appendNewlyDueToSession(9999), true);
+  assert.deepEqual(Array.from(api.getPlaylist().activeQueue), ["Abc12", "Jkl78", "Def34", "Ghi56"]);
+});
+
+test("sessions without a start time do not backfill already due puzzles", () => {
+  const { api } = loadList("puzzle-playlist.js", `
+    appendNewlyDueToSession,
+    setup: value => { playlist = normalizePlaylist(value); render = () => {}; },
+    getPlaylist: () => playlist
+  `);
+  api.setup({
+    items: [{ id: "Abc12", state: "review", dueAt: 1 }, { id: "Def34", state: "review", dueAt: 1 }],
+    activeQueue: ["Abc12"], activeIndex: 0,
+  });
+  assert.equal(api.getPlaylist().activeStartedAt, null);
+  assert.equal(api.appendNewlyDueToSession(Date.now()), false);
 });
 
 test("playlist restores zen mode before the next puzzle renders", () => {

@@ -14,7 +14,7 @@
   const scheduler = globalThis.LichessPuzzleScheduler;
   const pageLoadedAt = Date.now();
   let ratingMaxPosition = settings.defaults[ratingMaxPositionSetting];
-  let playlist = { items: [], activeQueue: [], activeIndex: null };
+  let playlist = { items: [], activeQueue: [], activeIndex: null, activeStartedAt: null };
   let homePanel;
   let homeSide;
   let playlistPage;
@@ -68,7 +68,8 @@
       ? [...new Set(value.activeQueue.filter(id => typeof id === "string" && (itemIds.has(id) || (id === activeId && /^[a-zA-Z0-9_-]{4,}$/.test(id)))))]
       : legacyActiveIndex !== null ? items.map(item => item.id) : [];
     const activeIndex = legacyActiveIndex !== null && activeQueue.includes(activeId) ? activeQueue.indexOf(activeId) : null;
-    return { items, activeQueue, activeIndex, ratingScaleVersion: scheduler.ratingScaleVersion };
+    const activeStartedAt = activeIndex !== null && Number.isFinite(value?.activeStartedAt) ? value.activeStartedAt : null;
+    return { items, activeQueue, activeIndex, activeStartedAt, ratingScaleVersion: scheduler.ratingScaleVersion };
   }
 
   function savePlaylist(next, onSaved) {
@@ -146,6 +147,21 @@
     });
   }
 
+  function newlyDueItems(now = Date.now()) {
+    if (playlist.activeIndex === null || !Number.isFinite(playlist.activeStartedAt)) return [];
+    const queuedIds = new Set(playlist.activeQueue.slice(playlist.activeIndex));
+    return playlist.items
+      .filter(item => item.dueAt > playlist.activeStartedAt && item.dueAt <= now && !queuedIds.has(item.id))
+      .sort((a, b) => a.dueAt - b.dueAt);
+  }
+
+  function appendNewlyDueToSession(now = Date.now()) {
+    const ids = newlyDueItems(now).map(item => item.id);
+    if (!ids.length) return false;
+    savePlaylist({ ...playlist, activeQueue: [...playlist.activeQueue, ...ids] });
+    return true;
+  }
+
   const intervalNumberFormat = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 });
   function formatInterval(milliseconds) {
     const minutes = Math.max(1, Math.round(milliseconds / 60000));
@@ -169,7 +185,7 @@
     if (!ids.length) return;
     const [firstId] = ids;
     const items = playlist.items.map(item => item.id === firstId ? { ...item, attempts: item.attempts + 1 } : item);
-    savePlaylist({ ...playlist, items, activeQueue: ids, activeIndex: 0 }, () => {
+    savePlaylist({ ...playlist, items, activeQueue: ids, activeIndex: 0, activeStartedAt: Date.now() }, () => {
       location.assign(trainingPath(ids[0]));
     });
   }
@@ -604,7 +620,7 @@
     const activeQueue = playlist.activeQueue.filter((id, index) => id !== removedId || index === playlist.activeIndex);
     let activeIndex = playlist.activeIndex;
     if (activeIndex !== null && queueIndex >= 0 && queueIndex < activeIndex) activeIndex--;
-    savePlaylist({ items, activeQueue: activeIndex === null ? [] : activeQueue, activeIndex });
+    savePlaylist({ ...playlist, items, activeQueue: activeIndex === null ? [] : activeQueue, activeIndex });
   }
 
   function renderPuzzleToolbar() {
@@ -740,7 +756,7 @@
   }
 
   function finishPlaylistSession() {
-    savePlaylist({ ...playlist, activeQueue: [], activeIndex: null }, () => {
+    savePlaylist({ ...playlist, activeQueue: [], activeIndex: null, activeStartedAt: null }, () => {
       location.assign("/#puzzle-playlist");
     });
   }
@@ -790,6 +806,8 @@
       teardown();
       return;
     }
+    if (appendNewlyDueToSession()) return;
+    scheduleDueRefresh(Date.now());
     observePuzzleState();
     syncHomePanel();
     ensureHomeClickHandler();
