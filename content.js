@@ -630,12 +630,27 @@
 
   function handleZenShortcut(event) {
     if (!settings.enabled) return;
-    if (event.key?.toLowerCase() !== "z" || event.altKey || event.ctrlKey || event.metaKey) return;
+    const key = event.key?.toLowerCase();
+    if (key !== "z" && key !== "a") return;
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
     const target = event.target;
-    if (target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName) || !zenBoard) return;
+    if (target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName)) return;
+    if (key === "z") {
+      if (!zenBoard) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!event.repeat) setZenMode(!document.documentElement.hasAttribute("data-lfs-zen-mode"));
+      return;
+    }
+    if (isAnalysisAutoDisabled()) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    if (!event.repeat) setZenMode(!document.documentElement.hasAttribute("data-lfs-zen-mode"));
+    if (!event.repeat) {
+      const value = !settings.analysisEnabled;
+      settings = normalize({ ...settings, analysisEnabled: value });
+      apply(document.documentElement);
+      chrome.storage.local.set({ analysisEnabled: value });
+    }
   }
 
   window.addEventListener("keydown", handleZenShortcut, true);

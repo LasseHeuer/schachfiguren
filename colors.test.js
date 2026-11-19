@@ -3925,6 +3925,7 @@ test("z shortcut toggles the plugin zen mode and ignores text inputs", () => {
   const toggles = [];
   let zenMode = false;
   const context = vm.createContext({
+    settings: { enabled: true },
     zenBoard: {},
     document: { documentElement: { hasAttribute: () => zenMode } },
     setZenMode: enabled => { zenMode = enabled; toggles.push(enabled); },
@@ -3956,6 +3957,59 @@ test("z shortcut toggles the plugin zen mode and ignores text inputs", () => {
   context.zenBoard = null;
   handle(keyEvent());
   assert.deepEqual(toggles, [true, false]);
+});
+
+test("a shortcut toggles the analysis display and ignores text inputs and auto-disabled games", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const source = readFileSync(join(__dirname, "content.js"), "utf8");
+  const handler = source.match(/function handleZenShortcut\(event\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(handler, "the plugin shortcut handler is present");
+  const toggles = [];
+  const stored = [];
+  let autoDisabled = false;
+  const context = vm.createContext({
+    settings: { enabled: true, analysisEnabled: true },
+    zenBoard: {},
+    document: { documentElement: {} },
+    normalize: value => value,
+    apply: () => toggles.push(context.settings.analysisEnabled),
+    isAnalysisAutoDisabled: () => autoDisabled,
+    chrome: { storage: { local: { set: value => stored.push(value.analysisEnabled) } } },
+  });
+  const handle = vm.runInContext(`${handler}\nhandleZenShortcut`, context);
+  const keyEvent = properties => ({
+    key: "a",
+    target: {},
+    repeat: false,
+    prevented: false,
+    stopped: false,
+    preventDefault() { this.prevented = true; },
+    stopImmediatePropagation() { this.stopped = true; },
+    ...properties,
+  });
+
+  const disable = keyEvent();
+  handle(disable);
+  assert.deepEqual(toggles, [false]);
+  assert.deepEqual(stored, [false]);
+  assert.equal(disable.prevented, true);
+  assert.equal(disable.stopped, true);
+
+  handle(keyEvent());
+  assert.deepEqual(toggles, [false, true]);
+  assert.deepEqual(stored, [false, true]);
+  handle(keyEvent({ target: { tagName: "INPUT" } }));
+  handle(keyEvent({ target: { isContentEditable: true } }));
+  handle(keyEvent({ ctrlKey: true }));
+  handle(keyEvent({ repeat: true }));
+  autoDisabled = true;
+  const ignored = keyEvent();
+  handle(ignored);
+  assert.deepEqual(toggles, [false, true]);
+  assert.equal(ignored.prevented, false);
+  assert.equal(ignored.stopped, false);
 });
 
 test("zen layout observer recenters on class-only puzzle layout changes", () => {
