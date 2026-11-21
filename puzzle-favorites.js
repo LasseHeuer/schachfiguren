@@ -598,7 +598,19 @@
     render();
   });
 
-  new MutationObserver(scheduleRender).observe(document, { childList: true, subtree: true });
+  new MutationObserver(records => {
+    const atHome = isHomePage();
+    const onThemesPage = isThemesPage();
+    if (!atHome && !onThemesPage) return;
+    const selector = atHome ? "main.lobby, .lobby__side" : ".puzzle-themes, .puzzle-themes__link";
+    const relevant = records.some(record => {
+      const target = record.target.nodeType === Node.ELEMENT_NODE ? record.target : record.target.parentElement;
+      if (atHome ? target?.matches(selector) : target?.closest(".puzzle-themes")) return true;
+      return [...record.addedNodes, ...record.removedNodes].some(node => node.nodeType === Node.ELEMENT_NODE
+        && (node.matches(selector) || node.querySelector(selector)));
+    });
+    if (relevant) scheduleRender();
+  }).observe(document, { childList: true, subtree: true });
   window.addEventListener("popstate", scheduleRender);
   window.addEventListener("hashchange", scheduleRender);
   window.addEventListener("resize", scheduleRender);

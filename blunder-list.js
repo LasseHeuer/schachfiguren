@@ -607,7 +607,19 @@
     render();
     if (dataChanged) renderPage();
   });
-  new MutationObserver(scheduleRender).observe(document, { childList: true, subtree: true });
+  new MutationObserver(records => {
+    const isListPage = location.pathname === "/" && location.hash === "#blunder-list";
+    const isTrainingPage = location.search.includes("lfs-blunder");
+    if (!isListPage && !isTrainingPage) return;
+    const selector = isListPage ? "main.lobby" : ".analyse__tools";
+    const relevant = records.some(record => {
+      const target = record.target.nodeType === Node.ELEMENT_NODE ? record.target : record.target.parentElement;
+      if (target?.matches(selector)) return true;
+      return [...record.addedNodes, ...record.removedNodes].some(node => node.nodeType === Node.ELEMENT_NODE
+        && (node.matches(selector) || node.querySelector(selector)));
+    });
+    if (relevant) scheduleRender();
+  }).observe(document, { childList: true, subtree: true });
   window.addEventListener("hashchange", scheduleRender);
   window.addEventListener("popstate", scheduleRender);
 })();

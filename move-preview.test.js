@@ -490,10 +490,18 @@ test("right-click move preview stays visual and restores the live board", {
       assert.equal(await evaluate("document.querySelector('#lfs-move-preview .lfs-move-preview-paths path').getAttribute('stroke-linecap')"), "butt");
       assert.equal(await evaluate("[...document.querySelectorAll('#lfs-move-preview .lfs-move-preview-paths path')].every(path => !path.hasAttribute('marker-end'))"), true);
 
-      await send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 288, y: 288, deltaX: 0, deltaY: -120 });
+      assert.equal(await evaluate(`(() => {
+        const event = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: -120 });
+        document.querySelector("#lfs-move-preview").dispatchEvent(event);
+        return event.defaultPrevented;
+      })()`), false, "plain wheel input must remain available for page scrolling");
+      assert.equal(await evaluate("document.querySelector('#lfs-move-preview > piece.black.pawn[data-key=e5]') !== null"), true,
+        "plain wheel input must not step the preview");
+
+      await send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 288, y: 288, deltaX: 0, deltaY: -120, modifiers: 1 });
       await settle();
       assert.equal(await evaluate("document.querySelector('#lfs-move-preview > piece.black.pawn[data-key=e7]') !== null"), true);
-      await send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 288, y: 288, deltaX: 0, deltaY: 120 });
+      await send("Input.dispatchMouseEvent", { type: "mouseWheel", x: 288, y: 288, deltaX: 0, deltaY: 120, modifiers: 1 });
       await settle();
       assert.equal(await evaluate("document.querySelector('#lfs-move-preview > piece.black.pawn[data-key=e5]') !== null"), true);
 

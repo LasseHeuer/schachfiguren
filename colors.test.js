@@ -3627,6 +3627,8 @@ test("hover state follows scrolling, window exit and re-entry without pointer mo
   const { readFileSync } = require("node:fs");
   const { join } = require("node:path");
   const listeners = {};
+  const frames = new Map();
+  let nextFrameId = 0;
   let top = 0;
   const board = {
     closest: () => board, querySelector: () => null,
@@ -3638,7 +3640,12 @@ test("hover state follows scrolling, window exit and re-entry without pointer mo
       elementFromPoint: () => board
     },
     addEventListener: (name, callback) => { listeners[name] = callback; },
-    requestAnimationFrame: () => 1,
+    requestAnimationFrame: callback => {
+      const id = ++nextFrameId;
+      frames.set(id, callback);
+      return id;
+    },
+    cancelAnimationFrame: id => frames.delete(id),
     clearTimeout() {}
   });
   vm.runInContext(readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8")
@@ -3654,6 +3661,12 @@ test("hover state follows scrolling, window exit and re-entry without pointer mo
   entry.previewPointerMotion = { smooth: true };
   top = -100;
   listeners.scroll();
+  const scrollFrame = nextFrameId;
+  listeners.scroll();
+  assert.equal(nextFrameId, scrollFrame, "multiple scroll events must coalesce into one frame");
+  assert.deepEqual({ ...entry.hoveredSquare }, { row: 4, col: 4 }, "scroll work must be deferred until the frame callback");
+  frames.get(scrollFrame)();
+  frames.delete(scrollFrame);
   assert.deepEqual({ ...entry.hoveredSquare }, { row: 5, col: 4 }, "scrolling must recompute the square under the stationary pointer");
   assert.equal(entry.previewPointerMotion, null, "scrolling is not pointer anticipation");
   entry.defenseHoverStartedKey = "hover:5,4:wrook";
@@ -3666,6 +3679,89 @@ test("hover state follows scrolling, window exit and re-entry without pointer mo
   assert.equal(entry.hoveredSquare, null);
   listeners.scroll();
   assert.equal(entry.hoveredSquare, null, "scrolling after blur must not restore stale hover");
+});
+
+test("threat hatch animation updates only visible boards at 30 fps", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const frames = new Map();
+  let nextFrameId = 0;
+  const context = vm.createContext({
+    document: { addEventListener() {}, hidden: false },
+    performance: { now: () => 1000 },
+    requestAnimationFrame: callback => {
+      const id = ++nextFrameId;
+      frames.set(id, callback);
+      return id;
+    },
+    cancelAnimationFrame: id => frames.delete(id)
+  });
+  vm.runInContext(readFileSync(join(__dirname, "selected-piece-wedge.js"), "utf8")
+    .replace("  documentObserver = new MutationObserver", `
+      globalThis.testing = { observedBoards, syncHatchAnimation, setSettings(value) { settings = value; } };
+      return;
+      documentObserver = new MutationObserver`), context);
+
+  const makePattern = () => ({
+    transform: null,
+    writes: 0,
+    getAttribute() { return this.transform; },
+    setAttribute(name, value) { this.transform = value; this.writes++; }
+  });
+  const hiddenPattern = makePattern();
+  const visiblePattern = makePattern();
+  context.testing.setSettings({ threatCenterHatchSpeed: 0.1 });
+  context.testing.observedBoards.set({}, { isVisible: false, hatchPatterns: [{ pattern: hiddenPattern, spacing: 0.64, angle: 45 }] });
+  context.testing.syncHatchAnimation();
+  assert.equal(frames.size, 0, "offscreen hatch patterns must not start an animation loop");
+
+  context.testing.observedBoards.set({}, { isVisible: true, hatchPatterns: [{ pattern: visiblePattern, spacing: 0.64, angle: 45 }] });
+  context.testing.syncHatchAnimation();
+  const runNextFrame = timestamp => {
+    const [id, callback] = frames.entries().next().value;
+    frames.delete(id);
+    callback(timestamp);
+  };
+  runNextFrame(1000);
+  runNextFrame(1016);
+  assert.equal(visiblePattern.writes, 1, "hatch transforms must be capped at 30 updates per second");
+  runNextFrame(1034);
+  assert.equal(visiblePattern.writes, 2);
+  assert.equal(hiddenPattern.writes, 0, "offscreen patterns must not be rewritten");
+});
+
+test("board mount changes identify only boards in the changed DOM nodes", () => {
+  const vm = require("node:vm");
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  for (const file of ["selected-piece-wedge.js", "threat-coding.js"]) {
+    const source = readFileSync(join(__dirname, file), "utf8");
+    const helper = source.match(/  function getChangedBoards\(mutations\) \{[\s\S]*?\n  \}/)?.[0];
+    assert.ok(helper, `${file} should collect affected boards directly`);
+    const context = vm.createContext({ Node: { ELEMENT_NODE: 1 }, boardSelector: ".test-board" });
+    vm.runInContext(`${helper}\nglobalThis.getChangedBoards = getChangedBoards;`, context);
+
+    const directBoard = { id: "direct", nodeType: 1, matches: () => true, querySelectorAll: () => [] };
+    const nestedBoard = { id: "nested", nodeType: 1, matches: () => true, querySelectorAll: () => [] };
+    const sourceBoard = { id: "source", nodeType: 1, matches: () => true, querySelectorAll: () => [] };
+    const previewBoard = {
+      id: "lfs-move-preview",
+      nodeType: 1,
+      matches: () => true,
+      querySelectorAll: () => [],
+      closest: () => previewWrapper
+    };
+    const previewWrapper = { querySelectorAll: () => [sourceBoard, previewBoard] };
+    const boardContainer = { nodeType: 1, matches: () => false, querySelectorAll: () => [nestedBoard, previewBoard] };
+    const unrelated = { nodeType: 1, matches: () => false, querySelectorAll: () => [] };
+    const affected = [...context.getChangedBoards([{
+      addedNodes: [directBoard, boardContainer],
+      removedNodes: [unrelated]
+    }])].map(board => board.id).sort();
+    assert.deepEqual(affected, ["direct", "lfs-move-preview", "nested", "source"],
+      `${file} must invalidate only changed boards and their move-preview source`);
+  }
 });
 
 test("hover anticipation waits for sustained motion and zero restores field animations", () => {

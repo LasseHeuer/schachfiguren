@@ -2900,22 +2900,9 @@ html:not([data-lfs-disabled]) .lobby__support-link { display: none !important; }
 
 /* Lobby: Favoriten-Partien dürfen aus der Seitenleiste herausragen, sonst schneidet
    Lichess' overflow:hidden der .lobby__side die letzte Karte unten ab. */
-html:not([data-lfs-disabled]) .lobby__side:has(.lfs-game-favorites-card) { overflow: visible !important; }
-
-/* Lobby: aktuelle Partie + Tagesrätsel in selber Spalte (unter den Start-Buttons) */
-.lfs-lobby-tvpuzzle {
-  grid-area: puzzle;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  min-width: 0;
-  min-height: 0;
-}
-.lfs-lobby-tvpuzzle > .lobby__tv,
-.lfs-lobby-tvpuzzle > .lobby__puzzle {
-  grid-area: auto;
-  min-width: 0;
-  min-height: 0;
+html:not([data-lfs-disabled]) .lobby__side:has(.lfs-game-favorites-card) {
+  min-width: 0 !important;
+  overflow: visible !important;
 }
 
 /* Lobby: Spieleranzeige mit Abstand + Start-Buttons mit Abstand */
@@ -2998,10 +2985,6 @@ html[data-lfs-disabled] [data-lfs-favorite-star],
 html[data-lfs-disabled] [data-lfs-study-favorite-star],
 html[data-lfs-disabled] [data-lfs-game-favorite-star] {
   display: none !important;
-}
-
-html[data-lfs-disabled] .lfs-lobby-tvpuzzle {
-  display: contents !important;
 }
 
 html[data-lfs-disabled] [data-lfs-board-layout] {

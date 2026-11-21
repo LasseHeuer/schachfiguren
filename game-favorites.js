@@ -6,7 +6,6 @@
   const playlistPanelId = "lfs-puzzle-playlist-home";
   const contextMenuId = "lfs-game-favorites-context-menu";
   const tooltipId = "lfs-game-favorites-tooltip";
-  const tvPuzzleId = "lfs-lobby-tvpuzzle";
   const gameIdPattern = /^[a-zA-Z0-9_-]{8}$/;
   const fullIdPattern = /^[a-zA-Z0-9_-]{8}[wb]$/;
   const reservedSegments = new Set([
@@ -292,39 +291,6 @@
     } finally {
       renderingStars = false;
     }
-  }
-
-  function syncLobbyTvPuzzle() {
-    if (location.pathname !== "/") return;
-    const lobby = document.querySelector("main.lobby");
-    if (!lobby) return;
-    let wrapper = document.getElementById(tvPuzzleId);
-    const tv = lobby.querySelector(`#${tvPuzzleId} .lobby__tv`) ||
-      (wrapper?.contains(lobby.querySelector(".lobby__tv")) ? lobby.querySelector(".lobby__tv") : null) ||
-      [...lobby.children].find((child) => child.classList?.contains("lobby__tv")) ||
-      null;
-    const puzzle = lobby.querySelector(`#${tvPuzzleId} .lobby__puzzle`) ||
-      [...lobby.children].find((child) => child.classList?.contains("lobby__puzzle")) ||
-      null;
-    const directTv = [...lobby.children].find((child) => child.classList?.contains("lobby__tv"));
-    const directPuzzle = [...lobby.children].find((child) => child.classList?.contains("lobby__puzzle"));
-    const liveTv = directTv || tv;
-    const livePuzzle = directPuzzle || puzzle;
-    if (!liveTv || !livePuzzle) return;
-    if (wrapper && wrapper.contains(liveTv) && wrapper.contains(livePuzzle)) {
-      if (liveTv.nextElementSibling !== livePuzzle) wrapper.append(liveTv, livePuzzle);
-      return;
-    }
-    if (!wrapper) {
-      wrapper = document.createElement("div");
-      wrapper.id = tvPuzzleId;
-      wrapper.className = "lfs-lobby-tvpuzzle";
-    }
-    if (wrapper.parentElement !== lobby) {
-      const anchor = livePuzzle.parentElement === lobby ? livePuzzle : liveTv;
-      anchor.before(wrapper);
-    }
-    wrapper.append(liveTv, livePuzzle);
   }
 
   function positionDragGhost(x, y) {
@@ -661,7 +627,6 @@
       teardown();
       return;
     }
-    syncLobbyTvPuzzle();
     syncHomePanel();
     renderListStars();
     renderDetailStar();
@@ -670,7 +635,6 @@
   function scheduleRender() {
     if (scheduled) return;
     scheduled = true;
-    syncLobbyTvPuzzle();
     requestAnimationFrame(() => {
       scheduled = false;
       render();
@@ -713,7 +677,18 @@
     render();
   });
 
-  new MutationObserver(scheduleRender).observe(document, { childList: true, subtree: true });
+  const gameFavoriteMutationSelector = ".now-playing, a.relay-game, .game__meta, .relay-tour__header, .lobby__side";
+  new MutationObserver(records => {
+    const relevant = records.some(record => {
+      const target = record.target.nodeType === Node.ELEMENT_NODE ? record.target : record.target.parentElement;
+      if (target?.closest("cg-board, .mini-game__clock")) return false;
+      if (target?.closest(gameFavoriteMutationSelector)) return true;
+      return [...record.addedNodes, ...record.removedNodes].some(node => node.nodeType === Node.ELEMENT_NODE
+        && (node.matches(gameFavoriteMutationSelector)
+          || node.querySelector(gameFavoriteMutationSelector)));
+    });
+    if (relevant) scheduleRender();
+  }).observe(document, { childList: true, subtree: true });
   window.addEventListener("popstate", scheduleRender);
   window.addEventListener("hashchange", scheduleRender);
   window.addEventListener("resize", scheduleRender);

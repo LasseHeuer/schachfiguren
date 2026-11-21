@@ -28,8 +28,11 @@
   let lastPointerPosition = null;
   let documentObserver = null;
   let hatchAnimationFrame = 0;
+  let hatchAnimationLastFrameTime = null;
   let hatchScrollLastTime = null;
   let hatchScrollDistance = 0;
+  let hatchVisibilityObserver = null;
+  let scrollPointerFrame = 0;
   let defenseHighlightFilterId = 0;
   let defenseHighlightLineId = 0;
   let defenseHighlightMaskId = 0;
@@ -60,12 +63,35 @@
     return `rotate(${angle}) translate(0 ${offset.toFixed(4)})`;
   }
 
+  function getHatchVisibilityObserver() {
+    if (hatchVisibilityObserver || typeof IntersectionObserver !== "function") return hatchVisibilityObserver;
+    hatchVisibilityObserver = new IntersectionObserver(entries => {
+      let visibilityChanged = false;
+      for (const observation of entries) {
+        const entry = observedBoards.get(observation.target);
+        const isVisible = observation.isIntersecting && observation.intersectionRatio > 0;
+        if (entry && entry.isVisible !== isVisible) {
+          entry.isVisible = isVisible;
+          visibilityChanged = true;
+        }
+      }
+      if (visibilityChanged) syncHatchAnimation();
+    });
+    return hatchVisibilityObserver;
+  }
+
   function animateHatchPatterns(timestamp) {
     hatchAnimationFrame = 0;
     if (document.hidden) return;
+    if (hatchAnimationLastFrameTime !== null && timestamp - hatchAnimationLastFrameTime < 1000 / 30) {
+      hatchAnimationFrame = requestAnimationFrame(animateHatchPatterns);
+      return;
+    }
+    hatchAnimationLastFrameTime = timestamp;
     advanceHatchScroll(timestamp);
     let hasPatterns = false;
     for (const entry of observedBoards.values()) {
+      if (!entry.isVisible) continue;
       for (const { pattern, spacing, angle } of entry.hatchPatterns) {
         const transform = hatchPatternTransform(angle, spacing);
         if (pattern.getAttribute("patternTransform") !== transform) pattern.setAttribute("patternTransform", transform);
@@ -78,10 +104,11 @@
   }
 
   function syncHatchAnimation() {
-    const hasPatterns = [...observedBoards.values()].some(entry => entry.hatchPatterns.length);
+    const hasPatterns = [...observedBoards.values()].some(entry => entry.isVisible && entry.hatchPatterns.length);
     if (settings?.threatCenterHatchSpeed > 0 && hasPatterns) {
       if (!hatchAnimationFrame) {
         hatchScrollLastTime = null;
+        hatchAnimationLastFrameTime = null;
         advanceHatchScroll();
         hatchAnimationFrame = requestAnimationFrame(animateHatchPatterns);
       }
@@ -98,6 +125,7 @@
     else if (hatchAnimationFrame) {
       cancelAnimationFrame(hatchAnimationFrame);
       hatchAnimationFrame = 0;
+      hatchAnimationLastFrameTime = null;
     }
   });
   document.addEventListener("lfs-pv-animation-position", event => {
@@ -194,14 +222,11 @@
   document.addEventListener("pointerover", event => {
     if (event.target?.closest?.(boardSelector) !== pointerOverBoard) updatePointerPosition(event);
   }, true);
-  document.addEventListener("scroll", () => {
-    if (!lastPointerPosition) return;
-    const { x, y } = lastPointerPosition;
-    for (const entry of observedBoards.values()) entry.previewPointerMotion = null;
-    updatePointerPosition({ clientX: x, clientY: y, target: document.elementFromPoint(x, y) });
-  }, true);
-
   function clearPointerPosition() {
+    if (scrollPointerFrame) {
+      cancelAnimationFrame(scrollPointerFrame);
+      scrollPointerFrame = 0;
+    }
     lastPointerPosition = null;
     pointerOverBoard = null;
     for (const [board, entry] of observedBoards) {
@@ -218,6 +243,19 @@
     if (!event.relatedTarget) clearPointerPosition();
   }, true);
   globalThis.addEventListener?.("blur", clearPointerPosition);
+
+  function updatePointerPositionAfterScroll() {
+    if (!lastPointerPosition || scrollPointerFrame) return;
+    scrollPointerFrame = requestAnimationFrame(() => {
+      scrollPointerFrame = 0;
+      if (!lastPointerPosition) return;
+      const { x, y } = lastPointerPosition;
+      for (const entry of observedBoards.values()) entry.previewPointerMotion = null;
+      updatePointerPosition({ clientX: x, clientY: y, target: document.elementFromPoint(x, y) });
+    });
+  }
+
+  document.addEventListener("scroll", updatePointerPositionAfterScroll, true);
 
 
   function getScreenSquare(element, board, boardRect) {
@@ -4729,9 +4767,11 @@
       defensePreviewMix: 0,
       frame: 0,
       figureBlends: new Map(),
-      hatchPatterns: []
+      hatchPatterns: [],
+      isVisible: !getHatchVisibilityObserver()
     };
     observedBoards.set(board, entry);
+    hatchVisibilityObserver?.observe(board);
 
     // Overlay elements are added to the board too; ignoring them stops the render from re-triggering itself every frame.
     const isOverlayOnlyChange = mutation => mutation.type === "childList"
@@ -4769,8 +4809,22 @@
     scheduleRender(board);
   }
 
-  function containsBoard(node) {
-    return node.nodeType === Node.ELEMENT_NODE && (node.matches(boardSelector) || Boolean(node.querySelector(boardSelector)));
+  function getChangedBoards(mutations) {
+    const boards = new Set();
+    const addBoard = board => {
+      boards.add(board);
+      if (board.id !== "lfs-move-preview" && board.id !== "lfs-pv-preview") return;
+      const wrapper = board.closest(".cg-wrap");
+      for (const relatedBoard of wrapper?.querySelectorAll(boardSelector) ?? []) boards.add(relatedBoard);
+    };
+    for (const mutation of mutations) {
+      for (const node of [...mutation.addedNodes, ...mutation.removedNodes]) {
+        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+        if (node.matches(boardSelector)) addBoard(node);
+        for (const board of node.querySelectorAll(boardSelector)) addBoard(board);
+      }
+    }
+    return boards;
   }
 
   function scanBoards() {
@@ -4781,6 +4835,7 @@
       entry.boardObserver.disconnect();
       entry.wrapperObserver?.disconnect();
       entry.resizeObserver?.disconnect();
+      hatchVisibilityObserver?.unobserve(board);
       if (entry.frame) cancelAnimationFrame(entry.frame);
 
       for (const piece of board.querySelectorAll(":scope > piece")) {
@@ -4801,12 +4856,10 @@
   }
 
   documentObserver = new MutationObserver(mutations => {
-    const changedBoards = mutations.flatMap(mutation => [...mutation.addedNodes, ...mutation.removedNodes]).filter(containsBoard);
-    if (!changedBoards.length) return;
+    const changedBoards = getChangedBoards(mutations);
+    if (!changedBoards.size) return;
     scanBoards();
-    if (changedBoards.some(board => board.id !== "lfs-pv-preview")) {
-      for (const board of observedBoards.keys()) scheduleRender(board);
-    }
+    for (const board of changedBoards) if (observedBoards.has(board)) scheduleRender(board);
   });
   documentObserver.observe(document, { childList: true, subtree: true });
   scanBoards();

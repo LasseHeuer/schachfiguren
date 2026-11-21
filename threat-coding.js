@@ -800,11 +800,22 @@
     renderFrame = requestAnimationFrame(render);
   }
 
-  function containsMainBoard(node) {
-    return node.nodeType === Node.ELEMENT_NODE && (
-      node.matches(".main-board, .mini-game, .cg-wrap, cg-board#lfs-move-preview, cg-board#lfs-pv-preview") ||
-      Boolean(node.querySelector(boardSelector))
-    );
+  function getChangedBoards(mutations) {
+    const boards = new Set();
+    const addBoard = board => {
+      boards.add(board);
+      if (board.id !== "lfs-move-preview" && board.id !== "lfs-pv-preview") return;
+      const wrapper = board.closest(".cg-wrap");
+      for (const relatedBoard of wrapper?.querySelectorAll(boardSelector) ?? []) boards.add(relatedBoard);
+    };
+    for (const mutation of mutations) {
+      for (const node of [...mutation.addedNodes, ...mutation.removedNodes]) {
+        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+        if (node.matches(boardSelector)) addBoard(node);
+        for (const board of node.querySelectorAll(boardSelector)) addBoard(board);
+      }
+    }
+    return boards;
   }
 
   function isRelevantBoardMutation(mutation) {
@@ -918,11 +929,7 @@
 
     if (!documentObserver) {
       documentObserver = new MutationObserver(mutations => {
-        const changedBoards = mutations.flatMap(mutation => [...mutation.addedNodes, ...mutation.removedNodes]).filter(containsMainBoard);
-        if (!changedBoards.length) return;
-        if (changedBoards.every(board => board.id === "lfs-pv-preview")) {
-          for (const board of changedBoards) scheduleRender(board);
-        } else scheduleRender();
+        for (const board of getChangedBoards(mutations)) scheduleRender(board);
       });
       documentObserver.observe(document, { childList: true, subtree: true });
     }

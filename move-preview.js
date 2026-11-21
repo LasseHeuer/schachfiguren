@@ -1024,7 +1024,7 @@
       stopEvent(event);
       return;
     }
-    if (!active || !isPreviewEnabled() || getBoardFromEvent(event) !== active.board) return;
+    if (!active || !isPreviewEnabled() || getBoardFromEvent(event) !== active.board || !event.altKey) return;
     stopEvent(event);
     active.wheelDelta += event.deltaY;
     while (active.wheelDelta >= 90) {

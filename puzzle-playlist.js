@@ -29,7 +29,7 @@
   let zenToolbarFrame;
   let dueRefreshTimer;
   let dueRefreshAt;
-  let homeTickTimer;
+  let homeTickTimer = null;
   let pieceSettings = settings.normalize({});
   const timelinePieceElements = new Map();
   const timelineStartPx = 40;
@@ -149,7 +149,8 @@
 
   function newlyDueItems(now = Date.now()) {
     if (playlist.activeIndex === null || !Number.isFinite(playlist.activeStartedAt)) return [];
-    const queuedIds = new Set(playlist.activeQueue.slice(playlist.activeIndex));
+    // The saved queue keeps completed entries and allows each puzzle only once.
+    const queuedIds = new Set(playlist.activeQueue);
     return playlist.items
       .filter(item => item.dueAt > playlist.activeStartedAt && item.dueAt <= now && !queuedIds.has(item.id))
       .sort((a, b) => a.dueAt - b.dueAt);
@@ -235,16 +236,15 @@
   }
 
   function syncHomePanel() {
-    const atHome = location.pathname === "/";
-    const lobby = atHome ? document.querySelector("main.lobby") : null;
-    if (atHome && location.hash === "#puzzle-playlist" && lobby) {
+    const lobby = document.querySelector("main.lobby");
+    if (lobby && location.hash === "#puzzle-playlist") {
       restoreHomeSide();
       syncPlaylistPage(lobby);
       return;
     }
 
     restorePlaylistPage();
-    const side = atHome ? lobby?.querySelector(".lobby__side") ?? document.querySelector(".lobby__side") : null;
+    const side = lobby?.querySelector(".lobby__side") ?? null;
     if (side !== homeSide) {
       restoreHomeSide();
       if (!side) return;
@@ -843,6 +843,7 @@
   }
 
   function scheduleZenToolbarPosition() {
+    if (!puzzleToolbar) return;
     cancelAnimationFrame(zenToolbarFrame);
     zenToolbarFrame = requestAnimationFrame(() => {
       zenToolbarFrame = requestAnimationFrame(positionZenToolbar);
@@ -920,7 +921,19 @@
     render();
   });
 
-  new MutationObserver(scheduleRender).observe(document, { childList: true, subtree: true });
+  new MutationObserver(records => {
+    const atHome = /^\/(?:[a-z]{2,3}(?:-[a-z0-9]+)*\/?)?$/i.test(location.pathname);
+    const onPuzzlePage = /^\/training(?:\/|$)/.test(location.pathname);
+    if (!atHome && !onPuzzlePage) return;
+    const selector = atHome ? "main.lobby, .lobby__side" : ".puzzle";
+    const relevant = records.some(record => {
+      const target = record.target.nodeType === Node.ELEMENT_NODE ? record.target : record.target.parentElement;
+      if (atHome && target?.matches(selector)) return true;
+      return [...record.addedNodes, ...record.removedNodes].some(node => node.nodeType === Node.ELEMENT_NODE
+        && (node.matches(selector) || node.querySelector(selector)));
+    });
+    if (relevant) scheduleRender();
+  }).observe(document, { childList: true, subtree: true });
   if (document.documentElement) {
     new MutationObserver(scheduleRender).observe(document.documentElement, { attributes: true, attributeFilter: ["data-lfs-zen-mode"] });
   }
