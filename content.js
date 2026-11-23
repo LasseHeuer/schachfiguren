@@ -1914,6 +1914,7 @@
       globalThis.LichessMoveAnimation?.update(settings);
       globalThis.LichessSelectedPieceWedge?.update({ ...settings, selectedPieceWedgeEnabled: false });
       globalThis.LichessMovePreview?.update(settings);
+      globalThis.LichessAutoThankMessage?.update(settings);
       root.toggleAttribute("data-lfs-ready", true);
       syncAnalysisToolbar();
       syncBoardLayout();
@@ -1960,6 +1961,7 @@
     };
     globalThis.LichessLastMoveLine?.update(settings);
     globalThis.LichessBoardCursor?.update(settings);
+    globalThis.LichessAutoThankMessage?.update(settings);
     globalThis.LichessThreatCoding?.update(analysisSettings);
     globalThis.LichessKingMovementFields?.update(analysisSettings);
     globalThis.LichessPieceBounce?.update(settings);
