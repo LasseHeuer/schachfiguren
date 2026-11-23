@@ -2,8 +2,17 @@
   const descriptor = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, "fillStyle");
   if (!descriptor?.set || !descriptor.get) return;
 
-  const graphCanvas = canvas => canvas.id === "acpl-chart" || canvas.id === "movetimes-chart"
-    || canvas.matches?.("canvas.study__server-eval");
+  const graphCanvasCache = new WeakMap();
+  const graphCanvas = canvas => {
+    const key = `${canvas.id}|${canvas.className || ""}`;
+    const cached = graphCanvasCache.get(canvas);
+    if (cached && cached.key === key) return cached.graph;
+    const graph = canvas.id === "acpl-chart" || canvas.id === "movetimes-chart"
+      || canvas.matches?.("canvas.study__server-eval");
+    graphCanvasCache.set(canvas, { key, graph: Boolean(graph) });
+    return Boolean(graph);
+  };
+  const playerColorCache = new Map();
   const enabled = () => !document.documentElement?.hasAttribute("data-lfs-disabled") && !document.documentElement?.hasAttribute("data-lfs-graph-colors-disabled");
   let cachedRootColors = null;
   let cachedCurveColor = null;
@@ -36,6 +45,17 @@
 
   const playerColor = (color, moveTimes = false) => {
     if (typeof color !== "string") return null;
+    const colors = rootColors();
+    const cacheKey = `${moveTimes ? 1 : 0}|${color}|${colors.white}|${colors.black}`;
+    if (playerColorCache.has(cacheKey)) return playerColorCache.get(cacheKey);
+    const resolved = resolvePlayerColor(color, moveTimes, colors);
+    if (playerColorCache.size > 256) playerColorCache.clear();
+    playerColorCache.set(cacheKey, resolved);
+    return resolved;
+  };
+
+  function resolvePlayerColor(color, moveTimes, colors) {
+    if (typeof color !== "string") return null;
     color = color.toLowerCase().trim();
     const aliases = { white: "rgb(255 255 255)", black: "rgb(0 0 0)", "#fff": "rgb(255 255 255)", "#ffffff": "rgb(255 255 255)", "#000": "rgb(0 0 0)", "#000000": "rgb(0 0 0)" };
     if (moveTimes && color === "#838383") color = "white";
@@ -54,7 +74,6 @@
     const whiteClockFill = moveTimes && Number(red) === 153 && Number(green) === 153 && Number(blue) === 153;
     if (!isWhite && !isBlack && !whiteClockFill) return null;
 
-    const colors = rootColors();
     const selected = isWhite || whiteClockFill ? colors.white : colors.black;
     if (alpha === "1") return selected;
     const opacity = alpha.endsWith("%") ? Number(alpha.slice(0, -1)) / 100 : Number(alpha);
@@ -82,7 +101,7 @@
     ...strokeDescriptor,
     set(value) {
       const moveTimes = enabled() && this.canvas?.id === "movetimes-chart";
-      const isCurveLine = typeof value === "string" && value.toLowerCase() === "#3893e8";
+      const isCurveLine = value === "#3893e8" || (typeof value === "string" && value.toLowerCase() === "#3893e8");
       const color = moveTimes && isCurveLine
         ? curveColor()
         : moveTimes ? playerColor(value, true) : null;

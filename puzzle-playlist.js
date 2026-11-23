@@ -626,8 +626,9 @@
   function renderPuzzleToolbar() {
     const id = puzzleId();
     const board = document.querySelector(".puzzle__board cg-board");
-    const toolbarParent = document.querySelector(".puzzle__session") ?? board?.closest(".puzzle");
-    if (!id || !toolbarParent || !board) {
+    const puzzleRoot = document.querySelector("main.puzzle");
+    const toolbarParent = document.querySelector(".puzzle__session") ?? board?.closest(".puzzle") ?? puzzleRoot;
+    if (!id || !toolbarParent || !puzzleRoot) {
       puzzleToolbar?.remove();
       puzzleToolbar = null;
       puzzleMenuSaveButton?.remove();
@@ -852,18 +853,26 @@
 
   function observePuzzleState() {
     const puzzle = document.querySelector(".puzzle__board")?.closest(".puzzle");
-    if (puzzle === observedPuzzle) return;
+    if (puzzle) {
+      if (puzzle === observedPuzzle) return;
+      puzzleObserver?.disconnect();
+      observedPuzzle = puzzle;
+      puzzleObserver = new MutationObserver(scheduleRender);
+      puzzleObserver.observe(puzzle, {
+        attributes: true,
+        attributeFilter: ["class", "href"],
+        characterData: true,
+        childList: true,
+        subtree: true,
+      });
+      return;
+    }
+    // Lichess replaces the puzzle tree during a redraw (wrong move, then solving).
+    // Keep watching the last tree while it is still connected instead of going
+    // blind until the board is rebuilt.
+    if (observedPuzzle?.isConnected) return;
     puzzleObserver?.disconnect();
-    observedPuzzle = puzzle;
-    if (!puzzle) return;
-    puzzleObserver = new MutationObserver(scheduleRender);
-    puzzleObserver.observe(puzzle, {
-      attributes: true,
-      attributeFilter: ["class", "href"],
-      characterData: true,
-      childList: true,
-      subtree: true,
-    });
+    observedPuzzle = null;
   }
 
   function scheduleRender() {
@@ -928,12 +937,17 @@
     const selector = atHome ? "main.lobby, .lobby__side" : ".puzzle";
     const relevant = records.some(record => {
       const target = record.target.nodeType === Node.ELEMENT_NODE ? record.target : record.target.parentElement;
+      // Lichess swaps the feedback element itself (fail -> good -> after) on a
+      // refutation/answer. Watching only ".puzzle" misses that transition, so
+      // the rating slider never appears when a puzzle is solved after a wrong move.
+      if (target?.closest?.(".puzzle__feedback, .puzzle__session")) return true;
       if (atHome && target?.matches(selector)) return true;
+      if (!atHome && target?.matches(".puzzle__feedback")) return true;
       return [...record.addedNodes, ...record.removedNodes].some(node => node.nodeType === Node.ELEMENT_NODE
-        && (node.matches(selector) || node.querySelector(selector)));
+        && (node.matches(selector) || node.matches(".puzzle__feedback") || node.querySelector(selector) || node.querySelector?.(".puzzle__feedback")));
     });
     if (relevant) scheduleRender();
-  }).observe(document, { childList: true, subtree: true });
+  }).observe(document, { attributes: true, attributeFilter: ["class", "href"], characterData: true, childList: true, subtree: true });
   if (document.documentElement) {
     new MutationObserver(scheduleRender).observe(document.documentElement, { attributes: true, attributeFilter: ["data-lfs-zen-mode"] });
   }

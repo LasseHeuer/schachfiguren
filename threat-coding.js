@@ -38,6 +38,8 @@
   let threatCanvas = null;
   const displayedThreatKeys = new WeakMap();
   const pendingThreatKeys = new WeakMap();
+  const lastRenderedThreatKeys = new WeakMap();
+  const opacityCache = new Map();
   const hoveredMoveTargets = new WeakMap();
   const knightHoverGaps = new WeakMap();
   const dirtyBoards = new Set();
@@ -233,6 +235,16 @@
   function getOpacityRgb(value, options, baseColor) {
     const normalized = Math.max(-5, Math.min(5, Number(value) || 0));
     const base = Array.isArray(baseColor) ? baseColor : parseHexColor(baseColor);
+    const cacheKey = `${normalized}|${base.join(",")}|${options.threatMaxMixPercent}|${options.threatBlendMode}|${options.whitePieceColor}|${options.blackPieceColor}`;
+    const cached = opacityCache.get(cacheKey);
+    if (cached) return cached;
+    const resolved = resolveOpacityRgb(normalized, options, base);
+    if (opacityCache.size > 512) opacityCache.clear();
+    opacityCache.set(cacheKey, resolved);
+    return resolved;
+  }
+
+  function resolveOpacityRgb(normalized, options, base) {
     const maxMix = Math.max(0, Math.min(100, Number(options.threatMaxMixPercent) || 0)) / 100;
     const amount = Math.min(Math.abs(normalized) / 5, 1) * maxMix;
     if (amount === 0) return base;
@@ -412,6 +424,7 @@
     if (!board) return;
     displayedThreatKeys.delete(board);
     pendingThreatKeys.delete(board);
+    lastRenderedThreatKeys.delete(board);
     board.removeAttribute("data-lfs-threat-board");
     board.style.removeProperty("--lfs-threat-background");
     board.style.removeProperty("--lfs-threat-background-position");
@@ -550,6 +563,9 @@
   }
 
   function renderPosition(board, position, blackOrientation) {
+    const renderKey = `${position.flat().join(",")}|${blackOrientation}|${settings.threatMoveDepth}|${settings.threatDepthFactor}|${settings.threatOwnSeeThrough}|${settings.threatOpponentSeeThrough}|${settings.threatPieceValueInfluencePercent}|${settings.threatMaxMixPercent}|${settings.threatBlendMode}|${settings.whitePieceColor}|${settings.blackPieceColor}|${settings.monochromeBoard}|${settings.boardLightLight}|${settings.boardLightDark}|${settings.boardDarkLight}|${settings.boardDarkDark}|${settings.boardGapLight}|${settings.boardGapDark}|${settings.boardFieldShape}|${settings.boardRoundPercent}|${settings.boardBevelPercent}|${settings.boardBevelEnabled}|${settings.threatGradientPercent}|${document.documentElement.classList.contains("light")}`;
+    if (lastRenderedThreatKeys.get(board) === renderKey && (displayedThreatKeys.has(board) || pendingThreatKeys.has(board))) return;
+    lastRenderedThreatKeys.set(board, renderKey);
     const threatMap = getCachedThreatMap(position, settings);
     const colors = Array.from({ length: 8 }, () => Array(8));
     const fieldShapePercent = settings.boardFieldShape === "round" ? settings.boardRoundPercent : settings.boardBevelPercent;
